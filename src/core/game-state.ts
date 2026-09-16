@@ -28,7 +28,6 @@ export interface SeatState {
   connected: boolean;
   isHost: boolean;
   alive: boolean;
-  /** 当前 HOUSE（可被 Shapeshifter 等改动；结算用此字段） */
   house: HouseId;
   houseRevealed: boolean;
   knownHouses: Array<{
@@ -40,11 +39,8 @@ export interface SeatState {
   tokens: HonorToken[];
   hand: CardInstance[];
   reserved: CardInstance[];
-  /** draft 临时手牌 */
   draftHand: CardInstance[];
-  /** 本阶段已声明打出的牌实例 */
   declared: CardInstance[];
-  /** 本阶段已应答 */
   declaredResponded: boolean;
 }
 
@@ -53,12 +49,37 @@ export interface QueuedCard {
   actorSeatId: SeatId;
 }
 
+/** 当前结算卡的多步决策状态 */
+export type CardStep =
+  | 'targetA'
+  | 'targetB'
+  | 'swapOrNot'
+  | 'gravePick'
+  | 'graveImmediate'
+  | 'viewKind'
+  | 'tokenGive'
+  | 'tokenTake'
+  | 'target'
+  | 'optionalKill'
+  | 'troubleReveal'
+  | 'done';
+
 export interface ResolveContext {
-  kind: 'target' | 'optional' | 'react';
   actorSeatId: SeatId;
   instance: CardInstance;
-  targetSeatId?: SeatId;
-  /** shinobi 查看后是否还允许杀 */
+  step: CardStep;
+  targets: SeatId[];
+  graveChoices?: CardInstance[];
+  gravePick?: CardInstance;
+  viewKind?: 'honor' | 'house';
+  giveTokenId?: string;
+  /** 反应窗 */
+  react?: {
+    victimSeatId: SeatId;
+    killerSeatId: SeatId;
+    fromJudge: boolean;
+    opening: boolean;
+  };
   mayKill?: boolean;
 }
 
@@ -78,20 +99,15 @@ export interface GameState {
   phase: GamePhase;
   step: StepKind;
   windowId: WindowId;
-  /** 解决队列 */
   resolveQueue: QueuedCard[];
   pending: PendingDecision[];
   resolveContext: ResolveContext | null;
-  /** 已收集声明的座位数辅助 */
-  nightPhaseOrder: GamePhase[];
   events: GameEvent[];
   eventSeq: number;
   processedCommandIds: string[];
-  /** 本轮死亡者 HOUSE 仍保留，用于记分（官方：含已死） */
   winners: SeatId[];
   gameOver: boolean;
   tokenPool: HonorToken[];
-  /** 每轮开始时备份，用于记分全员 */
   startingHouses: Record<SeatId, HouseId>;
 }
 

@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-**阶段 2 — 最小核心**（Draft + Spy/Mystic/BA/Shinobi + 计分 + 视图 + LocalAdapter；无 UI 页面、无 Socket）
+**阶段 3 — 完整规则单机**（4–11 人、六骗徒、反应、大将军、计分；无 UI、无 Socket）
 
 ## 如何验证
 

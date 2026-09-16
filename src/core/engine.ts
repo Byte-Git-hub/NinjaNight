@@ -1,15 +1,9 @@
-import type {
-  Command,
-  GamePhase,
-  HouseId,
-  RejectReason,
-  SeatId,
-} from '../shared/types';
-import { houseFamily, houseRank } from './deck';
+import type { Command, RejectReason, SeatId } from '../shared/types';
 import type { GameState, SeatState } from './game-state';
 import {
   afterDraftComplete,
   beginDraftPick,
+  bindMastermind,
   bindScoreRound,
   createGame,
   enterDraftDiscard,
@@ -20,27 +14,29 @@ import {
 import {
   afterDeclareSeat,
   bindAfterShinobi,
-  bindResolve,
   enterNightPhase,
   playableInstanceIds,
 } from './night-flow';
 import {
   applyOptionalChoice,
+  applyReactChoice,
   applyTargetChoice,
   revealDeclaredAndBuildQueue,
 } from './resolve';
-import { scoreRound } from './score';
-import { cloneGameState, findSeat, findSeatByToken } from './utils';
+import { resolveMastermind, scoreRound } from './score';
+import { cloneGameState, findSeatByToken } from './utils';
 import { pushEvent } from './events';
+import { houseFamily, houseRank } from './deck';
 
 export type EngineResult =
   | { ok: true; state: GameState }
   | { ok: false; reason: RejectReason; state: GameState };
 
 import * as resolveMod from './resolve';
-bindResolve(resolveMod);
-
+// night-flow no longer needs bindResolve
+void resolveMod;
 bindScoreRound(scoreRound);
+bindMastermind(resolveMastermind);
 bindAfterShinobi((state) => {
   enterMastermindReveal(state);
 });
@@ -48,47 +44,36 @@ bindAfterShinobi((state) => {
 export { createGame, enterNightPhase };
 
 export function applyCommand(state: GameState, cmd: Command): EngineResult {
-  const dup = state.processedCommandIds.includes(cmd.commandId);
-  if (dup) {
+  if (state.processedCommandIds.includes(cmd.commandId)) {
     return { ok: false, reason: 'duplicate', state };
   }
-
   const next = cloneGameState(state);
   next.processedCommandIds.push(cmd.commandId);
-
   const seat = findSeatByToken(next, cmd.seatToken);
-  if (!seat) {
-    return { ok: false, reason: 'unauthorized', state };
-  }
+  if (!seat) return { ok: false, reason: 'unauthorized', state };
 
   switch (cmd.type) {
-    case 'draft.pick': {
+    case 'draft.pick':
       return handleDraftPick(next, seat, cmd);
-    }
-    case 'draft.discard': {
+    case 'draft.discard':
       return handleDraftDiscard(next, seat, cmd);
-    }
-    case 'night.declare': {
+    case 'night.declare':
       return handleDeclare(next, seat, cmd);
-    }
-    case 'night.passPhase': {
+    case 'night.passPhase':
       return handlePass(next, seat);
-    }
-    case 'night.chooseTarget': {
+    case 'night.chooseTarget':
       return handleChooseTarget(next, seat, cmd);
-    }
-    case 'night.chooseOptional': {
+    case 'night.chooseOptional':
       return handleChooseOptional(next, seat, cmd);
-    }
+    case 'react.decide':
+      return handleReact(next, seat, cmd);
     case 'room.forceAdvance': {
       if (!seat.isHost) return { ok: false, reason: 'unauthorized', state };
-      // 阶段 4 完整超时；阶段 2 仅 dev 可跳过当前 declare 窗口
       if (next.step === 'collectDeclarations') {
-        for (const s of next.seats) {
+        for (const s of [...next.seats]) {
           if (!s.declaredResponded) afterDeclareSeat(next, s.seatId);
         }
-        // afterDeclareSeat may need resolve bound - also handle queue empty
-        if (next.step === 'collectDeclarations') {
+        if (next.pending.length === 0 && next.step === 'collectDeclarations') {
           revealDeclaredAndBuildQueue(next);
         }
         return { ok: true, state: next };
@@ -110,14 +95,8 @@ function handleDraftPick(next: GameState, seat: SeatState, cmd: Command): Engine
   }
   const pending = next.pending.find((p) => p.seatId === seat.seatId && p.kind === 'draftPick');
   if (!pending) return { ok: false, reason: 'staleWindow', state: next };
-  if (pending.id !== cmd.windowId && !cmd.windowId.endsWith(seat.seatId)) {
-    // allow prefix match
-    if (!pending.id.startsWith(cmd.windowId.split(':')[0] ?? '')) {
-      // be lenient with local adapter windows: check kind only if window matches seat window
-      if (cmd.windowId !== next.windowId && cmd.windowId !== pending.id) {
-        return { ok: false, reason: 'staleWindow', state: next };
-      }
-    }
+  if (cmd.windowId !== next.windowId && cmd.windowId !== pending.id) {
+    return { ok: false, reason: 'staleWindow', state: next };
   }
   const raw = 'cardInstanceId' in cmd.payload ? cmd.payload.cardInstanceId : null;
   if (!raw || !cardInSeatDraft(seat, raw)) {
@@ -126,12 +105,8 @@ function handleDraftPick(next: GameState, seat: SeatState, cmd: Command): Engine
   const chosen = seat.draftHand.find((c) => c.instanceId === raw);
   if (!chosen) return { ok: false, reason: 'notInHand', state: next };
 
-  // 选 1 扣置；剩余留在 draftHand 传出/弃置
-  if (next.phase === 'draftPick2') {
-    seat.hand.push({ ...chosen });
-  } else {
-    seat.hand = [{ ...chosen }];
-  }
+  if (next.phase === 'draftPick2') seat.hand.push({ ...chosen });
+  else seat.hand = [{ ...chosen }];
   seat.draftHand = seat.draftHand.filter((c) => c.instanceId !== raw);
   seat.declaredResponded = true;
   next.pending = next.pending.filter((p) => p.seatId !== seat.seatId);
@@ -146,7 +121,6 @@ function handleDraftPick(next: GameState, seat: SeatState, cmd: Command): Engine
       enterPassPhaseDraft(next);
       beginDraftPick(next, 2);
     } else if (next.phase === 'draftPick2') {
-      // draftHand 剩 1 张进入弃牌阶段；hand 已有第 1 次扣置
       enterDraftDiscard(next);
     }
   }
@@ -172,21 +146,13 @@ function handleDraftDiscard(next: GameState, seat: SeatState, cmd: Command): Eng
   seat.draftHand = seat.draftHand.filter((c) => c.instanceId !== raw);
   seat.declaredResponded = true;
   next.pending = next.pending.filter((p) => p.seatId !== seat.seatId);
-  pushEvent(next, 'draft.cardDiscarded', 'public', {
-    seatId: seat.seatId,
-    instanceId: raw,
-  });
-  if (next.pending.length === 0) {
-    afterDraftComplete(next);
-  }
+  pushEvent(next, 'draft.cardDiscarded', 'public', { seatId: seat.seatId, instanceId: raw });
+  if (next.pending.length === 0) afterDraftComplete(next);
   return { ok: true, state: next };
 }
 
 function handleDeclare(next: GameState, seat: SeatState, cmd: Command): EngineResult {
-  if (!next.phase.startsWith('night')) {
-    return { ok: false, reason: 'phaseMismatch', state: next };
-  }
-  if (next.step !== 'collectDeclarations') {
+  if (!next.phase.startsWith('night') || next.step !== 'collectDeclarations') {
     return { ok: false, reason: 'phaseMismatch', state: next };
   }
   if (!seat.alive) return { ok: false, reason: 'notAlive', state: next };
@@ -199,12 +165,11 @@ function handleDeclare(next: GameState, seat: SeatState, cmd: Command): EngineRe
       : [];
   const playable = playableInstanceIds(next, seat);
   for (const id of ids) {
-    if (!playable.includes(id)) {
-      return { ok: false, reason: 'notInHand', state: next };
-    }
+    if (!playable.includes(id)) return { ok: false, reason: 'notInHand', state: next };
   }
   seat.declared = seat.hand.filter((c) => ids.includes(c.instanceId)).map((c) => ({ ...c }));
   afterDeclareSeat(next, seat.seatId);
+  if (next.pending.length === 0) revealDeclaredAndBuildQueue(next);
   return { ok: true, state: next };
 }
 
@@ -216,36 +181,35 @@ function handlePass(next: GameState, seat: SeatState): EngineResult {
   if (!pending) return { ok: false, reason: 'staleWindow', state: next };
   seat.declared = [];
   afterDeclareSeat(next, seat.seatId);
+  if (next.pending.length === 0) revealDeclaredAndBuildQueue(next);
   return { ok: true, state: next };
 }
 
 function handleChooseTarget(next: GameState, seat: SeatState, cmd: Command): EngineResult {
-  if (next.step !== 'chooseTarget') {
-    return { ok: false, reason: 'phaseMismatch', state: next };
-  }
-  const target =
-    'targetSeatId' in cmd.payload ? cmd.payload.targetSeatId : null;
+  if (next.step !== 'chooseTarget') return { ok: false, reason: 'phaseMismatch', state: next };
+  const target = 'targetSeatId' in cmd.payload ? cmd.payload.targetSeatId : null;
   if (!target) return { ok: false, reason: 'invalidPayload', state: next };
   const res = applyTargetChoice(next, seat.seatId, target);
-  if (!res.ok) {
-    return { ok: false, reason: res.reason as RejectReason, state: next };
-  }
+  if (!res.ok) return { ok: false, reason: res.reason as RejectReason, state: next };
   return { ok: true, state: next };
 }
 
 function handleChooseOptional(next: GameState, seat: SeatState, cmd: Command): EngineResult {
-  if (next.step !== 'chooseOptional') {
-    return { ok: false, reason: 'phaseMismatch', state: next };
-  }
+  if (next.step !== 'chooseOptional') return { ok: false, reason: 'phaseMismatch', state: next };
   const choose = 'choose' in cmd.payload ? Boolean(cmd.payload.choose) : false;
   const res = applyOptionalChoice(next, seat.seatId, choose);
-  if (!res.ok) {
-    return { ok: false, reason: res.reason as RejectReason, state: next };
-  }
+  if (!res.ok) return { ok: false, reason: res.reason as RejectReason, state: next };
   return { ok: true, state: next };
 }
 
-/** 稳定状态哈希（测试重放） */
+function handleReact(next: GameState, seat: SeatState, cmd: Command): EngineResult {
+  if (next.step !== 'reactWindow') return { ok: false, reason: 'phaseMismatch', state: next };
+  const react = 'react' in cmd.payload ? Boolean(cmd.payload.react) : false;
+  const res = applyReactChoice(next, seat.seatId, react);
+  if (!res.ok) return { ok: false, reason: res.reason as RejectReason, state: next };
+  return { ok: true, state: next };
+}
+
 export function stateHash(state: GameState): string {
   const payload = JSON.stringify({
     seed: state.seed,
@@ -260,6 +224,7 @@ export function stateHash(state: GameState): string {
       revealed: s.houseRevealed,
       tokens: s.tokens.map((t) => `${t.instanceId}:${t.value}`).sort(),
       hand: s.hand.map((c) => c.instanceId).sort(),
+      reserved: s.reserved.map((c) => c.instanceId).sort(),
       draft: s.draftHand.map((c) => c.instanceId).sort(),
       known: s.knownHouses.map((k) => `${k.targetSeatId}|${k.houseId}|${k.round}`),
     })),
@@ -286,9 +251,12 @@ export function totalCardsInZones(state: GameState): number {
     state.zones.draftDiscard.length +
     state.zones.revealedInPlay.length +
     state.zones.spent.length +
-    state.seats.reduce((n, s) => n + s.hand.length + s.reserved.length + s.draftHand.length, 0)
+    state.seats.reduce(
+      (n, s) => n + s.hand.length + s.reserved.length + s.draftHand.length,
+      0,
+    )
   );
 }
 
-export type { GamePhase, HouseId, SeatId };
-export { houseFamily, houseRank, findSeat, enterHouseReveal };
+export { houseFamily, houseRank, enterHouseReveal };
+export type { SeatId };

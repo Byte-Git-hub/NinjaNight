@@ -118,7 +118,9 @@ export type GameEventType =
   | 'house.revealed'
   | 'score.honorAwarded'
   | 'score.roundWinner'
-  | 'score.victory';
+  | 'score.victory'
+  | 'react.opened'
+  | 'react.resolved';
 
 export interface GameEvent {
   id: string;

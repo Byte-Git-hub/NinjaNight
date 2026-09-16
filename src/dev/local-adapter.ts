@@ -5,29 +5,19 @@ import type {
   RejectReason,
   SeatId,
 } from '../shared/types';
-import {
-  applyCommand,
-  createGame,
-  type EngineResult,
-  stateHash,
-} from '../core/engine';
+import { applyCommand, createGame, stateHash, type EngineResult } from '../core/engine';
 import type { GameState } from '../core/game-state';
 import { projectView } from '../core/project-view';
 import { playableInstanceIds } from '../core/night-flow';
 import { findSeat } from '../core/utils';
 
-export type { GameState };
-
 export interface LocalAdapterOptions {
   seed: number;
   roomCode?: string;
   nicknames?: string[];
+  playerCount?: number;
 }
 
-/**
- * 本地单进程适配器：同一 core，可切换视角座位。
- * 仅供测试与 dev；生产联机用 SocketAdapter。
- */
 export class LocalAdapter implements GameClientAdapter {
   private state: GameState;
   private viewHandlers = new Set<(seatId: SeatId, view: PlayerView) => void>();
@@ -38,10 +28,16 @@ export class LocalAdapter implements GameClientAdapter {
       seed: options.seed,
       roomCode: options.roomCode,
       nicknames: options.nicknames,
+      playerCount: options.playerCount,
     });
   }
 
   getState(): GameState {
+    return this.state;
+  }
+
+  /** 测试：直接改 live state */
+  mutableState(): GameState {
     return this.state;
   }
 
@@ -85,14 +81,17 @@ export class LocalAdapter implements GameClientAdapter {
     }
   }
 
-  /** 测试/dev：发 draft.pick */
-  draftPick(seatId: SeatId, cardInstanceId: string): void {
+  private tokenOf(seatId: SeatId): string {
     const seat = findSeat(this.state, seatId);
     if (!seat) throw new Error('no seat');
+    return seat.seatToken;
+  }
+
+  draftPick(seatId: SeatId, cardInstanceId: string): void {
     this.submit({
-      commandId: `cmd-${seatId}-pick-${cardInstanceId}`,
+      commandId: `cmd-${seatId}-pick-${cardInstanceId}-${this.state.windowId}`,
       roomCode: this.state.roomCode,
-      seatToken: seat.seatToken,
+      seatToken: this.tokenOf(seatId),
       windowId: this.state.windowId,
       type: 'draft.pick',
       payload: { cardInstanceId },
@@ -100,12 +99,10 @@ export class LocalAdapter implements GameClientAdapter {
   }
 
   draftDiscard(seatId: SeatId, cardInstanceId: string): void {
-    const seat = findSeat(this.state, seatId);
-    if (!seat) throw new Error('no seat');
     this.submit({
-      commandId: `cmd-${seatId}-discard-${cardInstanceId}`,
+      commandId: `cmd-${seatId}-discard-${cardInstanceId}-${this.state.windowId}`,
       roomCode: this.state.roomCode,
-      seatToken: seat.seatToken,
+      seatToken: this.tokenOf(seatId),
       windowId: this.state.windowId,
       type: 'draft.discard',
       payload: { cardInstanceId },
@@ -113,12 +110,10 @@ export class LocalAdapter implements GameClientAdapter {
   }
 
   declare(seatId: SeatId, cardInstanceIds: string[]): void {
-    const seat = findSeat(this.state, seatId);
-    if (!seat) throw new Error('no seat');
     this.submit({
       commandId: `cmd-${seatId}-declare-${cardInstanceIds.join('_') || 'empty'}-${this.state.windowId}`,
       roomCode: this.state.roomCode,
-      seatToken: seat.seatToken,
+      seatToken: this.tokenOf(seatId),
       windowId: this.state.windowId,
       type: 'night.declare',
       payload: { cardInstanceIds },
@@ -126,12 +121,10 @@ export class LocalAdapter implements GameClientAdapter {
   }
 
   passPhase(seatId: SeatId): void {
-    const seat = findSeat(this.state, seatId);
-    if (!seat) throw new Error('no seat');
     this.submit({
       commandId: `cmd-${seatId}-pass-${this.state.windowId}`,
       roomCode: this.state.roomCode,
-      seatToken: seat.seatToken,
+      seatToken: this.tokenOf(seatId),
       windowId: this.state.windowId,
       type: 'night.passPhase',
       payload: {},
@@ -139,12 +132,10 @@ export class LocalAdapter implements GameClientAdapter {
   }
 
   chooseTarget(seatId: SeatId, targetSeatId: SeatId): void {
-    const seat = findSeat(this.state, seatId);
-    if (!seat) throw new Error('no seat');
     this.submit({
-      commandId: `cmd-${seatId}-target-${targetSeatId}-${this.state.windowId}`,
+      commandId: `cmd-${seatId}-target-${targetSeatId}-${this.state.windowId}-${this.state.eventSeq}`,
       roomCode: this.state.roomCode,
-      seatToken: seat.seatToken,
+      seatToken: this.tokenOf(seatId),
       windowId: this.state.windowId,
       type: 'night.chooseTarget',
       payload: { targetSeatId },
@@ -152,21 +143,25 @@ export class LocalAdapter implements GameClientAdapter {
   }
 
   chooseOptional(seatId: SeatId, choose: boolean): void {
-    const seat = findSeat(this.state, seatId);
-    if (!seat) throw new Error('no seat');
     this.submit({
-      commandId: `cmd-${seatId}-opt-${choose}-${this.state.windowId}`,
+      commandId: `cmd-${seatId}-opt-${choose}-${this.state.windowId}-${this.state.eventSeq}`,
       roomCode: this.state.roomCode,
-      seatToken: seat.seatToken,
+      seatToken: this.tokenOf(seatId),
       windowId: this.state.windowId,
       type: 'night.chooseOptional',
       payload: { choose },
     });
   }
 
-  handIdsOf(seatId: SeatId): string[] {
-    const seat = findSeat(this.state, seatId);
-    return seat ? seat.hand.map((c) => c.instanceId) : [];
+  react(seatId: SeatId, react: boolean): void {
+    this.submit({
+      commandId: `cmd-${seatId}-react-${react}-${this.state.windowId}-${this.state.eventSeq}`,
+      roomCode: this.state.roomCode,
+      seatToken: this.tokenOf(seatId),
+      windowId: this.state.windowId,
+      type: 'react.decide',
+      payload: { react },
+    });
   }
 
   draftHandIdsOf(seatId: SeatId): string[] {
@@ -183,4 +178,66 @@ export class LocalAdapter implements GameClientAdapter {
 
 export function createLocalAdapter(options: LocalAdapterOptions): LocalAdapter {
   return new LocalAdapter(options);
+}
+
+/** 自动完成 draft */
+export function finishDraft(adapter: LocalAdapter): void {
+  const seatIds = adapter.getState().seats.map((s) => s.seatId);
+  let guard = 0;
+  while (
+    adapter.getState().phase === 'draftPick1' ||
+    adapter.getState().phase === 'draftPick2' ||
+    adapter.getState().phase === 'draftDiscard'
+  ) {
+    guard += 1;
+    if (guard > 80) throw new Error('draft stuck');
+    const phase = adapter.getState().phase;
+    for (const id of seatIds) {
+      const hand = adapter.draftHandIdsOf(id);
+      const first = hand[0];
+      if (!first) continue;
+      if (phase === 'draftDiscard') adapter.draftDiscard(id, first);
+      else adapter.draftPick(id, first);
+    }
+  }
+}
+
+/** 自动推进夜晚决策 */
+export function runAutoNight(adapter: LocalAdapter, limit = 400): void {
+  let guard = 0;
+  while (!adapter.getState().gameOver && guard < limit) {
+    guard += 1;
+    const st = adapter.getState();
+    if (
+      !st.phase.startsWith('night') &&
+      st.phase !== 'mastermindReveal' &&
+      st.phase !== 'houseReveal' &&
+      st.phase !== 'score' &&
+      st.phase !== 'victoryCheck'
+    ) {
+      break;
+    }
+    let progressed = false;
+    for (const p of [...st.pending]) {
+      if (p.kind === 'declareCards') {
+        const playable = adapter.playableOf(p.seatId);
+        if (playable.length > 0) adapter.declare(p.seatId, playable);
+        else adapter.passPhase(p.seatId);
+        progressed = true;
+      } else if (p.kind === 'chooseTarget') {
+        const target = p.options[0];
+        if (target) {
+          adapter.chooseTarget(p.seatId, target);
+          progressed = true;
+        }
+      } else if (p.kind === 'chooseOptional') {
+        adapter.chooseOptional(p.seatId, true);
+        progressed = true;
+      } else if (p.kind === 'reactDecide') {
+        adapter.react(p.seatId, true);
+        progressed = true;
+      }
+    }
+    if (!progressed) break;
+  }
 }

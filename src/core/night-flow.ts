@@ -2,6 +2,7 @@ import type { GamePhase } from '../shared/types';
 import type { SeatState } from './game-state';
 import type { GameState } from './game-state';
 import { pushEvent } from './events';
+import { baseOf } from './deck';
 
 export function enterNightPhase(state: GameState, phase: GamePhase): void {
   state.phase = phase;
@@ -21,7 +22,7 @@ export function enterNightPhase(state: GameState, phase: GamePhase): void {
 export function beginCollectDeclarations(state: GameState): void {
   state.step = 'collectDeclarations';
   state.pending = state.seats
-    .filter((s) => s.alive && hasImplementedCardsForPhase(state, s))
+    .filter((s) => s.alive && playableInstanceIds(state, s).length > 0)
     .map((s) => ({
       id: `${state.windowId}:${s.seatId}`,
       seatId: s.seatId,
@@ -45,60 +46,53 @@ export function afterDeclareSeat(state: GameState, seatId: string): void {
   const seat = state.seats.find((s) => s.seatId === seatId);
   if (seat) seat.declaredResponded = true;
   state.pending = state.pending.filter((p) => p.seatId !== seatId);
-  if (state.pending.length === 0 && state.step === 'collectDeclarations') {
-    const { revealDeclaredAndBuildQueue } = require_resolve();
-    revealDeclaredAndBuildQueue(state);
-  }
 }
 
-// indirection to avoid circular import resolve <-> night-flow
-type ResolveMod = typeof import('./resolve');
-let resolveMod: ResolveMod | null = null;
-export function bindResolve(mod: ResolveMod): void {
-  resolveMod = mod;
-}
-function require_resolve(): ResolveMod {
-  if (!resolveMod) throw new Error('resolve not bound');
-  return resolveMod;
-}
-
-function phaseCardPrefix(state: GameState): string | null {
-  switch (state.phase) {
-    case 'nightSpy':
-      return 'spy';
-    case 'nightMystic':
-      return 'mystic';
-    case 'nightTrickster':
-      return 'trickster';
-    case 'nightBlindAssassin':
-      return 'blind_assassin';
-    case 'nightShinobi':
-      return 'shinobi';
-    default:
-      return null;
-  }
+export function allDeclarationsDone(state: GameState): boolean {
+  return state.pending.length === 0 && state.step === 'collectDeclarations';
 }
 
 export function isImplemented(cardId: string): boolean {
+  const b = baseOf(cardId);
   return (
-    cardId.startsWith('spy') ||
-    cardId.startsWith('mystic') ||
-    cardId.startsWith('blind_assassin') ||
-    cardId.startsWith('shinobi')
+    b === 'spy' ||
+    b === 'mystic' ||
+    b === 'blind_assassin' ||
+    b === 'shinobi' ||
+    TRICKSTERS.has(b)
   );
 }
 
-function hasImplementedCardsForPhase(state: GameState, seat: SeatState): boolean {
-  const prefix = phaseCardPrefix(state);
-  if (!prefix || prefix === 'trickster') return false;
-  return seat.hand.some((c) => c.cardId.startsWith(prefix) && isImplemented(c.cardId));
+const TRICKSTERS = new Set([
+  'shapeshifter',
+  'grave_digger',
+  'troublemaker',
+  'spirit_merchant',
+  'thief',
+  'judge',
+]);
+
+export function matchesPhase(state: GameState, cardId: string): boolean {
+  const b = baseOf(cardId);
+  switch (state.phase) {
+    case 'nightSpy':
+      return b === 'spy';
+    case 'nightMystic':
+      return b === 'mystic';
+    case 'nightTrickster':
+      return TRICKSTERS.has(b);
+    case 'nightBlindAssassin':
+      return b === 'blind_assassin';
+    case 'nightShinobi':
+      return b === 'shinobi';
+    default:
+      return false;
+  }
 }
 
 export function playableInstanceIds(state: GameState, seat: SeatState): string[] {
-  const prefix = phaseCardPrefix(state);
-  if (!prefix || prefix === 'trickster') return [];
   return seat.hand
-    .filter((c) => c.cardId.startsWith(prefix) && isImplemented(c.cardId))
+    .filter((c) => matchesPhase(state, c.cardId) && isImplemented(c.cardId))
     .map((c) => c.instanceId);
 }
 
@@ -123,19 +117,14 @@ export function tryAdvanceNightPhase(state: GameState): void {
     return;
   }
   if (state.phase === 'nightShinobi') {
-    advanceAfterShinobi(state);
+    afterShinobiFn(state);
     return;
   }
 }
 
-let afterShinobi: (s: GameState) => void = () => {
+let afterShinobiFn: (s: GameState) => void = () => {
   throw new Error('afterShinobi not bound');
 };
-
 export function bindAfterShinobi(fn: (s: GameState) => void): void {
-  afterShinobi = fn;
-}
-
-function advanceAfterShinobi(state: GameState): void {
-  afterShinobi(state);
+  afterShinobiFn = fn;
 }
