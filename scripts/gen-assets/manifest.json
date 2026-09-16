@@ -1,0 +1,197 @@
+{
+  "updatedAt": "2026-09-17T01:48:00+08:00",
+  "quotaResetTime": "2026-09-16T20:30:38Z",
+  "summary": {
+    "totalVisualUnits": 19,
+    "completed": 2,
+    "pendingQuota": 17,
+    "tokens": 1
+  },
+  "tokens": [
+    {
+      "tokenId": "honor-token",
+      "file": "public/assets/tokens/honor-token.jpg",
+      "sourcePath": "docs/06_assets/one-shot-kintsugi-token.jpg",
+      "sizeBytes": 754630,
+      "aspectRatio": "2:3",
+      "status": "completed",
+      "note": "One-Shot 荣誉标记锚点图复用"
+    }
+  ],
+  "visuals": [
+    {
+      "visualId": "spy",
+      "nameZh": "密探",
+      "file": "public/assets/visuals/spy.jpg",
+      "sourcePath": "C:/Users/chr/.gemini/antigravity-cli/brain/8b7ad90d-55ea-4a2d-9ddb-472919c5b56f/spy_1789580552183.jpg",
+      "sizeBytes": 772479,
+      "aspectRatio": "2:3",
+      "status": "completed",
+      "coveredCards": ["spy-1", "spy-2", "spy-3", "spy-4", "spy-5", "spy-6"],
+      "note": "生成的密探立绘：水墨夜色竹帘、金色眼眸与金箔微光卷轴、顶部12%与底部22%纯色留白符合预期"
+    },
+    {
+      "visualId": "shapeshifter",
+      "nameZh": "百变者",
+      "file": "public/assets/visuals/shapeshifter.jpg",
+      "sourcePath": "C:/Users/chr/.gemini/antigravity-cli/brain/8b7ad90d-55ea-4a2d-9ddb-472919c5b56f/shapeshifter_1789580615613.jpg",
+      "sizeBytes": 689477,
+      "aspectRatio": "2:3",
+      "status": "completed",
+      "coveredCards": ["shapeshifter"],
+      "note": "生成的百变者立绘：手持能面、碎裂青铜镜、异色双影、金箔金缮裂纹、留白符合预期"
+    },
+    {
+      "visualId": "mastermind",
+      "nameZh": "大将军",
+      "file": "public/assets/visuals/mastermind.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["mastermind"],
+      "note": "等待生图配额重置 (gemini-3.1-flash-image resets at 2026-09-16T20:30:38Z)"
+    },
+    {
+      "visualId": "mystic",
+      "nameZh": "隐士",
+      "file": "public/assets/visuals/mystic.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["mystic-1", "mystic-2", "mystic-3", "mystic-4", "mystic-5", "mystic-6"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "grave_digger",
+      "nameZh": "掘墓人",
+      "file": "public/assets/visuals/grave_digger.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["grave_digger"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "troublemaker",
+      "nameZh": "捣蛋鬼",
+      "file": "public/assets/visuals/troublemaker.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["troublemaker"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "spirit_merchant",
+      "nameZh": "商人",
+      "file": "public/assets/visuals/spirit_merchant.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["spirit_merchant"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "thief",
+      "nameZh": "盗贼",
+      "file": "public/assets/visuals/thief.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["thief"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "judge",
+      "nameZh": "裁判",
+      "file": "public/assets/visuals/judge.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["judge"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "blind_assassin",
+      "nameZh": "刺客",
+      "file": "public/assets/visuals/blind_assassin.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["blind_assassin-1", "blind_assassin-2", "blind_assassin-3", "blind_assassin-4", "blind_assassin-5", "blind_assassin-6"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "shinobi",
+      "nameZh": "上忍",
+      "file": "public/assets/visuals/shinobi.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["shinobi-1", "shinobi-2", "shinobi-3", "shinobi-4", "shinobi-5", "shinobi-6"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "mirror_monk",
+      "nameZh": "还施者",
+      "file": "public/assets/visuals/mirror_monk.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["mirror_monk"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "martyr",
+      "nameZh": "殉道者",
+      "file": "public/assets/visuals/martyr.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["martyr"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "crane",
+      "nameZh": "仙鹤",
+      "file": "public/assets/visuals/crane.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["crane-1", "crane-2", "crane-3", "crane-4", "crane-5"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "lotus",
+      "nameZh": "莲花",
+      "file": "public/assets/visuals/lotus.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["lotus-1", "lotus-2", "lotus-3", "lotus-4", "lotus-5"],
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "ronin",
+      "nameZh": "浪人",
+      "file": "public/assets/visuals/ronin.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["ronin"],
+      "note": "等待生图配额重置"
+    }
+  ],
+  "ui": [
+    {
+      "visualId": "ui-lobby-bg",
+      "nameZh": "大厅背景底图",
+      "file": "public/assets/ui/lobby-bg.jpg",
+      "aspectRatio": "16:9",
+      "status": "pending_quota",
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "ui-table-texture",
+      "nameZh": "牌桌和纸底纹",
+      "file": "public/assets/ui/table-texture.jpg",
+      "aspectRatio": "16:9",
+      "status": "pending_quota",
+      "note": "等待生图配额重置"
+    },
+    {
+      "visualId": "ui-button-primary",
+      "nameZh": "主要按钮质感板",
+      "file": "public/assets/ui/button-primary.jpg",
+      "aspectRatio": "1:1",
+      "status": "pending_quota",
+      "note": "等待生图配额重置"
+    }
+  ]
+}
