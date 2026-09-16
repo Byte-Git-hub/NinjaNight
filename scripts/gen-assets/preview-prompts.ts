@@ -1,28 +1,28 @@
-import { PROMPTS } from './prompts';
+import { VISUAL_PROMPTS, VISUAL_MAP } from './prompts';
 
 function cleanForMarkdownTable(str: string): string {
   return str.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }
 
 function main() {
-  console.log('# 美术资产 Prompt 预览清单（共 47 条）\n');
+  console.log('# 视觉单元 Prompt 预览清单（共 19 条：16 卡牌 + 3 UI）\n');
   console.log(
-    '| 序号 | 资产 ID | 中文名 | 英文名 | 分类 | 阶段/编号 | 视觉提示 | 英文生图 Prompt (promptEn) |',
+    '| 序号 | 视觉单元 (visualId) | 中文名 | 英文名 | 类别 | 分组 | 覆盖的牌 (cardIds) | 视觉提示 | 英文生图 Prompt (promptEn) |',
   );
   console.log(
-    '|:---:|:---|:---|:---|:---:|:---:|:---|:---|',
+    '|:---:|:---|:---|:---|:---:|:---:|:---|:---|:---|',
   );
 
-  PROMPTS.forEach((item, idx) => {
-    const num = item.number !== null ? String(item.number) : '-';
-    const phaseOrNum = `${item.phase} / ${num}`;
+  VISUAL_PROMPTS.forEach((item, idx) => {
+    const coveredCards = (VISUAL_MAP[item.visualId] ?? []).join(', ');
     const row = [
       idx + 1,
-      item.id,
+      item.visualId,
       item.nameZh,
       item.nameEn,
       item.kind,
-      phaseOrNum,
+      item.category,
+      coveredCards || '-',
       cleanForMarkdownTable(item.visualHint),
       cleanForMarkdownTable(item.promptEn),
     ].join(' | ');
@@ -30,7 +30,9 @@ function main() {
     console.log(`| ${row} |`);
   });
 
-  console.log(`\n> 统计：总计 ${PROMPTS.length} 条视觉资产（卡牌 44 张 + UI 预留 3 条）。`);
+  const cardUnits = VISUAL_PROMPTS.filter((p) => p.kind !== 'ui').length;
+  const uiUnits = VISUAL_PROMPTS.filter((p) => p.kind === 'ui').length;
+  console.log(`\n> 统计：总计 ${VISUAL_PROMPTS.length} 条视觉单元（卡牌视觉单元 ${cardUnits} 个，覆盖 44 张牌；UI 视觉单元 ${uiUnits} 个）。`);
 }
 
 main();
