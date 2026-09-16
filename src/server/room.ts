@@ -21,6 +21,8 @@ export interface SessionInfo {
   seatToken: string;
   socketId: string;
   ready: boolean;
+  connected: boolean;
+  disconnectedAt: number | null;
   rateWindowStart: number;
   rateCount: number;
   recentCommandIds: string[];
@@ -108,7 +110,7 @@ export class RoomRuntime {
           return {
             seatId: l.seatId,
             nickname: l.nickname,
-            connected: !!sess,
+            connected: sess?.connected ?? false,
             ready: l.ready,
             isHost: l.isHost,
           };
@@ -151,6 +153,10 @@ export class RoomRuntime {
   markEmpty(): void {
     if (this.sessions.size === 0) this.emptySince = Date.now();
     else this.emptySince = null;
+  }
+
+  clearTimer(): void {
+    /* window timers live in index.ts; kept for API completeness */
   }
 
   isIdleExpired(now: number, emptyTtl: number, endedTtl: number): boolean {

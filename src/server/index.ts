@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { applyAllDefaults, createGame } from '../core/engine';
@@ -25,6 +27,8 @@ import {
   type RoomAckPayload,
 } from '../shared/protocol';
 import { RoomRuntime, generateRoomCode, newSeatToken, type SessionInfo } from './room';
+import { logger } from './logger';
+import { DISCONNECT_RETAIN_MS } from '../shared/timeouts';
 
 const VALID_TYPES = new Set<CommandType>([
   'draft.pick',
@@ -42,6 +46,13 @@ export function createApp() {
   app.get('/health', (_req, res) => {
     res.json({ ok: true });
   });
+  const dist = join(process.cwd(), 'dist');
+  if (existsSync(dist)) {
+    app.use(express.static(dist));
+    app.get(/^(?!\/socket\.io|\/health).*/, (_req, res) => {
+      res.sendFile(join(dist, 'index.html'));
+    });
+  }
   return app;
 }
 
@@ -116,34 +127,68 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     socket.emit(OUT.roomError, { reasonCode: reason, message });
   }
 
+  /** 清理超过保留期的断线 session */
+  function pruneDisconnectedSessions(): void {
+    const now = Date.now();
+    for (const room of rooms.values()) {
+      for (const [tok, sess] of [...room.sessions]) {
+        if (!sess.connected && sess.disconnectedAt && now - sess.disconnectedAt > DISCONNECT_RETAIN_MS) {
+          room.sessions.delete(tok);
+          sessionsByToken.delete(tok);
+          logger.info('session.pruned', { roomCode: room.code, seatId: sess.seatId });
+        }
+      }
+      room.markEmpty();
+    }
+  }
+  const pruneTimer = setInterval(pruneDisconnectedSessions, 30_000);
+  pruneTimer.unref?.();
+
   function bindSession(
     room: RoomRuntime,
     socket: Socket,
     seatId: string,
     seatToken: string,
   ): SessionInfo {
+    // 重绑同 seatToken
+    const existing = room.sessions.get(seatToken);
+    if (existing) {
+      existing.socketId = socket.id;
+      existing.connected = true;
+      existing.disconnectedAt = null;
+      sessionsByToken.set(seatToken, existing);
+      socket.join(room.roomChannel());
+      socket.data.seatToken = seatToken;
+      socket.data.roomCode = room.code;
+      if (room.started && room.state) {
+        const seat = room.state.seats.find((s) => s.seatId === seatId);
+        if (seat) seat.connected = true;
+      }
+      logger.info('session.rebind', { roomCode: room.code, seatId });
+      return existing;
+    }
     const sess: SessionInfo = {
       roomCode: room.code,
       seatId,
       seatToken,
       socketId: socket.id,
       ready: false,
+      connected: true,
+      disconnectedAt: null,
       rateWindowStart: Date.now(),
       rateCount: 0,
       recentCommandIds: [],
     };
-    // 同一 seatToken 新连接抢占
+    // 同一 seat 新连接抢占旧 token
     for (const [tok, old] of sessionsByToken) {
-      if (tok === seatToken || (old.seatId === seatId && old.roomCode === room.code)) {
-        if (tok !== seatToken) {
-          io.to(old.socketId).emit(OUT.roomError, {
-            reasonCode: 'UNAUTHORIZED',
-            message: '连接被替换',
-          });
-          io.sockets.sockets.get(old.socketId)?.leave(room.roomChannel());
-          sessionsByToken.delete(tok);
-          room.sessions.delete(tok);
-        }
+      if (old.seatId === seatId && old.roomCode === room.code && tok !== seatToken) {
+        io.to(old.socketId).emit(OUT.roomError, {
+          reasonCode: 'UNAUTHORIZED',
+          message: '连接被替换',
+        });
+        io.sockets.sockets.get(old.socketId)?.leave(room.roomChannel());
+        sessionsByToken.delete(tok);
+        room.sessions.delete(tok);
       }
     }
     room.sessions.set(seatToken, sess);
@@ -160,6 +205,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
 
   io.on('connection', (socket) => {
     socket.on(EV.roomCreate, (payload: unknown) => {
+      try {
       const body = (payload ?? {}) as { nickname?: unknown };
       const nick = sanitizeNickname(body.nickname, MAX_NICKNAME_LEN);
       if (!nick) {
@@ -186,6 +232,11 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       };
       socket.emit(OUT.roomAck, ack);
       room.broadcastPresence();
+      } catch (err) {
+        const e = err as Error;
+        logger.error('socket.handler_error', { error: e.message, type: 'room.create' });
+        emitError(socket, 'INVALID_PAYLOAD', '服务器内部错误');
+      }
     });
 
     socket.on(EV.roomJoin, (payload: unknown) => {
@@ -334,6 +385,71 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       room.broadcastPublicEvents(res.newEvents.filter((e) => e.visibility === 'public'));
       room.broadcastPrivateEvents(res.newEvents);
       afterStateChange(room);
+    });
+
+    // 房主踢出断线玩家；对局中踢出则本局结束回大厅
+    socket.on(EV.roomKick, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; targetSeatId?: unknown };
+      const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      const room = rooms.get(sess.roomCode);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      if (sess.seatId !== room.hostSeatId) {
+        emitError(socket, 'NOT_HOST');
+        return;
+      }
+      const targetSeatId = typeof body.targetSeatId === 'string' ? body.targetSeatId : null;
+      if (!targetSeatId || targetSeatId === room.hostSeatId) {
+        emitError(socket, 'INVALID_PAYLOAD', '不能踢出房主');
+        return;
+      }
+      // 移除该座位 session
+      for (const [tok, s] of [...room.sessions]) {
+        if (s.seatId === targetSeatId) {
+          room.sessions.delete(tok);
+          sessionsByToken.delete(tok);
+          io.to(s.socketId).emit(OUT.roomError, {
+            reasonCode: 'UNAUTHORIZED',
+            message: '你已被房主踢出',
+          });
+        }
+      }
+      room.lobby = room.lobby.filter((l) => l.seatId !== targetSeatId);
+      if (room.started && room.state) {
+        // 已开始的对局无法继续 → 回大厅
+        resetRoomToLobby(room);
+        logger.info('room.kick_end_game', { roomCode: room.code, seatId: targetSeatId });
+      } else {
+        room.broadcastPresence();
+        logger.info('room.kick', { roomCode: room.code, seatId: targetSeatId });
+      }
+    });
+
+    // 房主终止本局 → 回大厅
+    socket.on(EV.roomEnd, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown };
+      const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      const room = rooms.get(sess.roomCode);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      if (sess.seatId !== room.hostSeatId) {
+        emitError(socket, 'NOT_HOST');
+        return;
+      }
+      resetRoomToLobby(room);
+      logger.info('room.end', { roomCode: room.code });
     });
 
     socket.on(EV.commandSend, (payload: unknown) => {
@@ -487,19 +603,58 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   });
 
   function leaveSession(sess: SessionInfo, socket: Socket): void {
-    sessionsByToken.delete(sess.seatToken);
     const room = rooms.get(sess.roomCode);
-    if (!room) return;
-    room.sessions.delete(sess.seatToken);
-    if (room.started && room.state) {
-      const seat = room.state.seats.find((s) => s.seatId === sess.seatId);
-      if (seat) seat.connected = false;
-    } else {
-      room.lobby = room.lobby.filter((l) => l.seatToken !== sess.seatToken);
+    socket.leave(room?.roomChannel() ?? '');
+    // 断线：保留 session 映射，标记 disconnected（阶段 5）
+    sess.connected = false;
+    sess.disconnectedAt = Date.now();
+    sess.socketId = '';
+    if (room) {
+      if (room.started && room.state) {
+        const seat = room.state.seats.find((s) => s.seatId === sess.seatId);
+        if (seat) seat.connected = false;
+      }
+      room.markEmpty();
+      room.broadcastPresence();
     }
-    socket.leave(room.roomChannel());
-    room.markEmpty();
+    logger.info('session.disconnect', {
+      roomCode: sess.roomCode,
+      seatId: sess.seatId,
+    });
+  }
+
+  function resetRoomToLobby(room: RoomRuntime): void {
+    room.clearTimer?.();
+    room.state = null;
+    room.started = false;
+    room.endedAt = null;
+    // 保留仍连接的 session 在 lobby（按 seatToken 重建 lobby）
+    const still: typeof room.lobby = [];
+    for (const sess of room.sessions.values()) {
+      if (!sess.connected) continue;
+      const prev = room.lobby.find((l) => l.seatId === sess.seatId);
+      still.push({
+        seatId: sess.seatId,
+        nickname: prev?.nickname ?? sess.seatId,
+        seatToken: sess.seatToken,
+        ready: false,
+        isHost: sess.seatId === room.hostSeatId,
+      });
+      sess.ready = false;
+    }
+    if (still.length === 0) {
+      // 至少保留房主若仍在线；否则房间将被清理
+      room.lobby = [];
+    } else {
+      room.lobby = still;
+      const host = still.find((s) => s.isHost) ?? still[0];
+      if (host) room.hostSeatId = host.seatId;
+    }
+    room.emptySince = room.sessions.size === 0 ? Date.now() : null;
     room.broadcastPresence();
+    for (const sess of room.sessions.values()) {
+      room.emitToSeat(sess.seatToken, OUT.roomStarted, { roomCode: room.code, reset: true });
+    }
   }
 
   return {
@@ -514,6 +669,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     },
     close() {
       clearInterval(cleaner);
+      clearInterval(pruneTimer);
       return new Promise<void>((resolve) => {
         io.close();
         httpServer.close(() => resolve());
@@ -523,3 +679,12 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
 }
 
 // 仅作为库导出；启动入口见 scripts/dev-server.ts
+
+process.on('uncaughtException', (err) => {
+  logger.error('process.uncaughtException', { error: err.message });
+});
+process.on('unhandledRejection', (reason) => {
+  logger.error('process.unhandledRejection', {
+    error: reason instanceof Error ? reason.message : String(reason),
+  });
+});

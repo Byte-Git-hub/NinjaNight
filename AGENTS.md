@@ -52,6 +52,8 @@ npm run build
 5. `dev` 不得进入生产构建  
 6. 不为程序方便静默删牌、改效果或改胜负规则  
 7. 未确认规则必须标记「待确认」，不得当成官方规则实现  
+8. **日志脱敏（硬约定）**：服务端日志禁止包含 HONOR 面值、玩家 HOUSE、手牌内容、`seatToken`；仅允许 roomCode / seatId / command.type / reasonCode 等。统一走 `src/server/logger.ts`。  
+9. **断线不重同步**：断线仅保留 seat 映射一段时间；客户端需刷新重建连接，不恢复对局状态。  
 
 ## 技术选型（已冻结）
 

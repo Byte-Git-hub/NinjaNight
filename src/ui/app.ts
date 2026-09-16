@@ -89,6 +89,7 @@ export class AppUI {
       },
       onCommandReject: (_id, reason) => {
         this.lastReject = reason;
+        this.showToast(`指令被拒绝：${reason}`);
         this.render();
       },
       onPublicEvents: () => {
@@ -98,7 +99,15 @@ export class AppUI {
   }
 
   private renderShell(): void {
-    this.root.innerHTML = `<div class="app" id="ui"></div>`;
+    this.root.innerHTML = `<div class="app" id="ui"><div id="toast" class="toast" hidden></div></div>`;
+  }
+
+  private showToast(msg: string): void {
+    const t = this.root.querySelector('#toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.removeAttribute('hidden');
+    window.setTimeout(() => t.setAttribute('hidden', ''), 2500);
   }
 
   private ui(): HTMLElement | null {
@@ -202,8 +211,26 @@ export class AppUI {
       <div class="row">
         <button id="btn-ready" type="button">切换准备</button>
         ${isHost ? `<button id="btn-start" type="button" ${n < 4 ? 'disabled' : ''}>开始 (${n})</button>` : ''}
+        ${isHost ? `<button id="btn-end" type="button" class="danger">终止本局</button>` : ''}
       </div>
+      ${isHost ? this.kickButtons() : ''}
       <p class="hint">需要 ${allReady ? '可开始' : '4–11 人且全员准备（房主可不准备）'}</p>
+    `;
+  }
+
+  private kickButtons(): string {
+    const seats = this.presence?.seats ?? [];
+    const offline = seats.filter((s) => !s.connected && !s.isHost);
+    if (offline.length === 0) return '';
+    return `
+      <div class="row kick-row">
+        ${offline
+          .map(
+            (s) =>
+              `<button type="button" class="danger kick" data-seat="${escapeHtml(s.seatId)}">踢出 ${escapeHtml(s.nickname)}（断线）</button>`,
+          )
+          .join('')}
+      </div>
     `;
   }
 
@@ -237,8 +264,11 @@ export class AppUI {
         ${this.pendingPanel(pending)}
         <div class="row">
           ${this.net.isHost ? `<button id="btn-fa" type="button">强制推进</button>` : ''}
+          ${this.net.isHost ? `<button id="btn-end" type="button" class="danger">终止本局</button>` : ''}
         </div>
-        <div class="log">${events}</div>
+        ${this.net.isHost ? this.kickButtons() : ''}
+        <button type="button" id="btn-toggle-log" class="muted">日志折叠</button>
+        <div class="log" id="game-log">${events}</div>
       </section>
     `;
   }
@@ -305,6 +335,16 @@ export class AppUI {
       });
       this.selected.clear();
     });
+    $('#btn-end')?.addEventListener('click', () => this.net.endGame());
+    $('#btn-toggle-log')?.addEventListener('click', () => {
+      this.root.querySelector('#game-log')?.classList.toggle('collapsed');
+    });
+    this.root.querySelectorAll<HTMLButtonElement>('.kick[data-seat]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const seat = btn.dataset['seat'];
+        if (seat) this.net.kickSeat(seat);
+      });
+    });
 
     this.root.querySelectorAll<HTMLButtonElement>('.card[data-iid]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -317,6 +357,13 @@ export class AppUI {
           this.selected.add(id);
           btn.classList.add('sel');
         }
+      });
+      // 双击取消选中（移动端）
+      btn.addEventListener('dblclick', () => {
+        const id = btn.dataset['iid'];
+        if (!id) return;
+        this.selected.delete(id);
+        btn.classList.remove('sel');
       });
     });
 

@@ -55,6 +55,8 @@ export const EV = {
   roomReady: 'room.ready',
   roomStart: 'room.start',
   roomForceAdvance: 'room.forceAdvance',
+  roomKick: 'room.kick',
+  roomEnd: 'room.end',
   commandSend: 'command.send',
   chatSend: 'chat.send',
 } as const;

@@ -94,6 +94,16 @@ export class GameNet {
     this.socket?.emit(EV.roomForceAdvance, { seatToken: this.seatToken });
   }
 
+  kickSeat(targetSeatId: string): void {
+    if (!this.seatToken) return;
+    this.socket?.emit(EV.roomKick, { seatToken: this.seatToken, targetSeatId });
+  }
+
+  endGame(): void {
+    if (!this.seatToken) return;
+    this.socket?.emit(EV.roomEnd, { seatToken: this.seatToken });
+  }
+
   sendCommand(
     windowId: string,
     type: string,

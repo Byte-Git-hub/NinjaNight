@@ -98,7 +98,21 @@ updated: 2026-09-16
 - [x] typecheck / test 49 / build 无 dev / test:e2e 2 passed  
 - [ ] 手动双隐私窗口完整一局（用户侧验收）  
 
-### 阶段 5+ — 未开始
+### 阶段 5 — 稳定性与可部署 — **完成（待用户确认进入美术资产管线）**
+
+- [x] 商人完整效果（merchantChoose / merchantExchange）  
+- [x] forceAdvance 语义文档确认  
+- [x] 断线保留 + 房主踢出 / 终止本局  
+- [x] 超时环境变量 + .env.example  
+- [x] 移动端 <1024px 布局  
+- [x] 错误处理 + 日志脱敏 logger  
+- [x] README Windows 启动  
+- [x] build:check CI 断言  
+- [x] 稳定性测试（10 房间 / 断线踢出 / TTL）  
+- [x] e2e：移动 / 断线 / 商人流程  
+- [ ] 真机手测一轮 4 人局（需用户）  
+
+### 阶段 6+ — 美术资产管线（未开始）
 
 ---
 
