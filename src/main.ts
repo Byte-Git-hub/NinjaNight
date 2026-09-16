@@ -1,7 +1,17 @@
-// 阶段 0 空入口：仅保证 Vite 可构建，无玩法规则。
+import './ui/style.css';
+import { GameNet } from './net/client';
+import { AppUI } from './ui/app';
+
 const app = document.querySelector<HTMLDivElement>('#app');
 if (app) {
-  app.textContent = '忍者之夜 — 阶段 0 骨架';
+  const net = new GameNet();
+  const ui = new AppUI(app, net);
+  ui.mount();
+  // 开发默认连同源；可用 ?server= 覆盖
+  const params = new URLSearchParams(location.search);
+  const url = params.get('server') || location.origin;
+  net.connect(url);
+  ui.render();
 }
 
 export {};

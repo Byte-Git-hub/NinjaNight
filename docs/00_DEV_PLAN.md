@@ -87,13 +87,16 @@ updated: 2026-09-16
 | 03 §0.2 是否有对应裁定 | **是**（排序/死者队列/ReactWindow/同开/反应嵌套/Mastermind/掘墓） |
 | 上轮 3 条 String replace 未命中 | 实际文件已含目标内容；本轮补写商人/掘墓澄清与本检查节 |
 
-### 阶段 4 — 房间联机版 — **进行中**
+### 阶段 4 — 房间联机版 — **完成（待用户确认进入阶段 5）**
 
-- [ ] 文档一致性检查  
-- [ ] 澄清 A 商人二选一 / 澄清 B 掘墓跨阶段  
-- [ ] 04_PROTOCOL 冻结  
-- [ ] server / net / UI / e2e / integration  
-- [ ] 验收命令与手动双开  
+- [x] 文档一致性检查（阶段 3 遗留检查节）  
+- [x] 澄清 A 商人二选一 / 澄清 B 掘墓跨阶段（commit `c4654c2` + 本阶段）  
+- [x] 04_PROTOCOL 冻结（事件/原因码/超时常量）  
+- [x] server：Express + Socket.IO 房间/会话/权威/超时/限频/消毒  
+- [x] net 客户端封装 + 轻量 DOM UI（大厅/对局/聊天/forceAdvance）  
+- [x] 集成测试 4 项 + e2e 2 项通过  
+- [x] typecheck / test 49 / build 无 dev / test:e2e 2 passed  
+- [ ] 手动双隐私窗口完整一局（用户侧验收）  
 
 ### 阶段 5+ — 未开始
 
@@ -111,6 +114,10 @@ updated: 2026-09-16
 | D6 | 已揭示牌在结算前死亡：默认继续结算 | 队列一致性；标待确认 |
 | D7 | 同号多牌稳定序=座位序 | 可测可重现 |
 | D8 | Grave Digger 默认不可看 set aside 牌 | discarded ≠ set aside |
+| D9 | 商人先二选一 HONOR/HOUSE 再可选交换【官方】 | 卡面「或」；澄清 A |
+| D10 | 掘墓过去阶段立即打出；未来阶段 reserved【网页版】 | 澄清 B |
+| D11 | 大厅不预建 GameState；start 时按实际人数 createGame | 避免空座发牌 |
+| D12 | forceAdvance/超时走 applyAllDefaults | 统一默认策略 |
 
 ---
 

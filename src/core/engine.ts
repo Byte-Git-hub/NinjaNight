@@ -69,17 +69,166 @@ export function applyCommand(state: GameState, cmd: Command): EngineResult {
       return handleReact(next, seat, cmd);
     case 'room.forceAdvance': {
       if (!seat.isHost) return { ok: false, reason: 'unauthorized', state };
-      if (next.step === 'collectDeclarations') {
-        for (const s of [...next.seats]) {
-          if (!s.declaredResponded) afterDeclareSeat(next, s.seatId);
-        }
-        if (next.pending.length === 0 && next.step === 'collectDeclarations') {
-          revealDeclaredAndBuildQueue(next);
-        }
-        return { ok: true, state: next };
-      }
-      return { ok: false, reason: 'phaseMismatch', state };
+      return applyAllDefaults(next);
     }
+    default:
+      return { ok: false, reason: 'unknownCommand', state };
+  }
+}
+
+/**
+ * 对当前所有 pending 应用 defaultChoice（房主 forceAdvance / 超时）。
+ * 可多次调用直至无 pending 或阶段不再推进。
+ */
+export function applyAllDefaults(state: GameState): EngineResult {
+  if (state.pending.length === 0) {
+    return { ok: true, state };
+  }
+  let progressed = false;
+  let guard = 0;
+  while (state.pending.length > 0 && guard < 200) {
+    guard += 1;
+    const p = state.pending[0];
+    if (!p) break;
+    const beforePhase = state.phase;
+    const beforeStep = state.step;
+    const beforePending = state.pending.length;
+    const beforeEvent = state.eventSeq;
+
+    const token = state.seats.find((s) => s.seatId === p.seatId)?.seatToken ?? '';
+    if (!token) {
+      state.pending = state.pending.filter((x) => x.id !== p.id);
+      progressed = true;
+      continue;
+    }
+
+    let cmd: Command | null = null;
+    if (p.kind === 'draftPick') {
+      const id = p.defaultChoice.kind === 'autoPick' ? p.defaultChoice.optionId : p.options[0];
+      if (!id) {
+        // 无可选则直接移除
+        state.pending = state.pending.filter((x) => x.id !== p.id);
+        progressed = true;
+        continue;
+      }
+      cmd = {
+        commandId: `auto-draft-pick-${p.id}-${state.eventSeq}`,
+        roomCode: state.roomCode,
+        seatToken: token,
+        windowId: p.id,
+        type: 'draft.pick',
+        payload: { cardInstanceId: id },
+      };
+    } else if (p.kind === 'draftDiscard') {
+      const id = p.defaultChoice.kind === 'autoPick' ? p.defaultChoice.optionId : p.options[0];
+      if (!id) {
+        state.pending = state.pending.filter((x) => x.id !== p.id);
+        progressed = true;
+        continue;
+      }
+      cmd = {
+        commandId: `auto-draft-d-${p.id}-${state.eventSeq}`,
+        roomCode: state.roomCode,
+        seatToken: token,
+        windowId: p.id,
+        type: 'draft.discard',
+        payload: { cardInstanceId: id },
+      };
+    } else if (p.kind === 'declareCards') {
+      cmd = {
+        commandId: `auto-pass-${p.id}-${state.eventSeq}`,
+        roomCode: state.roomCode,
+        seatToken: token,
+        windowId: p.id,
+        type: 'night.passPhase',
+        payload: {},
+      };
+    } else if (p.kind === 'chooseTarget') {
+      const id = p.defaultChoice.kind === 'autoPick' ? p.defaultChoice.optionId : p.options[0];
+      if (!id) {
+        state.pending = state.pending.filter((x) => x.id !== p.id);
+        progressed = true;
+        continue;
+      }
+      cmd = {
+        commandId: `auto-tgt-${p.id}-${state.eventSeq}`,
+        roomCode: state.roomCode,
+        seatToken: token,
+        windowId: p.id,
+        type: 'night.chooseTarget',
+        payload: { targetSeatId: id },
+      };
+    } else if (p.kind === 'chooseOptional') {
+      cmd = {
+        commandId: `auto-opt-${p.id}-${state.eventSeq}`,
+        roomCode: state.roomCode,
+        seatToken: token,
+        windowId: p.id,
+        type: 'night.chooseOptional',
+        payload: { choose: false },
+      };
+    } else if (p.kind === 'reactDecide') {
+      cmd = {
+        commandId: `auto-react-${p.id}-${state.eventSeq}`,
+        roomCode: state.roomCode,
+        seatToken: token,
+        windowId: p.id,
+        type: 'react.decide',
+        payload: { react: false },
+      };
+    }
+
+    if (!cmd) {
+      state.pending = state.pending.filter((x) => x.id !== p.id);
+      progressed = true;
+      continue;
+    }
+
+    const r = applyCommandDirect(state, cmd);
+    if (!r.ok) {
+      // 失败则移除该 pending 防止死循环
+      state.pending = state.pending.filter((x) => x.id !== p.id);
+      progressed = true;
+      continue;
+    }
+    progressed = true;
+    if (
+      state.phase === beforePhase &&
+      state.step === beforeStep &&
+      state.pending.length === beforePending &&
+      state.eventSeq === beforeEvent
+    ) {
+      break;
+    }
+  }
+  if (!progressed) return { ok: false, reason: 'phaseMismatch', state };
+  return { ok: true, state };
+}
+
+/** 不经过 processedCommandIds 门闩的内部应用（auto 指令需要） */
+function applyCommandDirect(state: GameState, cmd: Command): EngineResult {
+  // 复制 commandId 到 processed 防重复
+  if (!state.processedCommandIds.includes(cmd.commandId)) {
+    state.processedCommandIds.push(cmd.commandId);
+  }
+  const seat = findSeatByToken(state, cmd.seatToken);
+  if (!seat) return { ok: false, reason: 'unauthorized', state };
+
+  switch (cmd.type) {
+    case 'draft.pick':
+      return handleDraftPick(state, seat, cmd);
+    case 'draft.discard':
+      return handleDraftDiscard(state, seat, cmd);
+    case 'night.declare':
+      return handleDeclare(state, seat, cmd);
+    case 'night.passPhase':
+      return handlePass(state, seat);
+    case 'night.chooseTarget':
+      return handleChooseTarget(state, seat, cmd);
+    case 'night.chooseOptional':
+      return handleChooseOptional(state, seat, cmd);
+    case 'react.decide':
+      return handleReact(state, seat, cmd);
     default:
       return { ok: false, reason: 'unknownCommand', state };
   }

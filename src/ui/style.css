@@ -1,0 +1,158 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #0f1218;
+  color: #e8ecf1;
+  min-height: 100vh;
+}
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.top {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  border-bottom: 1px solid #2a3344;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+.top h1 {
+  font-size: 20px;
+  margin: 0;
+}
+.room,
+.seat {
+  color: #8b9bb4;
+  font-size: 14px;
+}
+.banner {
+  background: #1a2333;
+  border: 1px solid #3a4a66;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+.banner.warn {
+  border-color: #a67c00;
+  color: #ffd666;
+}
+.banner.err {
+  border-color: #a33;
+  color: #ff8a80;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 220px 1fr 240px;
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+.panel {
+  background: #161c27;
+  border: 1px solid #2a3344;
+  border-radius: 8px;
+  padding: 12px;
+}
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.phase {
+  color: #7ec8ff;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+input {
+  background: #0f1420;
+  border: 1px solid #2a3344;
+  color: #e8ecf1;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+button {
+  background: #2a5a8a;
+  border: none;
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+button.card {
+  background: #1e2a3a;
+  border: 1px solid #3a4a66;
+  margin: 4px 4px 0 0;
+}
+button.card.sel {
+  border-color: #7ec8ff;
+  background: #24405a;
+}
+button.opt {
+  background: #3a2a5a;
+}
+.seats {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.seats li {
+  padding: 6px 0;
+  border-bottom: 1px solid #243044;
+}
+.seats li.host {
+  color: #ffd666;
+}
+.seats li.dead {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.hand .card {
+  min-width: 88px;
+}
+.reserved .card.dim {
+  opacity: 0.6;
+}
+.known h3 {
+  font-size: 13px;
+  margin: 8px 0 4px;
+}
+.pending {
+  margin-top: 10px;
+  padding: 8px;
+  background: #1a2436;
+  border-radius: 6px;
+}
+.log,
+.chat-log {
+  max-height: 180px;
+  overflow: auto;
+  font-size: 12px;
+  color: #9aabbf;
+  margin-top: 8px;
+}
+.chat-log {
+  max-height: 220px;
+}
+.ev {
+  padding: 2px 0;
+  border-bottom: 1px solid #1e2838;
+}
+.hint {
+  color: #8b9bb4;
+  font-size: 12px;
+}

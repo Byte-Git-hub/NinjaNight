@@ -46,12 +46,21 @@ npm run build
 ## 禁止事项（摘要）
 
 1. `core` 不得依赖 DOM/Socket/时间/全局随机  
-2. `ui` 不得直接改权威状态  
-3. `server` 不得广播完整 `GameState`  
-4. `dev` 不得进入生产构建  
-5. 不为程序方便静默删牌、改效果或改胜负规则  
-6. 未确认规则必须标记「待确认」，不得当成官方规则实现  
+2. `ui` 不得直接改权威状态；`net` 不得实现规则逻辑  
+3. `server` 不得广播完整 `GameState`（硬约定）；不得 `import` `ui`  
+4. `core` 不得 `import` socket.io / express  
+5. `dev` 不得进入生产构建  
+6. 不为程序方便静默删牌、改效果或改胜负规则  
+7. 未确认规则必须标记「待确认」，不得当成官方规则实现  
 
 ## 技术选型（已冻结）
 
 TypeScript strict · Vite · 原生 DOM/CSS · Node + Socket.IO · Vitest · Playwright · 单仓单进程 · 内存房间 · 无游戏引擎 · 无微服务/Redis/数据库
+
+## 阶段 4 起命令
+
+```powershell
+npm run dev:server    # :3000 Socket.IO + health
+npm run dev           # :5173 前端（/socket.io 代理到 3000）
+npm run test:e2e      # Playwright（自动起 server + vite）
+```

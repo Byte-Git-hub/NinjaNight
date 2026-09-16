@@ -1,6 +1,6 @@
 # 04 — 联机协议
 
-status: skeleton  
+status: frozen-for-stage-4  
 updated: 2026-09-16  
 实现阶段：4  
 
@@ -12,49 +12,153 @@ updated: 2026-09-16
 - 不下发完整 `GameState`、牌堆序、种子、未获准暗牌、令牌面值。  
 - `commandId` 幂等；`windowId` 防旧窗口。  
 - 房间码仅用于 join；鉴权用 `seatToken`。  
+- 全部走 Socket.IO；输入消毒 + 简易限频。  
 
-## 房间生命周期
+---
 
-create → join → ready → start → 对局 → gameOver →（可选回大厅）→ 清理  
+## 事件清单（冻结）
 
-- 对局开始后默认禁止中途加入。  
-- 空房间与结束房间定时清理。  
-- 同玩家多开：以 `seatToken` 抢占（网页约定）。  
+### 房间生命周期（客户端 → 服务端）
 
-## Command 列表（骨架）
-
-| type | 发送者 | 字段 | 确认 |
+| 事件 | payload | 响应 | 说明 |
 |---|---|---|---|
-| room.create | 任何人 | nickname | ack + roomCode + seatToken |
-| room.join | 任何人 | roomCode, nickname | 同上 |
-| room.ready | 座位 | ready | public presence |
-| room.start | 房主 | — | gameStarted |
-| room.chat | 座位 | text | 公共消息（消毒） |
-| room.forceAdvance | 房主 | — | 结束当前窗口（阶段 4） |
-| draft.pick | 座位 | cardInstanceId | ack 或 reject |
-| draft.discard | 座位 | cardInstanceId | 同上 |
-| night.declare | 座位 | cardInstanceIds | 同上 |
-| night.passPhase | 座位 | — | 同上 |
-| night.chooseTarget | 座位 | targetSeatId | 同上 |
-| night.chooseOptional | 座位 | choose | 同上 |
-| react.decide | 座位 | react | 同上 |
+| `room.create` | `{ nickname }` | ack `{ roomCode, seatToken, seatId }` | 创建房间，创建者为房主 |
+| `room.join` | `{ roomCode, nickname }` | ack `{ seatToken, seatId }` | 加入已有房间 |
+| `room.leave` | `{ seatToken }` | ack | 离开/断开座位 |
+| `room.ready` | `{ seatToken, ready }` | presence | 大厅准备 |
+| `room.start` | `{ seatToken }` | 开局事件 | 仅房主；≥4 人且全员 ready |
+| `room.forceAdvance` | `{ seatToken }` | 超时默认 | 仅房主；跳过当前窗口 |
 
-## 出站消息（骨架）
+### 服务端 → 客户端（房间）
 
-| 消息 | 内容 |
+| 事件 | 范围 | 内容 |
+|---|---|---|
+| `room.presence` | 房间广播 | `{ roomCode, seats: [{ seatId, nickname, connected, ready, isHost }], phase, hostSeatId }` |
+| `room.error` | 单人 | `{ reasonCode, message? }` |
+| `room.started` | 房间广播 | `{ seed? no, roomCode }` |
+
+### 对局内（客户端 → 服务端）
+
+| 事件 | payload | 说明 |
+|---|---|---|
+| `command.send` | `{ commandId, seatToken, windowId, type, payload }` | 统一指令入口 |
+
+`type` / `payload` 与 `Command` 一致：
+
+| type | payload |
 |---|---|
-| view.snapshot | `PlayerView` |
-| event.public / event.private | `GameEvent` |
-| command.ack | commandId |
-| command.reject | commandId + reasonCode |
-| room.presence | 座位/连接/准备 |
+| `draft.pick` | `{ cardInstanceId }` |
+| `draft.discard` | `{ cardInstanceId }` |
+| `night.declare` | `{ cardInstanceIds }` |
+| `night.passPhase` | `{}` |
+| `night.chooseTarget` | `{ targetSeatId }`（可为 `view_honor` / `view_house` / 牌实例 id） |
+| `night.chooseOptional` | `{ choose }` |
+| `react.decide` | `{ react }` |
+| `room.forceAdvance` | `{}` |
 
-## 拒绝原因码（预留）
+### 服务端 → 客户端（对局）
 
-`unauthorized` · `staleWindow` · `duplicate` · `illegalTarget` · `notYourTurn` · `phaseMismatch` · `roomFull` · `gameStarted` · `invalidPayload` · `rateLimited`
+| 事件 | 范围 | 内容 |
+|---|---|---|
+| `command.ack` | 单人 | `{ commandId }` |
+| `command.reject` | 单人 | `{ commandId, reasonCode }` |
+| `view.snapshot` | 单人 | 完整 `PlayerView`（按座位投影） |
+| `event.public` | 房间广播 | `GameEvent[]` 增量或全量公开事件 |
+| `event.private` | 单人 | `GameEvent[]` 私密事件 |
+
+### 聊天
+
+| 事件 | 方向 | payload |
+|---|---|---|
+| `chat.send` | C→S | `{ seatToken, text }` |
+| `chat.event` | 房间广播 | `{ seatId, nickname, text, ts }` |
+
+---
+
+## 幂等与窗口
+
+- 服务端为每个 `seatToken` 缓存最近 **N=50** 条 `commandId`。  
+- 重复 `commandId` → 直接 `command.ack`，不重复执行。  
+- `windowId` 与当前 `state.windowId` 及活跃 pending id 均不匹配 → `command.reject { reasonCode: 'STALE_WINDOW' }`。  
+
+---
+
+## 超时
+
+常量集中于 `src/shared/timeouts.ts`：
+
+| 常量 | 默认 | 说明 |
+|---|---|---|
+| `DEFAULT_WINDOW_MS` | 60000 | PendingDecision / Draft 窗口 |
+| `EMPTY_ROOM_TTL_MS` | 300000 | 空房 5 分钟清理 |
+| `ENDED_ROOM_TTL_MS` | 600000 | 结束后 10 分钟清理 |
+| `COMMAND_RATE_PER_SEC` | 10 | 单 socket 每秒指令上限 |
+
+defaultChoice：
+
+| pending kind | 超时默认 |
+|---|---|
+| `draftPick` / `draftDiscard` | `autoPick` options[0] |
+| `declareCards` | `pass` |
+| `chooseTarget` | `autoPick` options[0] |
+| `chooseOptional` | `decline`（false） |
+| `reactDecide` | `decline`（false） |
+
+房主 `room.forceAdvance` 立即对当前活跃窗口应用上述默认（多人 declare/draft 则对所有未响应座位应用）。
+
+---
+
+## 拒绝原因码（枚举，冻结）
+
+```
+NOT_YOUR_TURN
+WRONG_WINDOW
+STALE_WINDOW
+DEAD_SEAT
+ILLEGAL_TARGET
+DUPLICATE_COMMAND
+NOT_HOST
+ROOM_FULL
+ROOM_NOT_FOUND
+GAME_IN_PROGRESS
+INVALID_PAYLOAD
+UNAUTHORIZED
+RATE_LIMITED
+PHASE_MISMATCH
+NOT_IN_HAND
+NO_ACTIVE_WINDOW
+UNKNOWN_COMMAND
+```
+
+与 core `RejectReason` 的映射见 `src/shared/protocol.ts`。
+
+---
+
+## 鉴权与会话
+
+- `seatToken`：服务端 UUID，映射 `seatToken → { roomCode, seatId }`。  
+- 同一 `seatToken` 新连接可抢占并踢掉旧连接。  
+- 对局开始后禁止中途加入。  
+
+---
+
+## 输入消毒
+
+- 昵称：长度 1–16，纯文本，去除控制字符。  
+- 聊天：长度 ≤200，纯文本，不做 HTML。  
+- payload：手写校验，格式错误 → `INVALID_PAYLOAD`。  
+
+---
+
+## 硬约定
+
+- **严禁** broadcast 完整 `GameState`。  
+- 每个座位仅收到 `projectView(state, seatId)`。  
+- `server` 不得 `import` `ui`。  
+- `core` 不得依赖 socket.io / express。  
 
 ---
 
 ## 变更记录
 
-- 2026-09-16：骨架。
+- 2026-09-16：阶段 4 冻结完整事件表、原因码、超时常量。  

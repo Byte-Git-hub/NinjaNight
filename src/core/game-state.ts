@@ -62,6 +62,8 @@ export type CardStep =
   | 'target'
   | 'optionalKill'
   | 'troubleReveal'
+  | 'merchantView'
+  | 'tokenOffer'
   | 'done';
 
 export interface ResolveContext {
