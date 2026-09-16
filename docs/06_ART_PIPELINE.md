@@ -84,6 +84,9 @@ updated: 2026-09-17
 
 - **生图工具**：Antigravity CLI 1.2.4，agent 模式。
 - **调用方式**：在 agy 的 TUI（终端用户界面）中，使用自然语言指示 agent 调用内置的 `generate_image` 工具。**不使用** `agy -p` CLI 参数模式。
+- **模型配置**：
+  - 已实测 `--model "Gemini 3.8 Flash (High)"` 完全可用。
+  - **主选模型锁定**：`Gemini 3.8 Flash (High)`。
 - **已实测结论**：
   1. agy agent 能够精准理解自然语言描述并触发内部 `generate_image` 工具调用。
   2. 输出格式：`jpg`。

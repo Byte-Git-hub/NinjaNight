@@ -260,7 +260,7 @@ export const VISUAL_PROMPTS: VisualUnitPrompt[] = [
     category: 'ui',
     visualHint: '水墨夜色 + 远处灯笼，中央留空给房间列表',
     promptZh: '大厅主背景底图：幽深水墨夜色全景，远景处有点点温暖纸灯笼微光与朦胧山峦，画面中央保留大面积平缓暗色留白以便承载房间列表与面板。',
-    promptEn: `Sumo-e ink wash landscape painting of a serene Japanese night, deep indigo and charcoal gradients. Distant traditional lanterns glow faintly with gentle warm amber light across mist-covered hills. Wide open generous negative space in the central region reserved for clean UI overlay. Minimalist atmospheric background texture, 16:9 ratio, no text.`,
+    promptEn: `Sumi-e ink wash landscape painting of a serene Japanese night, deep indigo and charcoal gradients. Distant traditional lanterns glow faintly with gentle warm amber light across mist-covered hills. Wide open generous negative space in the central region reserved for clean UI overlay. Minimalist atmospheric background texture, 16:9 ratio, no text.`,
     negative: STANDARD_NEGATIVE,
   },
   {
