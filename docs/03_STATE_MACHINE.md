@@ -14,6 +14,21 @@ updated: 2026-09-16
 - **ResolveQueue + PendingDecision + ReactWindow** 在阶段 2 必须存在；阶段 3 只增牌不重构。  
 - 超时 60s 与 `room.forceAdvance` 自**阶段 4** 生效；阶段 2–3 本地调试可手动推进。  
 
+### 0.1 目标校验（对应 01 §0.1 裁定）
+
+`validateTarget(state, actor, card, target)` 在阶段 2 实现：
+
+| 规则 | 实现 |
+|---|---|
+| spy / mystic 自选 | Reject `illegalTarget` |
+| spy / mystic → 死亡者 | 允许 |
+| blind_assassin 自选 | 允许（自杀） |
+| blind_assassin → 死亡者 | Reject `illegalTarget` |
+| shinobi 自选 | 允许 |
+| shinobi → 死亡者 | 允许查看；不可杀 |
+| 身份结算 | 始终用**当前** HOUSE（`seat.house`） |
+| knownHouses | 追加快照，不回写 seat.house |
+
 ---
 
 ## 1. 主路径状态机
