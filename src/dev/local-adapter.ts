@@ -224,8 +224,12 @@ export function runAutoNight(adapter: LocalAdapter, limit = 400): void {
         if (playable.length > 0) adapter.declare(p.seatId, playable);
         else adapter.passPhase(p.seatId);
         progressed = true;
-      } else if (p.kind === 'chooseTarget') {
-        const target = p.options[0];
+      } else if (
+        p.kind === 'chooseTarget' ||
+        p.kind === 'merchantChoose' ||
+        p.kind === 'merchantExchange'
+      ) {
+        const target = p.options.find((o) => o !== 'no_swap') ?? p.options[0];
         if (target) {
           adapter.chooseTarget(p.seatId, target);
           progressed = true;

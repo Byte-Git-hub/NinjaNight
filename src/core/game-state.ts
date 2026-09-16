@@ -63,6 +63,8 @@ export type CardStep =
   | 'optionalKill'
   | 'troubleReveal'
   | 'merchantView'
+  | 'merchantGive'
+  | 'merchantTake'
   | 'tokenOffer'
   | 'done';
 
@@ -74,6 +76,10 @@ export interface ResolveContext {
   graveChoices?: CardInstance[];
   gravePick?: CardInstance;
   viewKind?: 'honor' | 'house';
+  /** 商人：刚查看的那枚令牌 */
+  seenTokenId?: string;
+  seenTokenValue?: 2 | 3 | 4;
+  /** 商人：自己给出的令牌实例 */
   giveTokenId?: string;
   /** 反应窗 */
   react?: {

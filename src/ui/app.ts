@@ -255,6 +255,8 @@ export class AppUI {
       chooseTarget: '选择目标',
       chooseOptional: '可选决策',
       reactDecide: '是否发动反应？',
+      merchantChoose: '商人：查看 HOUSE 或 HONOR（必选）',
+      merchantExchange: '商人：交换令牌（可放弃）',
     };
     return `
       <div class="pending">
@@ -331,7 +333,11 @@ export class AppUI {
           this.net.sendCommand(v.windowId, type, payload);
           return;
         }
-        if (pending.kind === 'chooseTarget') {
+        if (
+          pending.kind === 'chooseTarget' ||
+          pending.kind === 'merchantChoose' ||
+          pending.kind === 'merchantExchange'
+        ) {
           this.net.sendCommand(v.windowId, 'night.chooseTarget', { targetSeatId: opt });
           return;
         }
@@ -357,10 +363,14 @@ function optLabel(o: string): string {
   if (o === 'play_now') return '立即打出';
   if (o === 'reserve') return '预留';
   if (o === 'swap') return '交换';
+  if (o === 'no_swap') return '不交换';
+  if (o === 'seen') return '刚看的那枚';
+  if (o === 'random') return '随机一枚';
   if (o === 'keep' || o === 'no' || o === 'hide' || o === 'spare') return '否';
   if (o === 'kill') return '击杀';
   if (o === 'reveal') return '公开';
   if (o.startsWith('s')) return o;
+  if (o.startsWith('tok-') || o.startsWith('t') || o.startsWith('x')) return `令牌 ${o}`;
   return o;
 }
 

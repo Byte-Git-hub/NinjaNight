@@ -231,7 +231,7 @@ export function applyTargetChoice(
     return { ok: true };
   }
 
-  // 商人查看类型二选一：view_honor / view_house【官方】
+  // 商人查看类型二选一：view_house / view_honor【官方】
   if (ctx.step === 'merchantView') {
     if (targetSeatId !== 'view_honor' && targetSeatId !== 'view_house') {
       return { ok: false, reason: 'illegalTarget' };
@@ -241,39 +241,132 @@ export function applyTargetChoice(
     if (!target0) return { ok: false, reason: 'illegalTarget' };
     if (targetSeatId === 'view_honor') {
       ctx.viewKind = 'honor';
+      if (target0.tokens.length === 0) {
+        finishInstance(state);
+        return { ok: true };
+      }
+      // 随机查看一枚令牌面值（只看这一枚）
+      const idx = state.rng.int(target0.tokens.length);
+      syncRngCalls(state);
+      const seen = target0.tokens[idx];
+      if (!seen) {
+        finishInstance(state);
+        return { ok: true };
+      }
+      ctx.seenTokenId = seen.instanceId;
+      ctx.seenTokenValue = seen.value;
       pushEvent(state, 'night.houseViewed', { seats: [actorSeatId] }, {
         viewerSeatId: actorSeatId,
         targetSeatId: target0.seatId,
         view: 'honor',
-        honorCount: target0.tokens.length,
-        honorFaces: target0.tokens.map((t) => t.value),
+        tokenInstanceId: seen.instanceId,
+        honorFace: seen.value,
       });
     } else {
       ctx.viewKind = 'house';
+      ctx.seenTokenId = undefined;
+      ctx.seenTokenValue = undefined;
       snapshotHouse(state, actor, target0, ctx.instance.cardId);
     }
-    ctx.step = 'tokenOffer';
+    // 进入交换阶段（可选）
     if (actor.tokens.length === 0 || target0.tokens.length === 0) {
       finishInstance(state);
       return { ok: true };
     }
-    state.step = 'chooseOptional';
+    beginMerchantExchange(state, actorSeatId);
+    return { ok: true };
+  }
+
+  // 商人：选择自己给出的令牌（或放弃）
+  if (ctx.step === 'merchantGive') {
+    if (targetSeatId === 'no_swap') {
+      finishInstance(state);
+      return { ok: true };
+    }
+    const give = actor.tokens.find((t) => t.instanceId === targetSeatId);
+    if (!give) return { ok: false, reason: 'illegalTarget' };
+    ctx.giveTokenId = give.instanceId;
+    ctx.step = 'merchantTake';
+    const tid = ctx.targets[0];
+    const target0 = tid ? findSeat(state, tid) : undefined;
+    if (!target0 || target0.tokens.length === 0) {
+      finishInstance(state);
+      return { ok: true };
+    }
+    const takeOpts: string[] = [];
+    if (
+      ctx.viewKind === 'honor' &&
+      ctx.seenTokenId &&
+      target0.tokens.some((t) => t.instanceId === ctx.seenTokenId)
+    ) {
+      takeOpts.push('seen');
+    }
+    takeOpts.push('random');
+    state.step = 'chooseTarget';
     state.pending = [
       {
-        id: `${state.windowId}:sm:${ctx.instance.instanceId}`,
+        id: `${state.windowId}:sm-take:${ctx.instance.instanceId}`,
         seatId: actorSeatId,
-        kind: 'chooseOptional',
-        options: ['swap', 'no'],
+        kind: 'merchantExchange',
+        options: takeOpts,
         deadline: null,
-        defaultChoice: { kind: 'autoPick', optionId: 'no' },
+        defaultChoice: { kind: 'autoPick', optionId: 'random' },
         context: {
           phase: state.phase,
-          step: 'chooseOptional',
+          step: 'chooseTarget',
           relatedInstanceIds: [ctx.instance.instanceId],
           cardId: ctx.instance.cardId,
         },
       },
     ];
+    return { ok: true };
+  }
+
+  // 商人：选择拿回方式并同步交换
+  if (ctx.step === 'merchantTake') {
+    if (targetSeatId !== 'seen' && targetSeatId !== 'random') {
+      return { ok: false, reason: 'illegalTarget' };
+    }
+    const tid = ctx.targets[0];
+    const target0 = tid ? findSeat(state, tid) : undefined;
+    if (!target0) return { ok: false, reason: 'illegalTarget' };
+    let take = undefined as (typeof actor.tokens)[number] | undefined;
+    if (targetSeatId === 'seen' && ctx.seenTokenId) {
+      take = target0.tokens.find((t) => t.instanceId === ctx.seenTokenId);
+      if (!take) return { ok: false, reason: 'illegalTarget' };
+      target0.tokens = target0.tokens.filter((t) => t.instanceId !== take!.instanceId);
+    } else {
+      // 随机再拿一枚：若看过 HONOR 且还有其他令牌，排除刚看的那枚
+      let pool = target0.tokens.slice();
+      if (ctx.viewKind === 'honor' && ctx.seenTokenId && pool.length > 1) {
+        pool = pool.filter((t) => t.instanceId !== ctx.seenTokenId);
+      }
+      if (pool.length === 0) {
+        finishInstance(state);
+        return { ok: true };
+      }
+      const ri = state.rng.int(pool.length);
+      syncRngCalls(state);
+      take = pool[ri];
+      target0.tokens = target0.tokens.filter((t) => t.instanceId !== take!.instanceId);
+    }
+    const giveIdx = actor.tokens.findIndex((t) => t.instanceId === ctx.giveTokenId);
+    if (giveIdx < 0 || !take) {
+      finishInstance(state);
+      return { ok: true };
+    }
+    const [give] = actor.tokens.splice(giveIdx, 1);
+    if (give) target0.tokens.push(give);
+    actor.tokens.push(take);
+    pushEvent(state, 'score.honorAwarded', 'public', {
+      swapped: true,
+      a: actorSeatId,
+      b: target0.seatId,
+      giveTokenId: give?.instanceId,
+      takeTokenId: take.instanceId,
+      takeWasSeen: targetSeatId === 'seen',
+    });
+    finishInstance(state);
     return { ok: true };
   }
 
@@ -424,7 +517,7 @@ export function applyTargetChoice(
     return { ok: true };
   }
   if (b === 'spirit_merchant') {
-    // 澄清 A【官方】：必须先二选一 HONOR 或 HOUSE，不能同时看
+    // 查看类型必选二选一【官方】：house | honor
     ctx.targets = [targetSeatId];
     ctx.step = 'merchantView';
     state.step = 'chooseTarget';
@@ -432,10 +525,10 @@ export function applyTargetChoice(
       {
         id: `${state.windowId}:smview:${ctx.instance.instanceId}`,
         seatId: actorSeatId,
-        kind: 'chooseTarget',
-        options: ['view_honor', 'view_house'],
+        kind: 'merchantChoose',
+        options: ['view_house', 'view_honor'],
         deadline: null,
-        defaultChoice: { kind: 'autoPick', optionId: 'view_honor' },
+        defaultChoice: { kind: 'autoPick', optionId: 'view_house' },
         context: {
           phase: state.phase,
           step: 'chooseTarget',
@@ -610,33 +703,6 @@ export function applyOptionalChoice(
     return { ok: true };
   }
 
-  if (b === 'spirit_merchant' && ctx.step === 'tokenOffer' && choose) {
-    const tid = ctx.targets[0];
-    const target = tid ? findSeat(state, tid) : undefined;
-    if (!actor || !target || actor.tokens.length === 0 || target.tokens.length === 0) {
-      finishInstance(state);
-      return { ok: true };
-    }
-    // 简化：随机/第一枚对换（网页版：给任意换任意 — 实现为各取第一枚实例）
-    const give = actor.tokens.shift();
-    const take = target.tokens.shift();
-    if (give) target.tokens.push(give);
-    if (take) actor.tokens.push(take);
-    pushEvent(state, 'score.honorAwarded', 'public', {
-      swapped: true,
-      a: actorSeatId,
-      b: target.seatId,
-    });
-    finishInstance(state);
-    return { ok: true };
-  }
-
-  // 商人未交换或不可交换 → 正常结束
-  if (b === 'spirit_merchant' && ctx.step === 'tokenOffer') {
-    finishInstance(state);
-    return { ok: true };
-  }
-
   finishInstance(state);
   return { ok: true };
 }
@@ -787,6 +853,32 @@ function snapshotHouse(
     targetSeatId: target.seatId,
     cardId: viaCardId,
   });
+}
+
+/** 商人：进入交换决策（给出令牌或放弃） */
+function beginMerchantExchange(state: GameState, actorSeatId: SeatId): void {
+  const ctx = state.resolveContext;
+  const actor = findSeat(state, actorSeatId);
+  if (!ctx || !actor) return;
+  ctx.step = 'merchantGive';
+  const giveOpts = ['no_swap', ...actor.tokens.map((t) => t.instanceId)];
+  state.step = 'chooseTarget';
+  state.pending = [
+    {
+      id: `${state.windowId}:sm-give:${ctx.instance.instanceId}`,
+      seatId: actorSeatId,
+      kind: 'merchantExchange',
+      options: giveOpts,
+      deadline: null,
+      defaultChoice: { kind: 'autoPick', optionId: 'no_swap' },
+      context: {
+        phase: state.phase,
+        step: 'chooseTarget',
+        relatedInstanceIds: [ctx.instance.instanceId],
+        cardId: ctx.instance.cardId,
+      },
+    },
+  ];
 }
 
 export function finishInstance(state: GameState): void {

@@ -104,7 +104,7 @@ defaultChoice：
 | `chooseOptional` | `decline`（false） |
 | `reactDecide` | `decline`（false） |
 
-房主 `room.forceAdvance` 立即对当前活跃窗口应用上述默认（多人 declare/draft 则对所有未响应座位应用）。
+房主 `room.forceAdvance` 立即对当前**所有未响应座位**应用上述默认（多人 declare/draft/merchant 一并应用；不修改为「仅当前活跃」）。
 
 ---
 

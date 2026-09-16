@@ -143,7 +143,7 @@ export function applyAllDefaults(state: GameState): EngineResult {
         type: 'night.passPhase',
         payload: {},
       };
-    } else if (p.kind === 'chooseTarget') {
+    } else if (p.kind === 'chooseTarget' || p.kind === 'merchantChoose' || p.kind === 'merchantExchange') {
       const id = p.defaultChoice.kind === 'autoPick' ? p.defaultChoice.optionId : p.options[0];
       if (!id) {
         state.pending = state.pending.filter((x) => x.id !== p.id);

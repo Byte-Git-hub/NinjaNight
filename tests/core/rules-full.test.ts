@@ -161,7 +161,7 @@ describe('骗徒剧本', () => {
     expect(findSeat(a.getState(), 's1')?.houseRevealed).toBe(true);
   });
 
-  it('商人：必须二选一 HONOR/HOUSE 后才可交换', () => {
+  it('商人：只查 HOUSE 不交换：流程正常结束', () => {
     const a = makeAdapter(8, 4);
     const st = a.mutableState();
     findSeat(st, 's0')!.tokens = [{ instanceId: 't0', value: 2 }];
@@ -170,35 +170,130 @@ describe('骗徒剧本', () => {
     a.declare('s0', ['sm1']);
     a.chooseTarget('s0', 's1');
     const p = a.getState().pending[0];
-    expect(p?.kind).toBe('chooseTarget');
-    expect(p?.options).toEqual(['view_honor', 'view_house']);
-    // 选 HONOR 才进入交换决策；此时不应有 HOUSE 信息写入
-    a.chooseTarget('s0', 'view_honor');
+    expect(p?.kind).toBe('merchantChoose');
+    expect(p?.options).toEqual(['view_house', 'view_honor']);
+    a.chooseTarget('s0', 'view_house');
     expect(
       findSeat(a.getState(), 's0')?.knownHouses.some((k) => k.viaCardId === 'spirit_merchant:4'),
-    ).toBe(false);
-    const swapPending = a.getState().pending[0];
-    expect(swapPending?.kind).toBe('chooseOptional');
-    a.chooseOptional('s0', true);
-    expect(findSeat(a.getState(), 's0')?.tokens.some((t) => t.instanceId === 't1')).toBe(true);
-    expect(findSeat(a.getState(), 's1')?.tokens.some((t) => t.instanceId === 't0')).toBe(true);
+    ).toBe(true);
+    // 交换决策：放弃
+    const ex = a.getState().pending[0];
+    expect(ex?.kind).toBe('merchantExchange');
+    expect(ex?.options).toContain('no_swap');
+    expect(ex?.options).toContain('t0');
+    a.chooseTarget('s0', 'no_swap');
+    expect(a.getState().pending).toHaveLength(0);
+    expect(findSeat(a.getState(), 's0')?.tokens.some((t) => t.instanceId === 't0')).toBe(true);
+    expect(findSeat(a.getState(), 's1')?.tokens.some((t) => t.instanceId === 't1')).toBe(true);
   });
 
-  it('商人：选 HOUSE 则记录 HOUSE 且看不到 HONOR 面值', () => {
-    const a = makeAdapter(81, 4);
+  it('商人：查 HONOR + 换刚看的那枚 tokenInstanceId', () => {
+    const a = makeAdapter(83, 4);
+    const st = a.mutableState();
+    findSeat(st, 's0')!.tokens = [{ instanceId: 't0', value: 2 }];
+    findSeat(st, 's1')!.tokens = [
+      { instanceId: 't1', value: 4 },
+      { instanceId: 't2', value: 3 },
+    ];
+    forceNightSetup(a, { s0: [{ cardId: 'spirit_merchant:4', instanceId: 'sm1' }] }, 'nightTrickster');
+    a.declare('s0', ['sm1']);
+    a.chooseTarget('s0', 's1');
+    a.chooseTarget('s0', 'view_honor');
+    // 私密事件含单枚 honorFace
+    const ev = a
+      .getState()
+      .events.filter(
+        (e) =>
+          e.type === 'night.houseViewed' &&
+          e.visibility !== 'public' &&
+          typeof e.payload === 'object' &&
+          'view' in e.payload &&
+          e.payload.view === 'honor',
+      )
+      .at(-1);
+    expect(ev).toBeTruthy();
+    const seenId = (ev?.payload as { tokenInstanceId?: string }).tokenInstanceId;
+    expect(seenId).toBeTruthy();
+    // 给 t0，拿 seen
+    a.chooseTarget('s0', 't0');
+    const takeP = a.getState().pending[0];
+    expect(takeP?.kind).toBe('merchantExchange');
+    expect(takeP?.options).toContain('seen');
+    a.chooseTarget('s0', 'seen');
+    expect(findSeat(a.getState(), 's0')?.tokens.some((t) => t.instanceId === seenId)).toBe(true);
+    expect(findSeat(a.getState(), 's1')?.tokens.some((t) => t.instanceId === 't0')).toBe(true);
+    expect(findSeat(a.getState(), 's1')?.tokens.some((t) => t.instanceId === seenId)).toBe(false);
+  });
+
+  it('商人：查 HONOR + 换随机一枚（排除刚看的若还有其他）', () => {
+    const a = makeAdapter(84, 4);
+    const st = a.mutableState();
+    findSeat(st, 's0')!.tokens = [{ instanceId: 't0', value: 2 }];
+    findSeat(st, 's1')!.tokens = [
+      { instanceId: 't1', value: 4 },
+      { instanceId: 't2', value: 3 },
+      { instanceId: 't3', value: 2 },
+    ];
+    forceNightSetup(a, { s0: [{ cardId: 'spirit_merchant:4', instanceId: 'sm1' }] }, 'nightTrickster');
+    a.declare('s0', ['sm1']);
+    a.chooseTarget('s0', 's1');
+    a.chooseTarget('s0', 'view_honor');
+    const ev = a
+      .getState()
+      .events.filter(
+        (e) =>
+          e.type === 'night.houseViewed' &&
+          typeof e.payload === 'object' &&
+          'view' in e.payload &&
+          e.payload.view === 'honor',
+      )
+      .at(-1);
+    const seenId = (ev?.payload as { tokenInstanceId?: string }).tokenInstanceId as string;
+    a.chooseTarget('s0', 't0');
+    a.chooseTarget('s0', 'random');
+    const got = findSeat(a.getState(), 's0')?.tokens.find((t) => t.instanceId !== 't0');
+    expect(got).toBeTruthy();
+    // random 不应拿走刚看的那枚（3 枚时排除 seen）
+    expect(got?.instanceId).not.toBe(seenId);
+    expect(findSeat(a.getState(), 's0')?.tokens.some((t) => t.instanceId === 't0')).toBe(false);
+  });
+
+  it('商人：查 HOUSE 时交换只能 random，无法选刚看的', () => {
+    const a = makeAdapter(85, 4);
+    const st = a.mutableState();
+    findSeat(st, 's0')!.tokens = [{ instanceId: 't0', value: 2 }];
+    findSeat(st, 's1')!.tokens = [
+      { instanceId: 't1', value: 4 },
+      { instanceId: 't2', value: 3 },
+    ];
+    forceNightSetup(a, { s0: [{ cardId: 'spirit_merchant:4', instanceId: 'sm1' }] }, 'nightTrickster');
+    a.declare('s0', ['sm1']);
+    a.chooseTarget('s0', 's1');
+    a.chooseTarget('s0', 'view_house');
+    a.chooseTarget('s0', 't0');
+    const takeP = a.getState().pending[0];
+    expect(takeP?.options).toEqual(['random']);
+    expect(takeP?.options).not.toContain('seen');
+    a.chooseTarget('s0', 'random');
+    expect(findSeat(a.getState(), 's0')?.tokens.some((t) => t.instanceId === 't0')).toBe(false);
+  });
+
+  it('商人：他人看不到商人看过的 HONOR 面值', () => {
+    const a = makeAdapter(86, 4);
     const st = a.mutableState();
     findSeat(st, 's0')!.tokens = [{ instanceId: 't0', value: 2 }];
     findSeat(st, 's1')!.tokens = [{ instanceId: 't1', value: 4 }];
     forceNightSetup(a, { s0: [{ cardId: 'spirit_merchant:4', instanceId: 'sm1' }] }, 'nightTrickster');
     a.declare('s0', ['sm1']);
     a.chooseTarget('s0', 's1');
-    a.chooseTarget('s0', 'view_house');
-    expect(
-      findSeat(a.getState(), 's0')?.knownHouses.some((k) => k.viaCardId === 'spirit_merchant:4'),
-    ).toBe(true);
-    // 不选交换 → 结束
-    a.chooseOptional('s0', false);
-    expect(a.getState().pending).toHaveLength(0);
+    a.chooseTarget('s0', 'view_honor');
+    a.chooseTarget('s0', 'no_swap');
+    // s2 的视图不应含 honorFace
+    const v2 = a.getView('s2');
+    const json = JSON.stringify(v2?.events ?? []);
+    expect(json).not.toContain('honorFace');
+    const v0 = a.getView('s0');
+    expect(JSON.stringify(v0?.events ?? [])).toContain('honorFace');
   });
 
   it('商人：不选查看类型则决策不推进', () => {
@@ -207,7 +302,6 @@ describe('骗徒剧本', () => {
     a.declare('s0', ['sm1']);
     a.chooseTarget('s0', 's1');
     const before = a.getState().pending[0]?.id;
-    // 非法 option 不应推进
     a.chooseTarget('s0', 's9');
     expect(a.getState().pending[0]?.id).toBe(before);
     expect(a.getState().step).toBe('chooseTarget');

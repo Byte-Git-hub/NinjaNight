@@ -95,6 +95,18 @@ updated: 2026-09-16
   - 未来阶段（刺客/上忍）：默认进 `reserved`，等对应阶段打出。
 - 未来阶段若强行「立即打出」实现口径：进 `reserved`（不跨未来阶段结算）。
 
+**阶段 5 商人完整效果【官方】+【网页版】**
+1. 查看（必选，`merchantChoose`）：
+   - `view_house`：查看目标当前 HOUSE。
+   - `view_honor`：**随机**查看目标**一枚**令牌的面值（只看这一枚；事件私密，含 `tokenInstanceId` + `honorFace`）。
+2. 交换（可选，`merchantExchange`；任一方无令牌则跳过）：
+   - 给出：自己任选一枚（`tokenInstanceId`）；或 `no_swap` 结束。
+   - 拿回：
+     - 若查看过 HONOR 且该枚仍在目标处：可 `seen`（刚看的那枚）或 `random`（随机再拿一枚，若目标有多枚则排除刚看的）。
+     - 若只查看过 HOUSE：仅 `random`。
+   - 一对一同步交换，无中间窗口；交换前后双方令牌总数守恒。
+【网页版】事件 `score.honorAwarded` 的 `swapped: true` 仅公开发生交换，不公开面值。
+
 **TBD-09/10**
 - 池耗尽本轮不再发；不归还重洗。
 

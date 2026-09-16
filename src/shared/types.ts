@@ -141,7 +141,9 @@ export type PendingDecisionKind =
   | 'declareCards'
   | 'chooseTarget'
   | 'chooseOptional'
-  | 'reactDecide';
+  | 'reactDecide'
+  | 'merchantChoose'
+  | 'merchantExchange';
 
 export type PendingDefaultAction =
   | { kind: 'pass' }
