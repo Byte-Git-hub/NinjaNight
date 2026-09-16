@@ -114,6 +114,44 @@ describe('骗徒剧本', () => {
     expect(seat?.reserved.length ?? 0).toBeGreaterThanOrEqual(0);
   });
 
+  it('掘墓人：骗徒阶段立即打出挖到的密探，效果正常结算【网页版】', () => {
+    const a = makeAdapter(61, 4);
+    const st = a.mutableState();
+    st.zones.draftDiscard = [
+      { instanceId: 'd1', cardId: 'spy:3', number: 3 },
+      { instanceId: 'd2', cardId: 'mystic:4', number: 4 },
+    ];
+    forceNightSetup(a, { s0: [{ cardId: 'grave_digger:2', instanceId: 'gd1' }] }, 'nightTrickster');
+    a.declare('s0', ['gd1']);
+    a.chooseTarget('s0', 'd1'); // 选密探
+    a.chooseOptional('s0', true); // 立即打出
+    // 应进入密探的目标选择（过去阶段立即打出）
+    expect(a.getState().step).toBe('chooseTarget');
+    const tp = a.getState().pending[0];
+    expect(tp?.context.cardId).toBe('spy:3');
+    a.chooseTarget('s0', 's1');
+    expect(
+      findSeat(a.getState(), 's0')?.knownHouses.some((k) => k.targetSeatId === 's1'),
+    ).toBe(true);
+    // 掘墓人与密探均已结算
+    expect(findSeat(a.getState(), 's0')?.knownHouses.length).toBeGreaterThan(0);
+  });
+
+  it('掘墓人：挖到未来阶段（刺客）立即打出则进 reserved【网页版】', () => {
+    const a = makeAdapter(62, 4);
+    const st = a.mutableState();
+    st.zones.draftDiscard = [
+      { instanceId: 'd1', cardId: 'blind_assassin:2', number: 2 },
+      { instanceId: 'd2', cardId: 'judge:6', number: 6 },
+    ];
+    forceNightSetup(a, { s0: [{ cardId: 'grave_digger:2', instanceId: 'gd1' }] }, 'nightTrickster');
+    a.declare('s0', ['gd1']);
+    a.chooseTarget('s0', 'd1');
+    a.chooseOptional('s0', true); // 选立即打出，但是未来阶段
+    const seat = findSeat(a.getState(), 's0');
+    expect(seat?.reserved.some((c) => c.instanceId === 'd1')).toBe(true);
+  });
+
   it('捣蛋鬼：查看并可公开', () => {
     const a = makeAdapter(7, 4);
     forceNightSetup(a, { s0: [{ cardId: 'troublemaker:3', instanceId: 'tm1' }] }, 'nightTrickster');
@@ -123,7 +161,7 @@ describe('骗徒剧本', () => {
     expect(findSeat(a.getState(), 's1')?.houseRevealed).toBe(true);
   });
 
-  it('商人：换令牌', () => {
+  it('商人：必须二选一 HONOR/HOUSE 后才可交换', () => {
     const a = makeAdapter(8, 4);
     const st = a.mutableState();
     findSeat(st, 's0')!.tokens = [{ instanceId: 't0', value: 2 }];
@@ -131,9 +169,48 @@ describe('骗徒剧本', () => {
     forceNightSetup(a, { s0: [{ cardId: 'spirit_merchant:4', instanceId: 'sm1' }] }, 'nightTrickster');
     a.declare('s0', ['sm1']);
     a.chooseTarget('s0', 's1');
+    const p = a.getState().pending[0];
+    expect(p?.kind).toBe('chooseTarget');
+    expect(p?.options).toEqual(['view_honor', 'view_house']);
+    // 选 HONOR 才进入交换决策；此时不应有 HOUSE 信息写入
+    a.chooseTarget('s0', 'view_honor');
+    expect(
+      findSeat(a.getState(), 's0')?.knownHouses.some((k) => k.viaCardId === 'spirit_merchant:4'),
+    ).toBe(false);
+    const swapPending = a.getState().pending[0];
+    expect(swapPending?.kind).toBe('chooseOptional');
     a.chooseOptional('s0', true);
     expect(findSeat(a.getState(), 's0')?.tokens.some((t) => t.instanceId === 't1')).toBe(true);
     expect(findSeat(a.getState(), 's1')?.tokens.some((t) => t.instanceId === 't0')).toBe(true);
+  });
+
+  it('商人：选 HOUSE 则记录 HOUSE 且看不到 HONOR 面值', () => {
+    const a = makeAdapter(81, 4);
+    const st = a.mutableState();
+    findSeat(st, 's0')!.tokens = [{ instanceId: 't0', value: 2 }];
+    findSeat(st, 's1')!.tokens = [{ instanceId: 't1', value: 4 }];
+    forceNightSetup(a, { s0: [{ cardId: 'spirit_merchant:4', instanceId: 'sm1' }] }, 'nightTrickster');
+    a.declare('s0', ['sm1']);
+    a.chooseTarget('s0', 's1');
+    a.chooseTarget('s0', 'view_house');
+    expect(
+      findSeat(a.getState(), 's0')?.knownHouses.some((k) => k.viaCardId === 'spirit_merchant:4'),
+    ).toBe(true);
+    // 不选交换 → 结束
+    a.chooseOptional('s0', false);
+    expect(a.getState().pending).toHaveLength(0);
+  });
+
+  it('商人：不选查看类型则决策不推进', () => {
+    const a = makeAdapter(82, 4);
+    forceNightSetup(a, { s0: [{ cardId: 'spirit_merchant:4', instanceId: 'sm1' }] }, 'nightTrickster');
+    a.declare('s0', ['sm1']);
+    a.chooseTarget('s0', 's1');
+    const before = a.getState().pending[0]?.id;
+    // 非法 option 不应推进
+    a.chooseTarget('s0', 's9');
+    expect(a.getState().pending[0]?.id).toBe(before);
+    expect(a.getState().step).toBe('chooseTarget');
   });
 
   it('盗贼：从枚数更多者夺取', () => {

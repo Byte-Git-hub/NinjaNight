@@ -39,7 +39,8 @@ updated: 2026-09-16
 | 同开 Mirror+Martyr | 自己死+凶手死+自己得 1 枚；先反杀后得令牌 |
 | 反应嵌套 | 最深一层 |
 | Mastermind | 夜晚结束存活者持有则本方获胜；浪人则无阵营胜 |
-| 掘墓 | 仅 draftDiscard；立即/预留两路径 |
+| 掘墓 | 仅 draftDiscard；立即/预留两路径；过去阶段可立即打出【网页版】 |
+| 商人 | 先二选一 view_honor / view_house，再可选交换【官方】 |
 
 ---
 

@@ -231,6 +231,52 @@ export function applyTargetChoice(
     return { ok: true };
   }
 
+  // 商人查看类型二选一：view_honor / view_house【官方】
+  if (ctx.step === 'merchantView') {
+    if (targetSeatId !== 'view_honor' && targetSeatId !== 'view_house') {
+      return { ok: false, reason: 'illegalTarget' };
+    }
+    const tid = ctx.targets[0];
+    const target0 = tid ? findSeat(state, tid) : undefined;
+    if (!target0) return { ok: false, reason: 'illegalTarget' };
+    if (targetSeatId === 'view_honor') {
+      ctx.viewKind = 'honor';
+      pushEvent(state, 'night.houseViewed', { seats: [actorSeatId] }, {
+        viewerSeatId: actorSeatId,
+        targetSeatId: target0.seatId,
+        view: 'honor',
+        honorCount: target0.tokens.length,
+        honorFaces: target0.tokens.map((t) => t.value),
+      });
+    } else {
+      ctx.viewKind = 'house';
+      snapshotHouse(state, actor, target0, ctx.instance.cardId);
+    }
+    ctx.step = 'tokenOffer';
+    if (actor.tokens.length === 0 || target0.tokens.length === 0) {
+      finishInstance(state);
+      return { ok: true };
+    }
+    state.step = 'chooseOptional';
+    state.pending = [
+      {
+        id: `${state.windowId}:sm:${ctx.instance.instanceId}`,
+        seatId: actorSeatId,
+        kind: 'chooseOptional',
+        options: ['swap', 'no'],
+        deadline: null,
+        defaultChoice: { kind: 'autoPick', optionId: 'no' },
+        context: {
+          phase: state.phase,
+          step: 'chooseOptional',
+          relatedInstanceIds: [ctx.instance.instanceId],
+          cardId: ctx.instance.cardId,
+        },
+      },
+    ];
+    return { ok: true };
+  }
+
   const target = findSeat(state, targetSeatId);
   if (!target) return { ok: false, reason: 'illegalTarget' };
 
@@ -378,33 +424,21 @@ export function applyTargetChoice(
     return { ok: true };
   }
   if (b === 'spirit_merchant') {
-    snapshotHouse(state, actor, target, ctx.instance.cardId); // 先记 house 访问
-    // 额外可选看 honor —— 简化：同时写入 private 看 honor 的 view kind
-    ctx.viewKind = 'honor';
-    pushEvent(state, 'night.houseViewed', { seats: [actorSeatId] }, {
-      viewerSeatId: actorSeatId,
-      targetSeatId: targetSeatId,
-      view: 'honor',
-      honorCount: target.tokens.length,
-      honorFaces: target.tokens.map((t) => t.value),
-    });
+    // 澄清 A【官方】：必须先二选一 HONOR 或 HOUSE，不能同时看
     ctx.targets = [targetSeatId];
-    state.step = 'chooseOptional';
-    if (actor.tokens.length === 0 || target.tokens.length === 0) {
-      finishInstance(state);
-      return { ok: true };
-    }
+    ctx.step = 'merchantView';
+    state.step = 'chooseTarget';
     state.pending = [
       {
-        id: `${state.windowId}:sm:${ctx.instance.instanceId}`,
+        id: `${state.windowId}:smview:${ctx.instance.instanceId}`,
         seatId: actorSeatId,
-        kind: 'chooseOptional',
-        options: ['swap', 'no'],
+        kind: 'chooseTarget',
+        options: ['view_honor', 'view_house'],
         deadline: null,
-        defaultChoice: { kind: 'autoPick', optionId: 'no' },
+        defaultChoice: { kind: 'autoPick', optionId: 'view_honor' },
         context: {
           phase: state.phase,
-          step: 'chooseOptional',
+          step: 'chooseTarget',
           relatedInstanceIds: [ctx.instance.instanceId],
           cardId: ctx.instance.cardId,
         },
@@ -486,28 +520,46 @@ export function applyOptionalChoice(
       return { ok: true };
     }
     if (choose) {
-      // 立即打出：入队重排
-      state.resolveQueue.shift(); // 移除掘墓人本身
-      state.zones.spent.push({ ...ctx.instance });
-      const reinserted: QueuedCard = { instance: { ...choice }, actorSeatId };
-      state.resolveQueue.push(reinserted);
-      state.resolveQueue = sortQueue(state.resolveQueue);
-      state.resolveContext = null;
-      state.pending = [];
-      // 若这张在当前阶段合法或为其他阶段 — 网页版：立即按正常逻辑，仅当阶段匹配时入当前队列
-      // TBD：立即打出允许跨阶段 —— 官方“play immediately”。实现：若阶段匹配当前 phase 则入队，否则放入 reserved 并等待
-      const phasePrefix = state.phase.replace('night', '').toLowerCase();
+      // 澄清 B【网页版】：已过去阶段（spy/mystic）与当前阶段可立即打出；未来阶段进 reserved
+      const phaseOrder = ['spy', 'mystic', 'trickster', 'blind_assassin', 'shinobi'];
+      const currentBase = (() => {
+        switch (state.phase) {
+          case 'nightSpy': return 'spy';
+          case 'nightMystic': return 'mystic';
+          case 'nightTrickster': return 'trickster';
+          case 'nightBlindAssassin': return 'blind_assassin';
+          case 'nightShinobi': return 'shinobi';
+          default: return 'trickster';
+        }
+      })();
       const cardBase = baseOf(choice.cardId);
-      const matches =
-        (phasePrefix === 'spy' && cardBase === 'spy') ||
-        (phasePrefix === 'mystic' && cardBase === 'mystic') ||
-        (phasePrefix === 'trickster' && cardBase === 'trickster') ||
-        (phasePrefix === 'blindassassin' && cardBase === 'blind_assassin') ||
-        (phasePrefix === 'shinobi' && cardBase === 'shinobi');
-      if (matches) {
+      const ci = phaseOrder.indexOf(currentBase);
+      const bi = phaseOrder.indexOf(cardBase);
+      // react/reveal 等非阶段牌 → reserved
+      const isPhaseCard = bi >= 0;
+      const isPastOrCurrent = isPhaseCard && bi <= ci;
+      const isFuture = isPhaseCard && bi > ci;
+
+      if (isPastOrCurrent) {
+        // 立即打出：入队重排并结算
+        state.resolveQueue.shift(); // 移除掘墓人本身
+        state.zones.spent.push({ ...ctx.instance });
+        state.zones.revealedInPlay.push({ ...choice });
+        pushEvent(state, 'night.cardResolved', 'public', {
+          actorSeatId,
+          cardId: ctx.instance.cardId,
+          instanceId: ctx.instance.instanceId,
+        });
+        const reinserted: QueuedCard = { instance: { ...choice }, actorSeatId };
+        state.resolveQueue.push(reinserted);
+        state.resolveQueue = sortQueue(state.resolveQueue);
+        state.resolveContext = null;
+        state.pending = [];
         pumpResolveQueue(state);
-      } else {
-        // 非当前阶段：放入 reserved 后续可留 —— 规则允许留用；立即打出若无法结算则 reserved
+        return { ok: true };
+      }
+      // 未来阶段（刺客/上忍）或非阶段牌 → reserved
+      if (isFuture || !isPhaseCard) {
         actor?.reserved.push({ ...choice });
         pushEvent(state, 'night.cardResolved', { seats: [actorSeatId] }, {
           actorSeatId,
@@ -515,8 +567,8 @@ export function applyOptionalChoice(
           cardId: choice.cardId,
         });
         pumpResolveQueue(state);
+        return { ok: true };
       }
-      return { ok: true };
     }
     // 保留
     actor?.reserved.push({ ...choice });
@@ -558,7 +610,7 @@ export function applyOptionalChoice(
     return { ok: true };
   }
 
-  if (b === 'spirit_merchant' && choose) {
+  if (b === 'spirit_merchant' && ctx.step === 'tokenOffer' && choose) {
     const tid = ctx.targets[0];
     const target = tid ? findSeat(state, tid) : undefined;
     if (!actor || !target || actor.tokens.length === 0 || target.tokens.length === 0) {
@@ -575,6 +627,12 @@ export function applyOptionalChoice(
       a: actorSeatId,
       b: target.seatId,
     });
+    finishInstance(state);
+    return { ok: true };
+  }
+
+  // 商人未交换或不可交换 → 正常结束
+  if (b === 'spirit_merchant' && ctx.step === 'tokenOffer') {
     finishInstance(state);
     return { ok: true };
   }
