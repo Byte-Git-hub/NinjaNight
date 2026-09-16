@@ -278,6 +278,71 @@ describe('骗徒剧本', () => {
     expect(findSeat(a.getState(), 's0')?.tokens.some((t) => t.instanceId === 't0')).toBe(false);
   });
 
+  it('商人裁定2边界1：目标仅 1 枚时 random 等价于 seen', () => {
+    const a = makeAdapter(87, 4);
+    const st = a.mutableState();
+    findSeat(st, 's0')!.tokens = [{ instanceId: 't0', value: 2 }];
+    findSeat(st, 's1')!.tokens = [{ instanceId: 't1', value: 4 }];
+    forceNightSetup(a, { s0: [{ cardId: 'spirit_merchant:4', instanceId: 'sm1' }] }, 'nightTrickster');
+    a.declare('s0', ['sm1']);
+    a.chooseTarget('s0', 's1');
+    a.chooseTarget('s0', 'view_honor');
+    a.chooseTarget('s0', 't0');
+    // 选 random
+    a.chooseTarget('s0', 'random');
+    // s0 应拿到 t1，s1 拿到 t0
+    expect(findSeat(a.getState(), 's0')?.tokens.some((t) => t.instanceId === 't1')).toBe(true);
+    expect(findSeat(a.getState(), 's1')?.tokens.some((t) => t.instanceId === 't0')).toBe(true);
+  });
+
+  it('商人裁定2边界2：不允许拿回自己刚给出的那枚', () => {
+    const a = makeAdapter(88, 4);
+    const st = a.mutableState();
+    findSeat(st, 's0')!.tokens = [{ instanceId: 't0', value: 2 }];
+    // 假设目标手里包含与给出者相同的 token id 加上一枚合法令牌
+    findSeat(st, 's1')!.tokens = [
+      { instanceId: 't0', value: 2 },
+      { instanceId: 't1', value: 4 },
+    ];
+    forceNightSetup(a, { s0: [{ cardId: 'spirit_merchant:4', instanceId: 'sm1' }] }, 'nightTrickster');
+    a.declare('s0', ['sm1']);
+    a.chooseTarget('s0', 's1');
+    a.chooseTarget('s0', 'view_house');
+    a.chooseTarget('s0', 't0');
+    a.chooseTarget('s0', 'random');
+    // 必定只能拿到 t1，绝不能拿回 t0
+    const s0Tokens = findSeat(a.getState(), 's0')?.tokens ?? [];
+    expect(s0Tokens.some((t) => t.instanceId === 't1')).toBe(true);
+  });
+
+  it('商人裁定2边界3：目标手里只有刚给出的那枚时，random 无合法对象，降级为 no_swap', () => {
+    const a = makeAdapter(89, 4);
+    const st = a.mutableState();
+    findSeat(st, 's0')!.tokens = [{ instanceId: 't0', value: 2 }];
+    // 目标手里只有与给出者同 id 的一枚
+    findSeat(st, 's1')!.tokens = [{ instanceId: 't0', value: 2 }];
+    forceNightSetup(a, { s0: [{ cardId: 'spirit_merchant:4', instanceId: 'sm1' }] }, 'nightTrickster');
+    a.declare('s0', ['sm1']);
+    a.chooseTarget('s0', 's1');
+    a.chooseTarget('s0', 'view_house');
+    a.chooseTarget('s0', 't0');
+    // 此时 random 无合法候选 -> 降级为 no_swap，流程正常结束
+    a.chooseTarget('s0', 'random');
+    expect(a.getState().pending.length).toBe(0);
+    // 未产生交换事件，且 s0 仍保留原 t0 令牌
+    const swapEv = a
+      .getState()
+      .events.find(
+        (e) =>
+          e.type === 'score.honorAwarded' &&
+          typeof e.payload === 'object' &&
+          e.payload !== null &&
+          'swapped' in e.payload,
+      );
+    expect(swapEv).toBeUndefined();
+    expect(findSeat(a.getState(), 's0')?.tokens.some((t) => t.instanceId === 't0')).toBe(true);
+  });
+
   it('商人：他人看不到商人看过的 HONOR 面值', () => {
     const a = makeAdapter(86, 4);
     const st = a.mutableState();

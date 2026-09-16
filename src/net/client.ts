@@ -35,9 +35,12 @@ export class GameNet {
   seatId: string | null = null;
   isHost = false;
 
-  connect(url: string): void {
+  connect(url: string, seatToken?: string): void {
     this.setStatus('connecting');
-    this.socket = io(url, { transports: ['websocket', 'polling'] });
+    this.socket = io(url, {
+      auth: seatToken ? { seatToken } : {},
+      transports: ['websocket', 'polling'],
+    });
     this.socket.on('connect', () => this.setStatus('connected'));
     this.socket.on('disconnect', () => this.setStatus('disconnected'));
     this.socket.on(OUT.roomAck, (p: RoomAckPayload) => {
@@ -45,9 +48,45 @@ export class GameNet {
       this.seatToken = p.seatToken;
       this.seatId = p.seatId;
       this.isHost = p.isHost;
+      if (this.socket) {
+        this.socket.auth = { seatToken: p.seatToken };
+      }
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(`ninja-night:seatToken:${p.roomCode}`, p.seatToken);
+          localStorage.setItem('ninja-night:lastRoomCode', p.roomCode);
+        }
+        if (typeof history !== 'undefined' && history.replaceState) {
+          const u = new URL(window.location.href);
+          u.searchParams.set('room', p.roomCode);
+          history.replaceState(null, '', u.toString());
+        }
+      } catch {}
       this.handlers.onAck?.(p);
     });
-    this.socket.on(OUT.roomError, (p: RoomErrorPayload) => this.handlers.onError?.(p));
+    this.socket.on(OUT.roomError, (p: RoomErrorPayload) => {
+      if (p.message === '座位已过期，请重新加入' || p.reasonCode === 'UNAUTHORIZED') {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            if (this.roomCode) {
+              localStorage.removeItem(`ninja-night:seatToken:${this.roomCode}`);
+            }
+            const last = localStorage.getItem('ninja-night:lastRoomCode');
+            if (last) localStorage.removeItem(`ninja-night:seatToken:${last}`);
+            localStorage.removeItem('ninja-night:lastRoomCode');
+          }
+          if (typeof history !== 'undefined' && history.replaceState) {
+            const u = new URL(window.location.href);
+            u.searchParams.delete('room');
+            history.replaceState(null, '', u.toString());
+          }
+        } catch {}
+        this.roomCode = null;
+        this.seatToken = null;
+        this.seatId = null;
+      }
+      this.handlers.onError?.(p);
+    });
     this.socket.on(OUT.roomPresence, (p: PresencePayload) => this.handlers.onPresence?.(p));
     this.socket.on(OUT.roomStarted, (p: { roomCode: string }) => this.handlers.onStarted?.(p));
     this.socket.on(OUT.viewSnapshot, (v: PlayerView) => this.handlers.onView?.(v));

@@ -139,6 +139,12 @@ UNKNOWN_COMMAND
 - `seatToken`：服务端 UUID，映射 `seatToken → { roomCode, seatId }`。  
 - 同一 `seatToken` 新连接可抢占并踢掉旧连接。  
 - 对局开始后禁止中途加入。  
+- **断线重连与 seatToken 复用【阶段 6 裁定 1】**：
+  - 客户端 `localStorage` 保存 `seatToken`（key: `ninja-night:seatToken:{roomCode}`，以及当前房间索引 `ninja-night:lastRoomCode`）。
+  - 页面刷新 / 断线重连时，Socket 握手 `auth: { seatToken }` 带上 `seatToken`。
+  - 服务端保留期内（5 分钟 / `DISCONNECT_RETAIN_MS`）复用同一 `seatId`，重新绑定 socket 并下发 `room.ack`，已开局则重新下发当前 `view.snapshot`（大厅则广播更新后的 `room.presence`）。
+  - **不做状态重同步**（不回放历史，直接下发最新单人投影视图）。
+  - 超期或未知 token 则返回 `room.error`：`{ reasonCode: 'UNAUTHORIZED', message: '座位已过期，请重新加入' }`，客户端清除该本地 token 并回退至大厅表单。  
 
 ---
 

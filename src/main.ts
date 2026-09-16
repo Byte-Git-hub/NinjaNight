@@ -10,7 +10,9 @@ if (app) {
   // 开发默认连同源；可用 ?server= 覆盖
   const params = new URLSearchParams(location.search);
   const url = params.get('server') || location.origin;
-  net.connect(url);
+  const roomCode = params.get('room') || (typeof localStorage !== 'undefined' ? localStorage.getItem('ninja-night:lastRoomCode') : null);
+  const savedToken = roomCode && typeof localStorage !== 'undefined' ? localStorage.getItem(`ninja-night:seatToken:${roomCode}`) : null;
+  net.connect(url, savedToken ?? undefined);
   ui.render();
 }
 

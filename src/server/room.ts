@@ -100,7 +100,7 @@ export class RoomRuntime {
           return {
             seatId: s.seatId,
             nickname: s.nickname,
-            connected: !!sess,
+            connected: sess?.connected ?? false,
             ready: lobbySeat?.ready ?? sess?.ready ?? false,
             isHost: s.seatId === this.hostSeatId,
           };

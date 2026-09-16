@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { applyAllDefaults, createGame } from '../core/engine';
+import { projectView } from '../core/project-view';
 import type { Command, CommandType } from '../shared/types';
 import {
   DEFAULT_WINDOW_MS,
@@ -204,6 +205,46 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   }
 
   io.on('connection', (socket) => {
+    // 裁定 1：断线重连 seatToken 复用（握手带 seatToken）
+    const handshakeToken =
+      (typeof socket.handshake.auth?.seatToken === 'string' ? socket.handshake.auth.seatToken : null) ||
+      (typeof socket.handshake.query?.seatToken === 'string' ? socket.handshake.query.seatToken : null);
+
+    if (handshakeToken) {
+      const sess = sessionsByToken.get(handshakeToken);
+      if (sess) {
+        const room = rooms.get(sess.roomCode);
+        const now = Date.now();
+        if (room && (!sess.disconnectedAt || now - sess.disconnectedAt <= DISCONNECT_RETAIN_MS)) {
+          bindSession(room, socket, sess.seatId, handshakeToken);
+          const isHost = sess.seatId === room.hostSeatId;
+          const ack: RoomAckPayload = {
+            roomCode: room.code,
+            seatToken: handshakeToken,
+            seatId: sess.seatId,
+            isHost,
+          };
+          socket.emit(OUT.roomAck, ack);
+          room.broadcastPresence();
+          if (room.started && room.state) {
+            const view = projectView(room.state, sess.seatId);
+            if (view) socket.emit(OUT.viewSnapshot, view);
+          }
+          logger.info('session.reconnect', { roomCode: room.code, seatId: sess.seatId });
+        } else {
+          socket.emit(OUT.roomError, {
+            reasonCode: 'UNAUTHORIZED',
+            message: '座位已过期，请重新加入',
+          });
+        }
+      } else {
+        socket.emit(OUT.roomError, {
+          reasonCode: 'UNAUTHORIZED',
+          message: '座位已过期，请重新加入',
+        });
+      }
+    }
+
     socket.on(EV.roomCreate, (payload: unknown) => {
       try {
       const body = (payload ?? {}) as { nickname?: unknown };

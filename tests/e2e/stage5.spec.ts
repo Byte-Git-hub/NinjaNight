@@ -147,3 +147,29 @@ test('商人完整流程：HONOR + 换刚看的那枚', async ({ browser }) => {
   await expect(host.locator('.panel').first()).toBeVisible();
   for (const ctx of ctxs) await ctx.close();
 });
+
+test('断线重连：A 加入 → 刷新 → 自动回到座位', async ({ browser }) => {
+  const ctx = await browser.newContext();
+  const host = await ctx.newPage();
+  const p1 = await ctx.newPage();
+  await host.goto('/');
+  await p1.goto('/');
+
+  await joinOrCreate(host, '房主');
+  const code = await roomCodeFrom(host);
+  await joinOrCreate(p1, '玩家A', code);
+  await expect(p1.locator('.room')).toContainText(code);
+  await expect(p1.locator('.seats')).toContainText('玩家A');
+  await expect(p1.locator('.seat')).toContainText('s1');
+
+  // 刷新玩家A页面
+  await p1.reload();
+
+  // 页面刷新后，带上 localStorage 中的 seatToken 握手重连，自动回到原房间和座位
+  await expect(p1.locator('.room')).toContainText(code, { timeout: 10_000 });
+  await expect(p1.locator('.seats')).toContainText('玩家A');
+  await expect(p1.locator('.seat')).toContainText('s1');
+
+  await ctx.close();
+});
+

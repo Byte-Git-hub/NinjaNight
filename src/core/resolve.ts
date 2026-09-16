@@ -330,24 +330,41 @@ export function applyTargetChoice(
     const tid = ctx.targets[0];
     const target0 = tid ? findSeat(state, tid) : undefined;
     if (!target0) return { ok: false, reason: 'illegalTarget' };
+
+    // 候选池：严格排除自己刚给出的那枚（不允许拿回自己刚给出的那枚）
+    const candidatePool = target0.tokens.filter((t) => t.instanceId !== ctx.giveTokenId);
+
+    // 目标手里只有刚给出的那枚时，random 无合法对象，降级为 no_swap
+    if (candidatePool.length === 0) {
+      finishInstance(state);
+      return { ok: true };
+    }
+
     let take = undefined as (typeof actor.tokens)[number] | undefined;
     if (targetSeatId === 'seen' && ctx.seenTokenId) {
-      take = target0.tokens.find((t) => t.instanceId === ctx.seenTokenId);
+      take = candidatePool.find((t) => t.instanceId === ctx.seenTokenId);
       if (!take) return { ok: false, reason: 'illegalTarget' };
       target0.tokens = target0.tokens.filter((t) => t.instanceId !== take!.instanceId);
     } else {
-      // 随机再拿一枚：若看过 HONOR 且还有其他令牌，排除刚看的那枚
-      let pool = target0.tokens.slice();
-      if (ctx.viewKind === 'honor' && ctx.seenTokenId && pool.length > 1) {
-        pool = pool.filter((t) => t.instanceId !== ctx.seenTokenId);
+      // 随机再拿一枚
+      // 1. 目标仅 1 枚：random 等价于 seen
+      if (candidatePool.length === 1) {
+        take = candidatePool[0];
+      } else {
+        // 目标有多枚：若看过 HONOR 且还有其他令牌，排除刚看的那枚
+        let randomPool = candidatePool;
+        if (ctx.viewKind === 'honor' && ctx.seenTokenId) {
+          const filtered = candidatePool.filter((t) => t.instanceId !== ctx.seenTokenId);
+          if (filtered.length > 0) randomPool = filtered;
+        }
+        const ri = state.rng.int(randomPool.length);
+        syncRngCalls(state);
+        take = randomPool[ri];
       }
-      if (pool.length === 0) {
+      if (!take) {
         finishInstance(state);
         return { ok: true };
       }
-      const ri = state.rng.int(pool.length);
-      syncRngCalls(state);
-      take = pool[ri];
       target0.tokens = target0.tokens.filter((t) => t.instanceId !== take!.instanceId);
     }
     const giveIdx = actor.tokens.findIndex((t) => t.instanceId === ctx.giveTokenId);
@@ -364,7 +381,7 @@ export function applyTargetChoice(
       b: target0.seatId,
       giveTokenId: give?.instanceId,
       takeTokenId: take.instanceId,
-      takeWasSeen: targetSeatId === 'seen',
+      takeWasSeen: targetSeatId === 'seen' || (targetSeatId === 'random' && take.instanceId === ctx.seenTokenId),
     });
     finishInstance(state);
     return { ok: true };
