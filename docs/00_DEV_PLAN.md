@@ -58,7 +58,17 @@ updated: 2026-09-16
 - [ ] 用户确认规则表与待确认项处理方式  
 - [ ] 用户提供实物 33 张清单（阶段 3 结束前硬性）  
 
-### 阶段 2+ — 未开始
+### 阶段 2 — 最小核心 + Spy 闭环 — **完成（待用户确认进入阶段 3）**
+
+- [x] 裁定 A/B/C 写入 01/03（commit `96734f5`）  
+- [x] shared 类型补全（Command 含 roomCode 等）  
+- [x] core：rng / setup(draft) / resolve / score / projectView / engine  
+- [x] LocalAdapter + dev smoke  
+- [x] 测试 15 项全绿；typecheck/build 通过  
+- [ ] 骗徒 / Mirror / Martyr / Mastermind / Shapeshifter  
+- [ ] 超时（阶段 4）  
+
+### 阶段 3+ — 未开始
 
 ---
 
@@ -118,4 +128,11 @@ updated: 2026-09-16
 
 - 全量规则账本、状态机、架构可见性冻结。  
 - git：初始 commit + 本阶段 commit（见 git log）。  
-- 待用户确认后进入阶段 2。  
+
+### 2026-09-16 — 阶段 2
+
+- 前置裁定 A/B/C；core 最小闭环（Draft + 四牌夜晚 + 计分 + 视图）。  
+- seed=42 自动局哈希（冒烟）：draft 后 `3c63975f`，整轮后 `a68a014d`（可能随后续逻辑变更）。  
+- 测试：`tests/core/engine.test.ts` + `validate.test.ts` 共 15 通过。  
+- 待用户确认后进入阶段 3。  
+

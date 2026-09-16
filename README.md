@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-**阶段 1 — 规则规格冻结**（规则/状态机/可见性文档；无玩法规则实现、无 UI、无联机）
+**阶段 2 — 最小核心**（Draft + Spy/Mystic/BA/Shinobi + 计分 + 视图 + LocalAdapter；无 UI 页面、无 Socket）
 
 ## 如何验证
 
@@ -28,12 +28,12 @@ npm run build
 | `docs/04_PROTOCOL.md` | 联机协议 |
 | `docs/05_TEST_PLAN.md` | 测试计划 |
 | `src/shared` | 共享类型（Command / GameEvent / PlayerView / PendingDecision） |
-| `src/core` | 规则核心（待实现） |
+| `src/core` | 规则核心（阶段 2 骨架） |
 | `src/ui` | 界面（待实现） |
 | `src/net` | 网络适配（待实现） |
 | `src/server` | 房间服务（待实现） |
-| `src/data` | 静态数据（待实现） |
-| `src/dev` | 本地调试（待实现，不进生产） |
+| `src/data` | 静态数据（阶段 2 在 `src/core/deck.ts`） |
+| `src/dev` | LocalAdapter / smoke（不进生产） |
 | `tests/` | core / integration / e2e |
 
 ## 阶段 0 范围外
