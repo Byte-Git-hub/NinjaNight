@@ -112,7 +112,29 @@ updated: 2026-09-16
 - [x] e2e：移动 / 断线 / 商人流程  
 - [ ] 真机手测一轮 4 人局（需用户）  
 
-### 阶段 6+ — 美术资产管线（未开始）
+### 阶段 6A — 美术资产管线架构与 Prompt 重构 — **完成**
+
+- [x] One-Shot 风格基线冻结（水墨+金箔金缮+浮世绘、2:3、留白 12%/22%）
+- [x] 从 47 条牌 prompt 重构为 16 个卡牌视觉单元（降本 60%+）+ 3 个 UI 单元
+- [x] `scripts/gen-assets/prompts.ts` 与 `preview-prompts.ts`
+- [x] `docs/06_ART_PIPELINE.md` 锁定 `--model "Gemini 3.8 Flash (High)"`
+
+### 阶段 6B — 图片生成与 UI 资源映射 — **进行中 / 阶段性完成（待配额恢复继续批次）**
+
+- [x] 6B 前置：修正拼写与 prompt 完整性（commit `24418f7`）
+- [x] 6B-1：UI 资源映射与编号渲染（commit `b618691`）
+  - `src/ui/assets.ts` 映射表与降级渲染
+  - `.card-placeholder` 与 `.card-number` 顶部 12% 留白区悬浮层
+  - 单元测试 `tests/ui/assets.test.ts` 全绿
+- [x] 6B-2：卡牌视觉单元生图与落盘（commit `900e0a9`）
+  - `public/assets/visuals/spy.jpg`（已生成落盘，符合 One-Shot 风格）
+  - `public/assets/visuals/shapeshifter.jpg`（已生成落盘，符合 One-Shot 风格）
+  - `public/assets/tokens/honor-token.jpg`（复用 One-Shot 荣誉标记）
+  - 触发 API 限流配额（`gemini-3.1-flash-image` 配额于 2026-09-16T20:30:38Z 重置）
+  - `scripts/gen-assets/manifest.json` 记录资产状态与配额恢复时间
+- [ ] 6B-2 剩余 14 张视觉单元生图（等待配额重置后一键推进）
+- [ ] 6B-3：UI 材质（大厅背景/桌面和纸/主按钮）生图
+- [ ] 6C：UI 主题沉浸重构（水墨和纸/令牌动画/手牌动效）
 
 ---
 
