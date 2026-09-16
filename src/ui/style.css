@@ -93,14 +93,81 @@ button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
-button.card {
-  background: #1e2a3a;
-  border: 1px solid #3a4a66;
+button.card, span.card {
+  width: 90px;
+  height: 135px;
+  aspect-ratio: 2/3;
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  padding: 0;
   margin: 4px 4px 0 0;
+  background: #181d28;
+  border: 1px solid #3a4a66;
+  display: inline-block;
+  vertical-align: top;
+  box-sizing: border-box;
 }
 button.card.sel {
   border-color: #7ec8ff;
-  background: #24405a;
+  box-shadow: 0 0 6px #7ec8ff;
+}
+.card.dim {
+  opacity: 0.6;
+}
+.card-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: #181d28;
+}
+.card-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  text-align: center;
+  background: #181d28;
+  color: #e8ecf1;
+  font-size: 13px;
+  z-index: 1;
+}
+.card-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 2;
+}
+.card-art.img-error,
+.card-art[style*="display: none"] {
+  display: none !important;
+}
+.card-number {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 12%;
+  min-height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0d0f14;
+  background: rgba(13, 15, 20, 0.75);
+  border: 1px solid #d4af37;
+  border-radius: 3px;
+  padding: 0 5px;
+  box-shadow: 0 0 4px rgba(212, 175, 55, 0.5);
+  text-shadow: -1px -1px 0 #d4af37, 1px -1px 0 #d4af37, -1px 1px 0 #d4af37, 1px 1px 0 #d4af37;
+  z-index: 5;
+  pointer-events: none;
 }
 button.opt {
   background: #3a2a5a;

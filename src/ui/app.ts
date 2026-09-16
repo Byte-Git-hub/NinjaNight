@@ -1,6 +1,7 @@
 import type { PresencePayload, ChatEventPayload, RoomErrorPayload } from '../shared/protocol';
 import type { ConnectionStatus, GameNet } from '../net/client';
 import type { PlayerView, PendingDecision, NinjaCardInstanceView } from '../shared/types';
+import { getCardDisplayName, renderCardHtml } from './assets';
 
 const PHASE_CN: Record<string, string> = {
   roomLobby: '大厅',
@@ -21,26 +22,8 @@ const PHASE_CN: Record<string, string> = {
   gameOver: '结束',
 };
 
-const CARD_CN: Record<string, string> = {
-  spy: '密探',
-  mystic: '隐士',
-  shapeshifter: '百变者',
-  grave_digger: '掘墓人',
-  troublemaker: '捣蛋鬼',
-  spirit_merchant: '商人',
-  thief: '盗贼',
-  judge: '裁判',
-  blind_assassin: '刺客',
-  shinobi: '上忍',
-  mirror_monk: '还施者',
-  martyr: '殉道者',
-  mastermind: '大将军',
-};
-
 function cardName(cardId: string): string {
-  const base = cardId.split(':')[0] ?? cardId;
-  const n = cardId.split(':')[1];
-  return `${CARD_CN[base] ?? cardId}${n ? ` ${n}` : ''}`;
+  return getCardDisplayName(cardId);
 }
 
 export class AppUI {
@@ -237,13 +220,10 @@ export class AppUI {
   private gamePanels(v: PlayerView, pending: PendingDecision | null): string {
     const self = v.self;
     const hand = self.hand
-      .map(
-        (c) =>
-          `<button class="card" data-iid="${c.instanceId}" type="button">${cardName(c.cardId)}</button>`,
-      )
+      .map((c) => renderCardHtml(c.cardId, c.instanceId, true))
       .join('');
     const reserved = self.reserved
-      .map((c) => `<span class="card dim">${cardName(c.cardId)}</span>`)
+      .map((c) => renderCardHtml(c.cardId, c.instanceId, false))
       .join('');
     const known = self.knownHouseHistory
       .map((k) => `<div>${escapeHtml(k.targetSeatId)} → ${escapeHtml(k.houseId)}（${escapeHtml(k.viaCardId ?? '')}）</div>`)
