@@ -13,3 +13,5 @@ public/assets/**/_originals/
 docs/06_assets/screenshots/
 # 6G-1 自签证书（本地生成，不进版本控制）
 certs/
+# 一键启动脚本的运行日志（本地生成，不进版本控制）
+logs/
