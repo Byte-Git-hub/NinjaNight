@@ -479,6 +479,10 @@ button.card.sel {
 .game-over-banner p {
   margin: 0 0 10px;
 }
+/* 窄屏防溢出：长昵称不断行撑宽时 banner 内横滚，不撑大整页 */
+.game-over-banner {
+  overflow-x: auto;
+}
 
 /* —— 日志与聊天 —— */
 .log,
@@ -516,10 +520,18 @@ button.card.sel {
   font-size: 13px;
   border-collapse: collapse;
   margin: 8px 0;
+  table-layout: fixed;
 }
 .rank-table td {
   padding: 3px 8px;
   border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  overflow-wrap: anywhere;
+}
+.rank-table td:first-child {
+  width: 2.5em;
+}
+.rank-table td:last-child {
+  width: 4.5em;
 }
 .hint {
   color: var(--gold-foil);

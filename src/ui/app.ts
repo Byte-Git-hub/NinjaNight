@@ -664,11 +664,13 @@ function winnerLabel(winner: unknown): string {
   return String(winner ?? '未知');
 }
 
-/** 本轮横幅：得主 + 自己本轮 +N 枚（只用公开的枚数，不碰面值） */
+/** 本轮横幅：得主 + 获奖名单（只用公开的枚数，不碰面值） */
 function roundLabel(e: GameEvent, v: PlayerView): string {
   const p = e.payload as { winner?: unknown; awarded?: Array<{ seatId: string; count: number }> };
-  const mine = p.awarded?.find((a) => a.seatId === v.self.seatId)?.count ?? 0;
-  return `本轮：${winnerLabel(p.winner)}获胜${mine > 0 ? `，你 +${mine} 枚` : ''}`;
+  const awarded = p.awarded ?? [];
+  const mine = awarded.find((a) => a.seatId === v.self.seatId)?.count ?? 0;
+  const names = awarded.map((a) => seatName(v, a.seatId)).join('、');
+  return `本轮：${winnerLabel(p.winner)}获胜${names ? `；获奖：${names}（各 +1 枚）` : ''}${mine > 0 ? `，你 +${mine} 枚` : ''}`;
 }
 
 /** 终局排名：取 score.victory 公开总分排序（Q5：只显示总分，不显示面值明细） */
