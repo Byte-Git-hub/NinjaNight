@@ -100,7 +100,7 @@ test.describe('6F 桌游布局', () => {
   test.describe('移动端', () => {
     test.use({ viewport: { width: 390, height: 844 } });
 
-    test('390宽：座位横滑、手牌底部固定、开局选牌可点', async ({ page }) => {
+    test('390宽：座位横滑、手牌不遮挡、开局选牌可点', async ({ page }) => {
       await page.goto('/');
       await page.fill('#nick', '手机玩家');
       await page.click('#btn-create');
@@ -118,8 +118,8 @@ test.describe('6F 桌游布局', () => {
       const scrollable = await page.locator('.seats.ring').evaluate((el) => el.scrollWidth >= el.clientWidth);
       expect(scrollable).toBe(true);
 
-      // 手牌底部固定
-      await expect(page.locator('.hand')).toHaveCSS('position', 'fixed');
+      // 6G-1-fix：手牌回到文档流（sticky），不再 fixed 覆盖已知身份区/底部按钮
+      await expect(page.locator('.hand')).toHaveCSS('position', 'sticky');
 
       // 选牌可点
       const draftOpt = page.locator('.pending .card.opt[data-opt]').first();

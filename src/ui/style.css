@@ -1029,10 +1029,11 @@ details.collapsed-panel #btn-toggle-log {
     border-radius: 6px;
     padding: 6px 8px;
   }
+  /* 6G-1-fix：手牌改回文档流（sticky 兜底），不再 fixed 覆盖已知身份区/底部按钮。
+     fixed 手牌钉在视口底部 150px，.known 与 #btn-end 滚入该视口带即被盖住（z50 > static），
+     且 .app padding-bottom 仅保护末尾元素。sticky bottom:0 让手牌占位参与排布，永不遮挡。 */
   .hand {
-    position: fixed;
-    left: 0;
-    right: 0;
+    position: sticky;
     bottom: 0;
     background: rgba(30, 41, 59, 0.95);
     border-top: 1px solid var(--gold-foil);
@@ -1056,11 +1057,11 @@ details.collapsed-panel #btn-toggle-log {
     min-height: 15px;
     padding: 0 4px;
   }
-  /* 6F-5：决策区改底部 sticky，不再全屏盖住手牌 */
+  /* 6G-1-fix：决策条改回静态流。sticky bottom:0 会让整个条（含可达 52vh 的 pending）
+     上滑时吸底滑过其后的 .known / #btn-end（z60 更高），与手牌抢视口底部致层级混乱。
+     手牌已回流，决策区随页面滚动即可到达，不再吸底。 */
   .bottom-bar {
-    position: sticky;
-    bottom: 0;
-    z-index: 60;
+    position: static;
   }
   .pending {
     max-height: 52vh;
