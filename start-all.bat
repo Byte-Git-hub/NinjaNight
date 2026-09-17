@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 cd /d "%~dp0"
 if not exist logs mkdir logs
 
@@ -9,29 +8,30 @@ set T=%T: =0%
 set T=%T:.=%
 
 echo ============================================
-echo  NinjaNight å¯®â‚¬é™æˆ å¹†æ¾§å†§ç«´é–¿î†¼æƒŽé”?echo ============================================
-echo éƒå •æ£¿éŽ´? %D%-%T%
+echo  NinjaNight ¿ª·¢»·¾³Ò»¼üÆô¶¯
+echo ============================================
+echo Ê±¼ä´Á %D%-%T%
 echo.
 
 netstat -ano | findstr ":3000 " | findstr "LISTENING" >nul
 if %errorlevel%==0 (
-  echo [ç’ºå® ç¹ƒ] :3000 å®¸èŒ¶î¦é—çŠµæ•¤
+  echo [Ìø¹ý] :3000 ÒÑ±»Õ¼ÓÃ
 ) else (
-  echo [éšîˆšå§©] Server...
+  echo [Æô¶¯] Server...
   start "NinjaNight-Server" powershell -NoProfile -NoExit -Command "npm run dev:server 2>&1 | Tee-Object -FilePath 'logs/server-%D%-%T%.log'"
   timeout /t 2 /nobreak >nul
 )
 
 netstat -ano | findstr ":5173 " | findstr "LISTENING" >nul
 if %errorlevel%==0 (
-  echo [ç’ºå® ç¹ƒ] :5173 å®¸èŒ¶î¦é—çŠµæ•¤
+  echo [Ìø¹ý] :5173 ÒÑ±»Õ¼ÓÃ
 ) else (
-  echo [éšîˆšå§©] Client...
+  echo [Æô¶¯] Client...
   start "NinjaNight-Client" powershell -NoProfile -NoExit -Command "npm run dev 2>&1 | Tee-Object -FilePath 'logs/client-%D%-%T%.log'"
 )
 
 echo.
-echo éšîˆšå§©ç€¹å±¾åžšéŠ†å‚î†–é—‚? http://localhost:5173
-echo éƒãƒ¥ç¹”é©î†¼ç¶: logs\
+echo Æô¶¯Íê³É¡£·ÃÎÊ http://localhost:5173
+echo ÈÕÖ¾Ä¿Â¼: logs\
 echo.
 timeout /t 3 /nobreak >nul

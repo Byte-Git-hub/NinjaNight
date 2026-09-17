@@ -1,16 +1,17 @@
 @echo off
-chcp 65001 >nul
 
-echo è¤°æ’³å¢  node æ©æ¶šâ–¼:
+echo µ±Ç° node ½ø³Ì:
 tasklist /FI "IMAGENAME eq node.exe" /FO TABLE
 echo.
 
-set /p CONFIRM="çº­î†¿î…»é‰â‚¬éºå¤‹å¢éˆ?node æ©æ¶šâ–¼é”›ç†¶ç´°è¤°åæ·éè·ºç•  Node æ¤¤åœ­æ´° (Y/N): "
+set /p CONFIRM="È·ÈÏÉ±µôËùÓĞ node ½ø³Ì£¿»áÓ°ÏìÆäËü Node ÏîÄ¿ (Y/N): "
 if /i not "%CONFIRM%"=="Y" (
-  echo å®¸æ’å½‡å¨‘?  pause
+  echo ÒÑÈ¡Ïû
+  pause
   exit /b 0
 )
 
 taskkill /F /IM node.exe
 echo.
-echo ç€¹å±¾åšéŠ†?pause
+echo Íê³É¡£
+pause
