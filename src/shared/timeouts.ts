@@ -38,3 +38,11 @@ export const VOICE_PORT_MIN = envInt('NINJA_MEDIA_PORT_MIN', 40000);
 export const VOICE_PORT_MAX = envInt('NINJA_MEDIA_PORT_MAX', 40100);
 /** 6G-1 语音：speaking 广播节流窗口（毫秒，客户端限频用） */
 export const VOICE_SPEAKING_THROTTLE_MS = 1000;
+/** 6G-2a 特效：客户端合并发送窗口（毫秒） */
+export const EFFECT_BATCH_WINDOW_MS = envInt('NINJA_EFFECT_BATCH_MS', 50);
+/** 6G-2a 特效：单批上限（条） */
+export const EFFECT_BATCH_MAX = envInt('NINJA_EFFECT_BATCH_MAX', 10);
+/** 6G-2a 特效：客户端镜像限频（条/秒，超限只本地渲染不发网，回退） */
+export const EFFECT_MIRROR_PER_SEC = envInt('NINJA_EFFECT_MIRROR_PER_SEC', 10);
+/** 6G-2a 特效：comboId 分组窗口（毫秒；同目标同物品归一组，服务端透传） */
+export const EFFECT_COMBO_WINDOW_MS = 1500;

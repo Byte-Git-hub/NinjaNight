@@ -73,6 +73,8 @@ export const EV = {
   voiceConsume: 'voice.consume',
   voiceCloseProducer: 'voice.closeProducer',
   voiceListProducers: 'voice.listProducers',
+  // 6G-2a 互动特效（纯社交层，不进 core；只广播不存；怀疑标记 6G-2b 再加）
+  effectSend: 'effect.send',
 } as const;
 
 export const OUT = {
@@ -91,6 +93,8 @@ export const OUT = {
   voiceState: 'voice.state',
   voiceUnavailable: 'voice.unavailable',
   voiceProducers: 'voice.producers',
+  // 6G-2a 特效广播（批）
+  effectBatch: 'effect.batch',
 } as const;
 
 export interface RoomAckPayload {
@@ -149,6 +153,54 @@ export interface VoiceStatePayload {
 export interface VoiceJoinPayload {
   seatToken: string;
   rtpCapabilities?: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// 6G-2a 互动特效 payload（纯社交层；物品 id 定稿 8 串，不得改名）
+// ---------------------------------------------------------------------------
+
+/** 互动物品 id（定稿 8 串；图集就位前服务端只认 id，不依赖图片） */
+export const EFFECT_ITEM_IDS = [
+  'egg',
+  'sakura',
+  'geta',
+  'rotten_pill',
+  'basket',
+  'secret_letter',
+  'tea',
+  'snowball',
+] as const;
+
+export type EffectItemId = (typeof EFFECT_ITEM_IDS)[number];
+
+const EFFECT_ITEM_SET: ReadonlySet<string> = new Set(EFFECT_ITEM_IDS);
+
+export function isEffectItemId(v: unknown): v is EffectItemId {
+  return typeof v === 'string' && EFFECT_ITEM_SET.has(v);
+}
+
+/** 客户端上行单个特效：目标座位 + 物品 + 连击组 id（同组 1.5s 窗口内计连击） */
+export interface EffectSendItem {
+  targetSeatId: string;
+  itemId: string;
+  comboId: string;
+}
+
+/** effect.send 上行：客户端 50ms 窗口合并，最多 10 条/批 */
+export interface EffectSendPayload {
+  seatToken: string;
+  items: EffectSendItem[];
+}
+
+/** effect.batch 下行单个条目（服务端只透传广播，不存不记历史） */
+export interface EffectBatchItem extends EffectSendItem {
+  fromSeatId: string;
+  fromNickname: string;
+}
+
+export interface EffectBatchPayload {
+  roomCode: string;
+  items: EffectBatchItem[];
 }
 
 const CTRL_RE = new RegExp('[\\u0000-\\u001F\\u007F]', 'g');

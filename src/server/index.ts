@@ -32,6 +32,7 @@ import {
 import { RoomRuntime, generateRoomCode, newSeatToken, type SessionInfo } from './room';
 import { logger } from './logger';
 import { VoiceManager } from './voice';
+import { EffectRelay, validateEffectItems } from './effects';
 import { DISCONNECT_RETAIN_MS } from '../shared/timeouts';
 import { VICTORY_AUTO_ADVANCE_MS } from '../shared/timeouts';
 import { scheduleBots } from './bot-scheduler';
@@ -69,6 +70,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   const httpServer = buildHttpServer(app);
   const io = new Server(httpServer, { cors: { origin: true } });
   const voice = new VoiceManager(io);
+  // 6G-2a：特效只中继广播（无状态；怀疑标记 6G-2b 再加）
+  const effects = new EffectRelay(io);
 
   const rooms = new Map<string, RoomRuntime>();
   const sessionsByToken = new Map<string, SessionInfo>();
@@ -707,13 +710,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         emitError(socket, 'UNAUTHORIZED');
         return;
       }
-      const now = Date.now();
-      if (now - sess.rateWindowStart > 1000) {
-        sess.rateWindowStart = now;
-        sess.rateCount = 0;
-      }
-      sess.rateCount += 1;
-      if (sess.rateCount > COMMAND_RATE_PER_SEC) {
+      if (!takeSharedRate(sess)) {
         socket.emit(OUT.commandReject, {
           commandId: String(body.commandId ?? ''),
           reasonCode: 'RATE_LIMITED',
@@ -817,6 +814,35 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       room.broadcastPrivateEvents(res.newEvents);
       afterStateChange(room);
     });
+
+    /**
+     * 6G-2a 共享限频桶（command.send 与 effect.send 共用 COMMAND_RATE_PER_SEC 窗口）。
+     * 返回 false = 超限（调用方：指令走 commandReject，社交层静默丢弃）。
+     */
+    function takeSharedRate(sess: SessionInfo): boolean {
+      const now = Date.now();
+      if (now - sess.rateWindowStart > 1000) {
+        sess.rateWindowStart = now;
+        sess.rateCount = 0;
+      }
+      sess.rateCount += 1;
+      return sess.rateCount <= COMMAND_RATE_PER_SEC;
+    }
+
+    /** 本房座位 id 全集（lobby + 对局态；社交层目标合法性用） */
+    function seatIdsOf(room: RoomRuntime): Set<string> {
+      const ids = new Set(room.lobby.map((l) => l.seatId));
+      if (room.state) {
+        for (const s of room.state.seats) ids.add(s.seatId);
+      }
+      return ids;
+    }
+
+    function nicknameOf(room: RoomRuntime, seatId: string): string {
+      const st = room.state?.seats.find((s) => s.seatId === seatId);
+      if (st) return st.nickname;
+      return room.lobby.find((l) => l.seatId === seatId)?.nickname ?? seatId;
+    }
 
     // ---- 6G-1 语音信令（seatToken 鉴权；只传状态与握手参数，不碰音频） ----
     type VoiceAck = (res: unknown) => void;
@@ -1060,6 +1086,31 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       });
     });
 
+    // ---- 6G-2a 互动特效（seatToken 鉴权；共享限频桶，超限静默丢弃；只广播不存） ----
+    socket.on(EV.effectSend, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; items?: unknown };
+      const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      if (!takeSharedRate(sess)) return;
+      const room = rooms.get(sess.roomCode);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      const items = validateEffectItems({ items: body.items }, (id) => seatIdsOf(room).has(id));
+      if (!items) {
+        emitError(socket, 'INVALID_PAYLOAD');
+        return;
+      }
+      effects.broadcast(room.code, room.roomChannel(), sess.seatId, nicknameOf(room, sess.seatId), items);
+      logger.info('effect.relay', { roomCode: room.code, seatId: sess.seatId, type: 'batch' });
+    });
+
+
+
     socket.on(EV.roomLeave, (payload: unknown) => {
       const body = (payload ?? {}) as { seatToken?: unknown };
       const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
@@ -1201,6 +1252,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     rooms,
     sessionsByToken,
     voice,
+    effects,
     listen(portNum = port) {
       return new Promise<void>((resolve) => {
         // 局域网访问：监听所有网卡（Socket.IO 复用同一 httpServer，一并生效）
