@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { applyAllDefaults, totalCardsInZones } from '../../src/core/engine';
+import { projectView } from '../../src/core/project-view';
 import { scoreRound } from '../../src/core/score';
+import { startNextRound } from '../../src/core/setup';
 import { forceNightSetup, makeAdapter } from '../fixtures/game';
 
 describe('Bug2: victoryCheck 下一轮循环', () => {
@@ -76,5 +78,37 @@ describe('Bug2: victoryCheck 下一轮循环', () => {
     b.chooseTarget('s0', 's1');
     b.chooseOptional('s0', false);
     expect(b.getState().seats[1]!.alive).toBe(true);
+  });
+
+  it('6F.5-fix3: startNextRound 清空 knownHouses（跨轮不残留）', () => {
+    const a = makeAdapter(25);
+    const st = a.mutableState();
+    st.seats[0]!.knownHouses.push({
+      round: 1,
+      targetSeatId: 's1',
+      houseId: st.seats[1]!.house,
+      viaCardId: 'spy:2',
+    });
+    expect(st.seats[0]!.knownHouses).toHaveLength(1);
+    startNextRound(st);
+    expect(st.round).toBe(2);
+    for (const s of st.seats) {
+      expect(s.knownHouses).toEqual([]);
+    }
+  });
+
+  it('6F.5-fix3: projectView 按当前 round 过滤 knownHouseHistory（双保险）', () => {
+    const a = makeAdapter(26);
+    const st = a.mutableState();
+    // 即使 core 残留上轮记录，投影也只透出本轮
+    st.seats[0]!.knownHouses.push(
+      { round: 1, targetSeatId: 's1', houseId: st.seats[1]!.house, viaCardId: 'spy:2' },
+      { round: 2, targetSeatId: 's2', houseId: st.seats[2]!.house, viaCardId: 'mystic:4' },
+    );
+    st.round = 2;
+    const v = projectView(st, 's0');
+    expect(v).not.toBeNull();
+    expect(v!.self.knownHouseHistory).toHaveLength(1);
+    expect(v!.self.knownHouseHistory[0]).toMatchObject({ round: 2, targetSeatId: 's2' });
   });
 });

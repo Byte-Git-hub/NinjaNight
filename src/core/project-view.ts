@@ -65,12 +65,14 @@ export function projectView(state: GameState, seatId: SeatId): PlayerView | null
       instanceId: t.instanceId,
       value: t.value,
     })),
-    knownHouseHistory: self.knownHouses.map((k) => ({
-      round: k.round,
-      targetSeatId: k.targetSeatId,
-      houseId: k.houseId,
-      viaCardId: k.viaCardId,
-    })),
+    knownHouseHistory: self.knownHouses
+      .filter((k) => k.round === state.round)
+      .map((k) => ({
+        round: k.round,
+        targetSeatId: k.targetSeatId,
+        houseId: k.houseId,
+        viaCardId: k.viaCardId,
+      })),
     declaredThisPhase: self.declared.map((c) => c.instanceId),
     hasPending: state.pending.some((p) => p.seatId === self.seatId),
   };

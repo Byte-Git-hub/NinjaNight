@@ -32,7 +32,7 @@ $env:NINJA_WINDOW_MS=5000; npm run dev:server  # 短超时调试
 
 ## 硬约定（踩中即错）
 
-- **可见性**：令牌**枚数公开、面值/总分私密**（宣称胜利亮牌除外）；Thief 比**枚数**；Shapeshifter 对调不广播、`knownHouses` 是 append-only 快照（拷贝、禁活引用、禁自动刷新）；`room.error` / reject 不得夹带未授权暗牌。
+- **可见性**：令牌**枚数公开、面值/总分私密**（宣称胜利亮牌除外）；Thief 比**枚数**；Shapeshifter 对调不广播；`knownHouses` 是同一轮内的知识快照——单轮内 append-only（拷贝、禁活引用、禁自动刷新，对调后不刷新），`startNextRound` 时清空，UI 投影按当前 round 过滤（双保险）；`room.error` / reject 不得夹带未授权暗牌。
 - **日志脱敏**：只走 `src/server/logger.ts`；禁止记 HONOR 面值、HOUSE、手牌、`seatToken`、种子、视图 payload，只记 roomCode / seatId / command.type / reasonCode。
 - **断线**：仅保留 seat 映射至 `DISCONNECT_RETAIN_MS`（默认 5min）；重连凭 `localStorage` 的 `seatToken` 抢占式重绑并重下发最新单人 `view.snapshot`，**不回放、不恢复对局状态**，过期回大厅表单。
 - **Bot**：`src/core/bot.ts` 保持纯函数（输入仅自身 `PlayerView` + 窗口 id + 注入 `Rng`）；调度走 `src/server/bot-scheduler.ts`（`projectView` + 内部 `setTimeout`，默认 `BOT_DELAY_MS=500`/`BOT_JITTER_MS=1000`），严禁服务端开本地 Socket 连自己、严禁碰完整 `GameState`。

@@ -134,8 +134,9 @@ export function afterDraftComplete(state: GameState): void {
 
 /**
  * 开启下一轮（Q2 裁定）：保留 tokens/round+1/rng 连续，其余重置。
- * 重发身份、重组忍者牌堆并重发 draftHand；knownHouses 保留（append-only 历史，
- * 记录自带 round 戳）；tokenPool 保留剩余（耗尽不再发，不重洗）。
+ * 重发身份、重组忍者牌堆并重发 draftHand；knownHouses 按轮清空
+ * （单轮内 append-only，记录自带 round 戳；跨轮清空 + 投影过滤双保险）；
+ * tokenPool 保留剩余（耗尽不再发，不重洗）。
  * 注意：不重置牌实例计数器，保证 instanceId 跨轮唯一。
  */
 export function startNextRound(state: GameState): void {
@@ -155,6 +156,7 @@ export function startNextRound(state: GameState): void {
     seat.alive = true;
     seat.house = houses[i] as HouseId;
     seat.houseRevealed = false;
+    seat.knownHouses = [];
     seat.hand = [];
     seat.reserved = [];
     seat.declared = [];
