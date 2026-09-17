@@ -73,8 +73,12 @@ export const EV = {
   voiceConsume: 'voice.consume',
   voiceCloseProducer: 'voice.closeProducer',
   voiceListProducers: 'voice.listProducers',
-  // 6G-2a 互动特效（纯社交层，不进 core；只广播不存；怀疑标记 6G-2b 再加）
+  // 6G-2a 互动特效（纯社交层，不进 core；只广播不存）
   effectSend: 'effect.send',
+  // 6G-2b 怀疑标记（纯社交层，不进 core；状态服务端内存持有，快照广播）
+  markSet: 'mark.set',
+  markClear: 'mark.clear',
+  markSync: 'mark.sync',
 } as const;
 
 export const OUT = {
@@ -95,6 +99,8 @@ export const OUT = {
   voiceProducers: 'voice.producers',
   // 6G-2a 特效广播（批）
   effectBatch: 'effect.batch',
+  // 6G-2b 怀疑标记全量快照
+  markState: 'mark.state',
 } as const;
 
 export interface RoomAckPayload {
@@ -156,7 +162,7 @@ export interface VoiceJoinPayload {
 }
 
 // ---------------------------------------------------------------------------
-// 6G-2a 互动特效 payload（纯社交层；物品 id 定稿 8 串，不得改名）
+// 6G-2a 互动特效 payload（纯社交层；物品 id 定稿 9 串，不得改名）
 // ---------------------------------------------------------------------------
 
 /** 互动物品 id（定稿 8 串；图集就位前服务端只认 id，不依赖图片） */
@@ -202,6 +208,31 @@ export interface EffectBatchItem extends EffectSendItem {
 export interface EffectBatchPayload {
   roomCode: string;
   items: EffectBatchItem[];
+}
+
+// ---------------------------------------------------------------------------
+// 6G-2b 怀疑标记 payload（纯社交层，不进 core；服务端内存持有，快照广播）
+// ---------------------------------------------------------------------------
+
+/** 一条怀疑关系：from 座位怀疑 target 座位 */
+export interface MarkPair {
+  from: string;
+  target: string;
+}
+
+export interface MarkSetPayload {
+  seatToken: string;
+  targetSeatId: string;
+}
+
+export interface MarkClearPayload {
+  seatToken: string;
+  targetSeatId: string;
+}
+
+export interface MarkStatePayload {
+  roomCode: string;
+  marks: MarkPair[];
 }
 
 const CTRL_RE = new RegExp('[\\u0000-\\u001F\\u007F]', 'g');

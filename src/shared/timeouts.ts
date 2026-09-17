@@ -46,3 +46,7 @@ export const EFFECT_BATCH_MAX = envInt('NINJA_EFFECT_BATCH_MAX', 10);
 export const EFFECT_MIRROR_PER_SEC = envInt('NINJA_EFFECT_MIRROR_PER_SEC', 10);
 /** 6G-2a 特效：comboId 分组窗口（毫秒；同目标同物品归一组，服务端透传） */
 export const EFFECT_COMBO_WINDOW_MS = 1500;
+/** 6G-2b 特效：Canvas 粒子池上限（超限合并为 +N 飘字） */
+export const EFFECT_PARTICLE_MAX = envInt('NINJA_EFFECT_PARTICLE_MAX', 200);
+/** 6G-2b 怀疑标记：每人最多标记数（重复点同一目标 = 取消） */
+export const MARK_PER_SEAT_MAX = envInt('NINJA_MARK_PER_SEAT_MAX', 2);

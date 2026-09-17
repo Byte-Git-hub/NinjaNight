@@ -1,13 +1,27 @@
-import type { PresencePayload, ChatEventPayload, VoiceSeatState } from '../shared/protocol';
+import type {
+  PresencePayload,
+  ChatEventPayload,
+  VoiceSeatState,
+  EffectBatchItem,
+  MarkPair,
+} from '../shared/protocol';
+import { MARK_PER_SEAT_MAX } from '../shared/timeouts';
 import type { ConnectionStatus, GameNet } from '../net/client';
 import { VoiceNet } from '../net/voice';
+import { EffectNet } from '../net/effects';
+import { SocialNet } from '../net/social';
 import { VoiceClient, type VoiceClientStatus } from './voice/client';
 import { micBadge } from './voice/icons';
 import { voiceBannerHtml, voiceBarHtml } from './voice/controls';
+import { EFFECT_ITEMS, QUICK_EMOJIS, getEffectItem, isQuickEmoji } from './effects/items';
+import { EffectLayer } from './effects/particles';
+import { markBadge, markButton, myMarkedTargets } from './social/marks';
 import type { PlayerView, PendingDecision, NinjaCardInstanceView, GameEvent } from '../shared/types';
 import {
   getCardDisplayName,
+  getEmojiPath,
   getHonorTokenPath,
+  getItemPath,
   getHouseCardBackPath,
   getHouseDisplayName,
   getNinjaCardBackPath,
@@ -120,6 +134,14 @@ export class AppUI {
   private voiceNotice = '';
   private voiceSupported = false;
   private voiceStatus: VoiceClientStatus = 'idle';
+  /** 6G-2 互动特效 + 怀疑标记（纯社交层；状态以服务端广播为准，本地只存快照） */
+  private effectNet: EffectNet | null = null;
+  private socialNet: SocialNet | null = null;
+  private fxLayer: EffectLayer | null = null;
+  private marks: MarkPair[] = [];
+  private fxTarget = '';
+  /** 座位卡抖动：seatId → 命中时间戳（render 时超 350ms 的修剪，避免重渲染复播） */
+  private fxHit = new Map<string, number>();
 
   public get currentView(): PlayerView | null {
     return this.view;
@@ -134,7 +156,10 @@ export class AppUI {
     preloadAssets();
     this.renderShell();
     this.net.setHandlers({
-      onAck: () => this.render(),
+      onAck: () => {
+        this.socialNet?.sync();
+        this.render();
+      },
       onError: (e) => {
         this.lastReject = `${e.reasonCode}${e.message ? ': ' + e.message : ''}`;
         this.showToast(`错误：${this.lastReject}`);
@@ -142,10 +167,12 @@ export class AppUI {
       },
       onPresence: (p) => {
         this.presence = p;
+        this.socialNet?.sync();
         this.render();
       },
       onStarted: () => {
         this.lastReject = '';
+        this.socialNet?.sync();
         this.render();
       },
       onTerminated: () => {
@@ -154,6 +181,7 @@ export class AppUI {
         this.resetIdentityUi();
         this.voiceClient?.leave();
         this.voiceSeats = [];
+        this.resetSocialUi();
         this.lastReject = '';
         this.showToast('对局已终止，回到大厅');
         this.render();
@@ -222,6 +250,122 @@ export class AppUI {
     vnet.onProducersChange(() => {
       void this.voiceClient?.refreshRemote();
     });
+    // 6G-2 特效 + 怀疑标记接线（独立 Canvas 层常驻 root，不随 #ui 重绘销毁）
+    this.fxLayer = new EffectLayer();
+    this.fxLayer.mount(this.root);
+    const enet = new EffectNet(this.net);
+    enet.attach();
+    this.effectNet = enet;
+    const snet = new SocialNet(this.net);
+    snet.attach();
+    this.socialNet = snet;
+    enet.onBatchArrive((items) => this.onEffectBatch(items));
+    snet.onMarksChange((marks) => {
+      this.marks = marks;
+      this.render();
+    });
+    // 6G-2：根点击委托（mount 时一次）。render 会重建 #ui 内所有节点，
+    // 逐个绑定会被重渲染竞态吞点击；委托挂在常驻 root 上，天然免疫。
+    this.root.addEventListener('click', (ev) => this.onRootClick(ev));
+  }
+
+  /**
+   * 6G-2 根委托点击：怀疑标记切换 / 扔物品 / 快捷表情 / 座位卡选目标。
+   * 顺序：先处理按钮类（[data-mark] 在座位卡 li 内，必须先于座位卡分支），
+   * 再处理座位卡（按钮/卡背翻转/输入区点击不触发选目标）。
+   */
+  private onRootClick(ev: MouseEvent): void {
+    const t = ev.target as HTMLElement | null;
+    if (!t?.closest) return;
+    const markBtn = t.closest('[data-mark]');
+    if (markBtn) {
+      const target = (markBtn as HTMLElement).dataset['mark'] ?? '';
+      if (!target || !this.socialNet) return;
+      const selfId = this.view?.self.seatId ?? '';
+      if (myMarkedTargets(this.marks, selfId).includes(target)) {
+        this.socialNet.clearMark(target);
+      } else {
+        this.socialNet.setMark(target);
+      }
+      return;
+    }
+    const fxBtn = t.closest('[data-fx]');
+    if (fxBtn) {
+      const itemId = (fxBtn as HTMLElement).dataset['fx'] ?? '';
+      const meta = getEffectItem(itemId);
+      if (!meta || !this.effectNet) return;
+      if (!this.fxTarget) {
+        this.showToast('先点一张座位卡选目标');
+        return;
+      }
+      const target = this.fxTarget;
+      if (this.effectNet.send(target, itemId) === 'local-only') {
+        this.renderEffectLocal(target, itemId);
+      }
+      return;
+    }
+    const emojiBtn = t.closest('[data-emoji]');
+    if (emojiBtn) {
+      const emojiId = (emojiBtn as HTMLElement).dataset['emoji'] ?? '';
+      if (!isQuickEmoji(emojiId)) return;
+      if (!this.fxTarget) {
+        this.showToast('先点一张座位卡选目标');
+        return;
+      }
+      const el = this.root.querySelector(`.seat-card[data-seat="${this.fxTarget}"]`);
+      if (el) this.fxLayer?.emojiAt(el, emojiId);
+      return;
+    }
+    const card = t.closest('.seat-card[data-seat]');
+    if (card) {
+      if (t.closest('button, .flip-wrap, a, input, summary')) return;
+      const sid = (card as HTMLElement).dataset['seat'] ?? '';
+      if (!sid) return;
+      // 再点同一张取消选中
+      this.fxTarget = this.fxTarget === sid ? '' : sid;
+      this.render();
+    }
+  }
+
+  /** 6G-2：收到特效广播 → Canvas 爆发 + 座位卡抖动 + 连击飘字（同 comboId 1.5s 内累计） */
+  private onEffectBatch(items: EffectBatchItem[]): void {
+    const layer = this.fxLayer;
+    if (!layer) return;
+    const now = Date.now();
+    for (const it of items) {
+      const el = this.root.querySelector(`.seat-card[data-seat="${it.targetSeatId}"]`);
+      if (!el) continue;
+      const meta = getEffectItem(it.itemId);
+      if (!meta) continue;
+      layer.burstAt(el, meta);
+      this.fxHit.set(it.targetSeatId, now);
+      const combo = layer.combos.hit(it.comboId, now);
+      if (combo >= 2) layer.textAt(el, `${combo} 连击`);
+    }
+    this.render();
+  }
+
+  /** 6G-2：本地回退渲染（镜像限频/离线时只画本地，不发网） */
+  private renderEffectLocal(targetSeatId: string, itemId: string): void {
+    const layer = this.fxLayer;
+    if (!layer) return;
+    const el = this.root.querySelector(`.seat-card[data-seat="${targetSeatId}"]`);
+    if (!el) return;
+    const meta = getEffectItem(itemId);
+    if (!meta) return;
+    const now = Date.now();
+    layer.burstAt(el, meta);
+    this.fxHit.set(targetSeatId, now);
+    const combo = layer.combos.hit(`local-${targetSeatId}-${itemId}`, now);
+    if (combo >= 2) layer.textAt(el, `${combo} 连击`);
+    this.render();
+  }
+
+  private resetSocialUi(): void {
+    this.marks = [];
+    this.fxTarget = '';
+    this.fxHit.clear();
+    this.fxLayer?.clear();
   }
 
   private renderShell(): void {
@@ -432,18 +576,31 @@ export class AppUI {
         })
       : '';
     const speakingCls = vs?.speaking && !vs.muted ? ' speaking' : '';
+    // 6G-2：命中抖动（fxHit 时间戳 350ms 内有效）+ 特效目标高亮 + 怀疑徽章/按钮（纯社交层）
+    const hitAt = this.fxHit.get(s.seatId) ?? 0;
+    const hitCls = inGame && Date.now() - hitAt < 350 ? ' fx-hit' : '';
+    const targetCls = inGame && !isSelf && this.fxTarget === s.seatId ? ' fx-target' : '';
+    const selfId = v?.self.seatId ?? '';
+    const markB = inGame ? markBadge(this.marks, s.seatId) : '';
+    const markB2 = inGame && !isSelf ? markButton(this.marks, selfId, s.seatId, MARK_PER_SEAT_MAX) : '';
 
-    return `<li class="seat-card${s.isHost ? ' host' : ''}${isBot ? ' bot' : ''}${dead ? ' dead' : ''}${isSelf ? ' self' : ''}${speakingCls}" data-seat="${escapeHtml(s.seatId)}">
-      <div class="seat-head"><b>${isBot ? '🤖 ' : ''}${escapeHtml(s.nickname)}</b> <span class="seat-id">${escapeHtml(s.seatId)}</span>${s.isHost ? '👑' : ''} ${s.connected ? '●' : '○'}${mic}${isSelf ? '<em class="you">你</em>' : ''}</div>
+    return `<li class="seat-card${s.isHost ? ' host' : ''}${isBot ? ' bot' : ''}${dead ? ' dead' : ''}${isSelf ? ' self' : ''}${speakingCls}${hitCls}${targetCls}" data-seat="${escapeHtml(s.seatId)}">
+      <div class="seat-head"><b>${isBot ? '🤖 ' : ''}${escapeHtml(s.nickname)}</b> <span class="seat-id">${escapeHtml(s.seatId)}</span>${s.isHost ? '👑' : ''} ${s.connected ? '●' : '○'}${mic}${markB}${isSelf ? '<em class="you">你</em>' : ''}</div>
       ${inGame ? `<div class="seat-body">${houseImg}${handStack}${tokenStack}</div>` : ''}
       ${selfMeta}
       ${metaBits.length > 0 ? `<div class="seat-meta">${metaBits.join(' ')}</div>` : ''}
+      ${markB2}
     </li>`;
   }
 
   private gameBody(): string {
     const p = this.presence;
     const v = this.view;
+    // 6G-2：修剪过期抖动标记（>350ms），避免重渲染复播抖动动画
+    const now = Date.now();
+    for (const [sid, at] of this.fxHit) {
+      if (now - at >= 350) this.fxHit.delete(sid);
+    }
     // 对局中以 view.seats 为准（含 handCount/alive/house 等对局字段）；
     // 大厅才用 presence（含 ready）。反向会把对局字段遮掉（6F-4 目检发现）。
     const allSeats = v?.seats ?? p?.seats ?? [];
@@ -582,6 +739,7 @@ export class AppUI {
         ${roundBanner}
         ${nextRoundBtn}
         ${central}
+        ${this.fxBarHtml(v)}
         <div class="bottom-bar">
           <div class="hand-section">
             <h3>手牌</h3>
@@ -598,6 +756,29 @@ export class AppUI {
         ${this.net.isHost ? this.kickButtons() : ''}
       </section>
     `;
+  }
+
+  /**
+   * 6G-2b 互动条：9 物品 + 12 快捷表情（图集切图）+ 目标提示。
+   * 点座位卡选目标（高亮 fx-target），再点物品发网（effect.send 批发送）；
+   * 表情为本地渲染（不发网）；怀疑标记点座位卡上的 👁 按钮。选择器均为新增 data-*，不动已有选择器。
+   */
+  private fxBarHtml(v: PlayerView): string {
+    const target = v.seats.find((s) => s.seatId === this.fxTarget);
+    const hint = target ? `目标：${escapeHtml(target.nickname)}` : '先点座位卡选目标';
+    const items = EFFECT_ITEMS.map(
+      (m) =>
+        `<button type="button" class="fx-btn" data-fx="${m.id}" title="扔${m.name}"><img src="${getItemPath(m.id)}" alt="${m.name}" draggable="false" /><i>${m.name}</i></button>`,
+    ).join('');
+    const emojis = QUICK_EMOJIS.map(
+      (e) =>
+        `<button type="button" class="fx-btn emoji" data-emoji="${e}" title="表情 ${e}"><img src="${getEmojiPath(e)}" alt="${e}" draggable="false" /></button>`,
+    ).join('');
+    return `<div class="fx-bar" aria-label="互动特效">
+      <div class="fx-row">${items}</div>
+      <div class="fx-row">${emojis}</div>
+      <div class="fx-hint" id="fx-target-hint">${hint} · 怀疑标记点座位卡上的 👁</div>
+    </div>`;
   }
 
   /** 6F-5 聊天/日志折叠面板（默认折叠；DOM 常驻，关闭态由 details 原生折叠） */
@@ -792,6 +973,7 @@ export class AppUI {
       this.voiceClient?.leave();
       this.voiceSeats = [];
       this.voiceNotice = '';
+      this.resetSocialUi();
       this.net.leaveRoom();
       this.view = null;
       this.presence = null;
@@ -818,6 +1000,7 @@ export class AppUI {
         this.render();
       }
     });
+    // 6G-2 点击走根委托（见 mount 内 onRootClick），此处不逐个绑定。
     // 6F-4：身份弹窗点击关闭（backdrop 穿透不挡 e2e/游戏点击）
     $('#identity-modal')?.addEventListener('click', () => this.closeIdentityModal());
     // 6F-4：自家卡背翻转（先播 250ms 动画再同步重渲染，更新身份名显隐）

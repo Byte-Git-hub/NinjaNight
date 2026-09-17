@@ -33,6 +33,7 @@ import { RoomRuntime, generateRoomCode, newSeatToken, type SessionInfo } from '.
 import { logger } from './logger';
 import { VoiceManager } from './voice';
 import { EffectRelay, validateEffectItems } from './effects';
+import { SocialMarks } from './social';
 import { DISCONNECT_RETAIN_MS } from '../shared/timeouts';
 import { VICTORY_AUTO_ADVANCE_MS } from '../shared/timeouts';
 import { scheduleBots } from './bot-scheduler';
@@ -70,8 +71,10 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   const httpServer = buildHttpServer(app);
   const io = new Server(httpServer, { cors: { origin: true } });
   const voice = new VoiceManager(io);
-  // 6G-2a：特效只中继广播（无状态；怀疑标记 6G-2b 再加）
+  // 6G-2a：特效只中继广播（无状态）
   const effects = new EffectRelay(io);
+  // 6G-2b：怀疑标记（服务端内存持有，快照广播；不进 core）
+  const social = new SocialMarks(io);
 
   const rooms = new Map<string, RoomRuntime>();
   const sessionsByToken = new Map<string, SessionInfo>();
@@ -89,6 +92,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     for (const [code, room] of rooms) {
       if (room.isIdleExpired(now, EMPTY_ROOM_TTL_MS, ENDED_ROOM_TTL_MS)) {
         room.sessions.clear();
+        social.cleanupRoom(code);
         rooms.delete(code);
       }
     }
@@ -543,6 +547,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
           room.sessions.delete(tok);
           sessionsByToken.delete(tok);
           voice.removeSeatEverywhere(targetSeatId, room.code);
+          social.removeSeat(room.code, targetSeatId);
           io.to(s.socketId).emit(OUT.roomError, {
             reasonCode: 'UNAUTHORIZED',
             message: '你已被房主踢出',
@@ -1109,6 +1114,62 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       logger.info('effect.relay', { roomCode: room.code, seatId: sess.seatId, type: 'batch' });
     });
 
+    // ---- 6G-2b 怀疑标记（seatToken 鉴权；共享限频桶，超限静默丢弃；重复点同一目标=取消） ----
+    socket.on(EV.markSet, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; targetSeatId?: unknown };
+      const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      if (!takeSharedRate(sess)) return;
+      const room = rooms.get(sess.roomCode);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      const target =
+        typeof body.targetSeatId === 'string' ? body.targetSeatId : '';
+      if (target === '' || target === sess.seatId || !seatIdsOf(room).has(target)) {
+        emitError(socket, 'INVALID_PAYLOAD');
+        return;
+      }
+      social.setMark(room.code, sess.seatId, target);
+    });
+
+    socket.on(EV.markClear, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; targetSeatId?: unknown };
+      const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      if (!takeSharedRate(sess)) return;
+      const room = rooms.get(sess.roomCode);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      const target =
+        typeof body.targetSeatId === 'string' ? body.targetSeatId : '';
+      if (target === '' || target === sess.seatId || !seatIdsOf(room).has(target)) {
+        emitError(socket, 'INVALID_PAYLOAD');
+        return;
+      }
+      social.clearMark(room.code, sess.seatId, target);
+    });
+
+    // 入房/重连后对齐快照（服务端单播回 mark.state）
+    socket.on(EV.markSync, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown };
+      const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      socket.emit(OUT.markState, { roomCode: sess.roomCode, marks: social.snapshot(sess.roomCode) });
+    });
+
 
 
     socket.on(EV.roomLeave, (payload: unknown) => {
@@ -1149,8 +1210,9 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       if (humanSeats.length === 0) {
         room.clearTimer?.();
         room.clearBotTimers?.();
+        social.cleanupRoom(room.code);
         rooms.delete(room.code);
-        logger.info('room.destroy_empty', { roomCode: room.code });
+        logger.info('room.destroy_empty', { roomCode: room.code, seatId: sess.seatId });
         return;
       }
       if (room.hostSeatId === sess.seatId) {
@@ -1190,6 +1252,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     socket.leave(room?.roomChannel() ?? '');
     // 6G-1：断线即离语音（重连后需重新加入语音；听语音偏好不持久）
     voice.removeSeatEverywhere(sess.seatId, sess.roomCode);
+    // 6G-2b：断线清理该座位相关怀疑标记
+    social.removeSeat(sess.roomCode, sess.seatId);
     // 断线：保留 session 映射，标记 disconnected（阶段 5）
     sess.connected = false;
     sess.disconnectedAt = Date.now();
@@ -1212,6 +1276,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     room.clearTimer?.();
     room.clearBotTimers?.();
     voice.cleanupRoom(room.code);
+    social.cleanupRoom(room.code);
     room.state = null;
     room.started = false;
     room.endedAt = null;
