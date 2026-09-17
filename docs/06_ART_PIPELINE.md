@@ -192,3 +192,17 @@ A small circular token, ink dot base with gold foil flecks (kintsugi style), min
 - **遇到的问题与解法**：
   - 429 配额限制：agy 内置的 `gemini-3.1-flash-image` 触发配额限流后，用户改走网页端高配额通道手动完成其余 14 张生成并存放于 `docs/06_assets/`。
   - 文件命名与映射对齐：对齐无前缀规范（`lobby-bg.jpg` 等），`assets.ts` 补充 `UI_ASSETS` 与 `getUiAssetPath`，平滑完成资产归位与全量测试。
+
+---
+
+## 六、资产归档策略（6E.7 统一）
+
+| 位置 | 内容 | 是否进 git | 说明 |
+|---|---|---|---|
+| `public/assets/visuals/_originals/`（及 `ui/`、`tokens/` 下同名目录） | 所有原始 jpg 归档（含 16 卡面 + 3 UI + 1 令牌 + 2 卡背 = 22 张） | 否（`.gitignore` 已配 `public/assets/**/_originals/`） | 大文件只留本地，`npm run assets:optimize` 的输入源，便于未来重做压缩 |
+| `public/assets/visuals/*.webp`（及 `ui/`、`tokens/`） | 生产用资产 | 是 | 唯一线上读取格式；`manifest.json` 的 `file` 字段统一写 `.webp` |
+| `docs/06_assets/one-shot-kintsugi-token.jpg` | One-Shot 风格锚点 | 是（唯一例外） | 风格基线参照物，非运行时资产 |
+| `docs/06_assets/screenshots/` | e2e / 手工截图输出目录 | 否（运行时生成） | Playwright spec 内 `mkdirSync` 自建，不要手工归档素材进去 |
+
+- 历史说明：6B 迁移时用 move（`docs/06_assets/` → `public/`），6E.7 卡背归位时用 copy；统一后 `docs/06_assets/` 不再作为素材中转站，只保留风格锚点。
+- 新增素材流程：原图放入对应 `public/assets/<分类>/` → 跑 `npm run assets:optimize`（自动转 webp + 原图移入 `_originals/`）→ 更新 `manifest.json`（`file` 写 `.webp`）。
