@@ -7,6 +7,8 @@ import {
   renderCardHtml,
   getUiAssetPath,
   getHonorTokenPath,
+  getNinjaCardBackPath,
+  getHouseCardBackPath,
 } from '../../src/ui/assets';
 
 describe('UI assets mapping & card rendering', () => {
@@ -66,5 +68,10 @@ describe('UI assets mapping & card rendering', () => {
     expect(getUiAssetPath('ui-button-primary')).toBe('/assets/ui/button-primary.webp');
     expect(getUiAssetPath('button-primary')).toBe('/assets/ui/button-primary.webp');
     expect(getHonorTokenPath()).toBe('/assets/tokens/honor-token.webp');
+  });
+
+  it('getNinjaCardBackPath & getHouseCardBackPath: 卡背路径（6F 布局用）', () => {
+    expect(getNinjaCardBackPath()).toBe('/assets/visuals/ninja-card-back.webp');
+    expect(getHouseCardBackPath()).toBe('/assets/visuals/house-card-back.webp');
   });
 });

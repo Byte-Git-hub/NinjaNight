@@ -70,6 +70,20 @@ export function getHonorTokenPath(): string {
 }
 
 /**
+ * 获取忍者牌卡背图片路径（6F 桌游感布局用：他人手牌背面展示）
+ */
+export function getNinjaCardBackPath(): string {
+  return '/assets/visuals/ninja-card-back.webp';
+}
+
+/**
+ * 获取身份牌卡背图片路径（6F 桌游感布局用：未公开身份牌展示）
+ */
+export function getHouseCardBackPath(): string {
+  return '/assets/visuals/house-card-back.webp';
+}
+
+/**
  * 从 cardId 解析编号（如 'spy-3' -> 3, 'spy:3' -> 3, 'shapeshifter' -> null, 'ronin' -> null）
  */
 export function getCardNumber(cardId: string): number | null {
