@@ -36,6 +36,9 @@ export default defineConfig({
     },
   },
   server: {
+    // 局域网访问：监听所有网卡（本机 localhost 照常用，局域网用 http://<本机IP>:5173）
+    host: '0.0.0.0',
+    port: 5173,
     // 6G-1：NINJA_TLS=1 且 certs/ 齐全时跑 https（局域网麦克风必需），否则 http
     ...(loadLocalTls() ?? {}),
     proxy: {

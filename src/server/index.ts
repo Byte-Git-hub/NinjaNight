@@ -1203,7 +1203,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     voice,
     listen(portNum = port) {
       return new Promise<void>((resolve) => {
-        httpServer.listen(portNum, () => resolve());
+        // 局域网访问：监听所有网卡（Socket.IO 复用同一 httpServer，一并生效）
+        httpServer.listen(portNum, '0.0.0.0', () => resolve());
       });
     },
     close() {
