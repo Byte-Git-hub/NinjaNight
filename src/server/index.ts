@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
 import { applyAllDefaults, createGame } from '../core/engine';
+import { playableInstanceIds } from '../core/night-flow';
 import { projectView } from '../core/project-view';
 import type { Command, CommandType } from '../shared/types';
 import {
@@ -720,6 +721,21 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         ) {
           socket.emit(OUT.commandReject, { commandId, reasonCode: 'INVALID_PAYLOAD' });
           return;
+        }
+        // 预校验：声明的牌必须在本阶段可打（core 内 phaseMismatch 兜底，双层保护）
+        const seat = room.state.seats.find((s) => s.seatToken === sess.seatToken);
+        if (seat && room.state.phase.startsWith('night')) {
+          const ids = p.cardInstanceIds as string[];
+          const handIds = new Set(seat.hand.map((c) => c.instanceId));
+          if (ids.some((id) => !handIds.has(id))) {
+            socket.emit(OUT.commandReject, { commandId, reasonCode: 'NOT_IN_HAND' });
+            return;
+          }
+          const playable = playableInstanceIds(room.state, seat);
+          if (ids.some((id) => !playable.includes(id))) {
+            socket.emit(OUT.commandReject, { commandId, reasonCode: 'PHASE_MISMATCH' });
+            return;
+          }
         }
       } else if (type === 'night.chooseTarget') {
         if (typeof p.targetSeatId !== 'string') {

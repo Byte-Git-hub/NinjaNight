@@ -277,10 +277,15 @@ export class AppUI {
 
   private gamePanels(v: PlayerView, pending: PendingDecision | null): string {
     const self = v.self;
+    // 声明窗口：仅 pending.options 内的牌可打，其余置灰且不可勾选
+    const playableSet =
+      pending?.kind === 'declareCards' ? new Set<string>(pending.options) : null;
     const hand = self.hand
       .map((c) => {
         const isSel = this.selected.has(c.instanceId);
-        return renderCardHtml(c.cardId, c.instanceId, true, isSel ? 'sel' : '');
+        const offPhase = playableSet !== null && !playableSet.has(c.instanceId);
+        const cls = `${isSel ? 'sel' : ''}${offPhase ? ' dim' : ''}`.trim();
+        return renderCardHtml(c.cardId, c.instanceId, true, cls);
       })
       .join('');
     const reserved = self.reserved
@@ -495,7 +500,7 @@ export class AppUI {
       }
     };
 
-    this.root.querySelectorAll<HTMLButtonElement>('.hand .card[data-iid], .pending .declare-opt[data-iid]').forEach((btn) => {
+    this.root.querySelectorAll<HTMLButtonElement>('.hand .card[data-iid]:not(.dim), .pending .declare-opt[data-iid]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.dataset['iid'];
         if (id) toggleCardSelection(id);

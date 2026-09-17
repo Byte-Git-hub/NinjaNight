@@ -312,9 +312,14 @@ function handleDeclare(next: GameState, seat: SeatState, cmd: Command): EngineRe
     'cardInstanceIds' in cmd.payload && Array.isArray(cmd.payload.cardInstanceIds)
       ? cmd.payload.cardInstanceIds
       : [];
+  // 先区分“不在手牌”（notInHand），再区分“在手但非本阶段可打”（phaseMismatch）
+  const handIds = new Set(seat.hand.map((c) => c.instanceId));
+  for (const id of ids) {
+    if (!handIds.has(id)) return { ok: false, reason: 'notInHand', state: next };
+  }
   const playable = playableInstanceIds(next, seat);
   for (const id of ids) {
-    if (!playable.includes(id)) return { ok: false, reason: 'notInHand', state: next };
+    if (!playable.includes(id)) return { ok: false, reason: 'phaseMismatch', state: next };
   }
   seat.declared = seat.hand.filter((c) => ids.includes(c.instanceId)).map((c) => ({ ...c }));
   afterDeclareSeat(next, seat.seatId);
