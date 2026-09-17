@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 cd /d "%~dp0"
 if not exist logs mkdir logs
 
@@ -8,6 +9,6 @@ set T=%T: =0%
 set T=%T:.=%
 set LOGFILE=logs\client-%D%-%T%.log
 
-echo Client ��־: %LOGFILE%
+echo Client 鏃ュ織: %LOGFILE%
 echo.
-powershell -NoProfile -NoExit -Command "chcp 65001 >$null; npm run dev 2>&1 | Tee-Object -FilePath '%LOGFILE%' -Encoding utf8"
+powershell -NoProfile -NoExit -Command "npm run dev 2>&1 | Tee-Object -FilePath '%LOGFILE%'"
