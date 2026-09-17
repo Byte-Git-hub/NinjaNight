@@ -303,23 +303,42 @@ export class AppUI {
       })
       .join('');
     const tokens = self.honorTokens.map((t) => t.value).join(', ');
+    // 日志：中文友好行 + 全量 payload（超长由 CSS 省略，不再硬截断丢字符）
     const events = v.events
       .slice(-40)
-      .map((e) => `<div class="ev">${escapeHtml(e.type)} ${escapeHtml(JSON.stringify(e.payload).slice(0, 80))}</div>`)
+      .map((e) => `<div class="ev" title="${escapeHtml(e.type)}">${escapeHtml(eventLabel(e, v))}</div>`)
       .join('');
 
+    // 本轮横幅：只看本 round 的 roundWinner（跨轮后旧事件自动隐藏）
+    const lastRound = [...v.events].reverse().find((e) => e.type === 'score.roundWinner');
+    const roundBanner =
+      !v.gameOver && lastRound && lastRound.round === v.round
+        ? `<div class="round-banner panel">${escapeHtml(roundLabel(lastRound, v))}</div>`
+        : '';
+
+    const victoryEv = [...v.events].reverse().find((e) => e.type === 'score.victory');
     const gameOverBanner = v.gameOver
       ? `<div class="game-over-banner panel">
           <h3>🏆 对局结束</h3>
           <p>胜出玩家：<b>${v.winners.map((w) => v.seats.find((s) => s.seatId === w)?.nickname ?? w).join(', ') || '平局/无'}</b></p>
+          ${rankingHtml(v, victoryEv)}
           ${this.net.isHost ? `<button id="btn-game-over-lobby" type="button">返回大厅（再来一局）</button>` : '<p class="hint">等待房主重置大厅…</p>'}
         </div>`
       : '';
+
+    const nextRoundBtn =
+      !v.gameOver && v.phase === 'victoryCheck'
+        ? this.net.isHost
+          ? `<div class="row"><button id="btn-next-round" type="button" class="btn-primary">开始下一轮</button></div>`
+          : '<p class="hint">等待房主开始下一轮…</p>'
+        : '';
 
     return `
       <section class="panel in-game-table">
         <h2>对局 <span class="phase">${escapeHtml(phaseLabel(v.phase))}</span></h2>
         ${gameOverBanner}
+        ${roundBanner}
+        ${nextRoundBtn}
         <div class="private-info">
           <p>你的身份：<b class="house-badge">${escapeHtml(getHouseDisplayName(self.houseId))}</b> · 令牌面值：[<span class="token-val">${escapeHtml(tokens || '无')}</span>]</p>
         </div>
@@ -447,6 +466,10 @@ export class AppUI {
     });
     $('#btn-game-over-lobby')?.addEventListener('click', () => {
       this.net.endGame();
+    });
+    $('#btn-next-round')?.addEventListener('click', () => {
+      this.showToast('正在进入下一轮…');
+      this.net.forceAdvance();
     });
     $('#btn-chat')?.addEventListener('click', () => {
       const input = this.root.querySelector('#chat-input') as HTMLInputElement | null;
@@ -598,6 +621,94 @@ function escapeHtml(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function seatName(v: PlayerView, seatId: string): string {
+  const s = v.seats.find((st) => st.seatId === seatId);
+  return s ? `${s.nickname} (${seatId})` : seatId;
+}
+
+function winnerLabel(winner: unknown): string {
+  if (winner === 'crane') return '仙鹤';
+  if (winner === 'lotus') return '莲花';
+  if (winner === 'tie') return '平局（存活者各得）';
+  if (winner === 'none') return '无人获胜';
+  if (winner === 'mastermind_ronin') return '浪人（大将军）';
+  return String(winner ?? '未知');
+}
+
+/** 本轮横幅：得主 + 自己本轮 +N 枚（只用公开的枚数，不碰面值） */
+function roundLabel(e: GameEvent, v: PlayerView): string {
+  const p = e.payload as { winner?: unknown; awarded?: Array<{ seatId: string; count: number }> };
+  const mine = p.awarded?.find((a) => a.seatId === v.self.seatId)?.count ?? 0;
+  return `本轮：${winnerLabel(p.winner)}获胜${mine > 0 ? `，你 +${mine} 枚` : ''}`;
+}
+
+/** 终局排名：取 score.victory 公开总分排序（Q5：只显示总分，不显示面值明细） */
+function rankingHtml(v: PlayerView, victoryEv?: GameEvent): string {
+  const scores = (victoryEv?.payload as { scores?: Array<{ seatId: string; score: number }> } | undefined)
+    ?.scores;
+  if (!scores || scores.length === 0) return '';
+  const rows = [...scores]
+    .sort((a, b) => b.score - a.score)
+    .map(
+      (s, i) =>
+        `<tr><td>${i + 1}</td><td>${escapeHtml(seatName(v, s.seatId))}</td><td>${s.score} 分</td></tr>`,
+    )
+    .join('');
+  return `<table class="rank-table"><tbody>${rows}</tbody></table>`;
+}
+
+/** 日志中文友好行；未知类型回退全量 JSON（不再截断，超长由 CSS 省略） */
+function eventLabel(e: GameEvent, v: PlayerView): string {
+  const p = e.payload as Record<string, unknown>;
+  const sid = (k: string): string => seatName(v, String(p[k] ?? ''));
+  switch (e.type) {
+    case 'game.started':
+      return '对局开始';
+    case 'draft.cardPicked':
+      return `${sid('seatId')} 选牌`;
+    case 'draft.cardDiscarded':
+      return `${sid('seatId')} 弃牌`;
+    case 'draft.passed':
+      return '传牌（左手）';
+    case 'night.phaseStarted':
+      return `进入阶段：${phaseLabel(String(p['phase'] ?? ''))}`;
+    case 'night.playerDied':
+      return `💀 ${sid('seatId')} 出局`;
+    case 'night.optionalResolved':
+      return 'killed' in p
+        ? `${sid('actorSeatId')} 选择${p['killed'] ? '击杀' : '放过'}`
+        : `可选决策：${JSON.stringify(p)}`;
+    case 'night.houseViewed':
+      return `👁 你查看了身份`;
+    case 'night.ninjaViewed':
+      return `👁 你查看了忍者牌`;
+    case 'house.revealed': {
+      const h = typeof p['houseId'] === 'string' ? getHouseDisplayName(p['houseId']) : '';
+      return `👁 ${sid('seatId')} 亮出身份${h ? `：${h}` : ''}`;
+    }
+    case 'score.honorAwarded':
+      if ('tokenValue' in p) return `🎖 你获得 1 枚令牌（${String(p['tokenValue'])} 分）`;
+      if ('swapped' in p) return `🔄 ${sid('a')} 与 ${sid('b')} 交换了令牌`;
+      if ('from' in p) return `🥷 ${sid('to')} 从 ${sid('from')} 处夺得 1 枚令牌`;
+      return `令牌变动：${JSON.stringify(p)}`;
+    case 'score.roundWinner': {
+      const aw = (p['awarded'] as Array<{ seatId: string; count: number }> | undefined) ?? [];
+      const detail = aw.map((a) => `${seatName(v, a.seatId)}+${a.count}`).join('、');
+      return `🏆 本轮：${winnerLabel(p['winner'])}获胜${detail ? `（${detail}）` : ''}`;
+    }
+    case 'score.victory': {
+      const w = (p['winners'] as string[] | undefined) ?? [];
+      return `🏆 整局结束：${w.map((id) => seatName(v, id)).join('、') || '无'}获胜`;
+    }
+    case 'react.opened':
+      return '⚔ 有人受到致命威胁（反应窗开启）';
+    case 'react.resolved':
+      return '⚔ 反应结算';
+    default:
+      return `${e.type} ${JSON.stringify(p)}`;
+  }
 }
 
 export type { NinjaCardInstanceView };

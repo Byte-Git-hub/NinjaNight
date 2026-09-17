@@ -136,7 +136,18 @@ export function scoreRound(state: GameState): void {
     }
   }
 
-  pushEvent(state, 'score.roundWinner', 'public', { winner, awarded });
+  // 公开事件只给枚数（谁得几枚），面值走私密事件（令牌总分保密）
+  const counts = new Map<string, number>();
+  for (const a of awarded) counts.set(a.seatId, (counts.get(a.seatId) ?? 0) + 1);
+  pushEvent(state, 'score.roundWinner', 'public', {
+    winner,
+    awarded: [...counts].map(([seatId, count]) => ({ seatId, count })),
+  });
+  for (const a of awarded) {
+    pushEvent(state, 'score.honorAwarded', { seats: [a.seatId] }, {
+      tokenValue: a.tokenValue,
+    });
+  }
   finishVictoryCheck(state);
 }
 

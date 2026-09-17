@@ -499,6 +499,27 @@ button.card.sel {
 .ev {
   padding: 3px 0;
   border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.round-banner {
+  border: 1px solid rgba(212, 175, 55, 0.6);
+  background: rgba(212, 175, 55, 0.08);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+.rank-table {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+.rank-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
 }
 .hint {
   color: var(--gold-foil);
