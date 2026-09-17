@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "gen:preview": "tsx scripts/gen-assets/preview-prompts.ts",
+    "gen:slice": "tsx scripts/gen-assets/slice-sheet.ts",
     "assets:optimize": "tsx scripts/optimize-assets.ts",
     "certs": "tsx scripts/gen-certs.ts"
   },

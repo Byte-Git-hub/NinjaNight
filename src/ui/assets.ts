@@ -98,6 +98,39 @@ export function getHouseCardBackPath(): string {
 }
 
 /**
+ * 快捷表情 12 定稿（对齐 emoji-sheet 切割产物 public/assets/emoji/*.webp）
+ */
+export const EMOJI_IDS = [
+  'swords',
+  'kunai',
+  'ninja_head',
+  'noh_mask',
+  'flame',
+  'water',
+  'moon',
+  'star',
+  'tea_cup',
+  'bamboo',
+  'kitsune_mask',
+  'scroll',
+] as const;
+export type EmojiId = (typeof EMOJI_IDS)[number];
+
+/**
+ * 返回互动物品图片路径 '/assets/items/{itemId}.webp'（6G-2b 图集切割产物）
+ */
+export function getItemPath(itemId: string): string {
+  return `/assets/items/${itemId}.webp`;
+}
+
+/**
+ * 返回快捷表情图片路径 '/assets/emoji/{emojiId}.webp'（6G-2b 图集切割产物）
+ */
+export function getEmojiPath(emojiId: string): string {
+  return `/assets/emoji/${emojiId}.webp`;
+}
+
+/**
  * 从 cardId 解析编号（如 'spy-3' -> 3, 'spy:3' -> 3, 'shapeshifter' -> null, 'ronin' -> null）
  */
 export function getCardNumber(cardId: string): number | null {
