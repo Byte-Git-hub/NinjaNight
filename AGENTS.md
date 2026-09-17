@@ -40,6 +40,12 @@ $env:NINJA_WINDOW_MS=5000; npm run dev:server  # 短超时调试
 - **联机**：房间码 6 位（`sanitizeRoomCode`）；鉴权靠 `seatToken`；4–11 人、全员 ready 房主才能 `room.start`，开局后禁加入；`commandId` 幂等缓存 50，旧 `windowId` 回 `STALE_WINDOW`；单 socket 限频 10/s；`room.forceAdvance` 对所有未响应座位走 `applyAllDefaults`（`draftPick/discard→options[0]`、`declare/chooseTarget→pass/options[0]`、`chooseOptional/react→false`）。
 - **UI 选项映射**：`chooseOptional` 的选项→boolean 必须走 `app.ts` 的 `CHOOSE_OPTIONAL_TRUE` 显式映射表（`kill/swap/reveal→true`，其余 false），新增 options 必须登记，禁止 `__true` 暗语；`reactDecide` 的 `__true/__false` 保持不动。
 
+## 贡献流程
+
+本项目采用 AGPL-3.0-or-later 许可证。外部贡献者提交 PR 前必须阅读并
+在 PR 描述中声明同意 `CLA.md` 中的 Contributor License Agreement。
+未声明的 PR 不予合并。
+
 ## 技术选型（已冻结）
 
 TypeScript strict（`tsc -b`）· Vite · 原生 DOM/CSS · Node + Socket.IO · Vitest · Playwright · 单进程内存房间 · 无 DB/Redis/引擎/微服务。
