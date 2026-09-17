@@ -100,6 +100,11 @@ export class AppUI {
   render(): void {
     const el = this.ui();
     if (!el) return;
+    const isGame = Boolean(this.view);
+    if (typeof document !== 'undefined') {
+      document.body.classList.toggle('in-game', isGame);
+      document.body.classList.toggle('in-lobby', !isGame);
+    }
     const banner =
       this.status === 'disconnected'
         ? `<div class="banner warn">连接已断开。请刷新页面重新加入（首版不自动重同步）。</div>`
@@ -113,8 +118,8 @@ export class AppUI {
       ${banner}${reject}
       <header class="top">
         <h1>忍者之夜</h1>
-        ${this.view || this.presence ? `<span class="room">房间 ${this.net.roomCode ?? ''}</span>` : ''}
-        ${this.net.seatId ? `<span class="seat">座位 ${this.net.seatId}</span>` : ''}
+        ${this.view || this.presence ? `<span class="room">房间 <b>${this.net.roomCode ?? ''}</b></span>` : ''}
+        ${this.net.seatId ? `<span class="seat">座位 <b>${this.net.seatId}</b></span>` : ''}
       </header>
       ${!this.view && !this.presence ? this.lobbyForm() : this.gameBody()}
     `;

@@ -21,8 +21,8 @@ describe('UI assets mapping & card rendering', () => {
   });
 
   it('getVisualPath: 返回正确图片路径', () => {
-    expect(getVisualPath('spy')).toBe('/assets/visuals/spy.jpg');
-    expect(getVisualPath('crane')).toBe('/assets/visuals/crane.jpg');
+    expect(getVisualPath('spy')).toBe('/assets/visuals/spy.webp');
+    expect(getVisualPath('crane')).toBe('/assets/visuals/crane.webp');
   });
 
   it('getCardNumber: 解析编号与无编号特殊牌', () => {
@@ -44,7 +44,7 @@ describe('UI assets mapping & card rendering', () => {
   it('renderCardHtml: 占位色块、卡名文字与顶部编号渲染', () => {
     const htmlWithNum = renderCardHtml('spy:3', 'inst-1', true);
     // 包含 img 指向对应 visualId 路径
-    expect(htmlWithNum).toContain('src="/assets/visuals/spy.jpg"');
+    expect(htmlWithNum).toContain('src="/assets/visuals/spy.webp"');
     // 包含占位色块与卡名文字（供图片未就绪/加载失败时回退显示）
     expect(htmlWithNum).toContain('class="card-placeholder"');
     expect(htmlWithNum).toContain('密探 3');
@@ -59,12 +59,12 @@ describe('UI assets mapping & card rendering', () => {
   });
 
   it('getUiAssetPath & getHonorTokenPath: 路径解析对齐无前缀文件名', () => {
-    expect(getUiAssetPath('ui-lobby-bg')).toBe('/assets/ui/lobby-bg.jpg');
-    expect(getUiAssetPath('lobby-bg')).toBe('/assets/ui/lobby-bg.jpg');
-    expect(getUiAssetPath('ui-table-texture')).toBe('/assets/ui/table-texture.jpg');
-    expect(getUiAssetPath('table-texture')).toBe('/assets/ui/table-texture.jpg');
-    expect(getUiAssetPath('ui-button-primary')).toBe('/assets/ui/button-primary.jpg');
-    expect(getUiAssetPath('button-primary')).toBe('/assets/ui/button-primary.jpg');
-    expect(getHonorTokenPath()).toBe('/assets/tokens/honor-token.jpg');
+    expect(getUiAssetPath('ui-lobby-bg')).toBe('/assets/ui/lobby-bg.webp');
+    expect(getUiAssetPath('lobby-bg')).toBe('/assets/ui/lobby-bg.webp');
+    expect(getUiAssetPath('ui-table-texture')).toBe('/assets/ui/table-texture.webp');
+    expect(getUiAssetPath('table-texture')).toBe('/assets/ui/table-texture.webp');
+    expect(getUiAssetPath('ui-button-primary')).toBe('/assets/ui/button-primary.webp');
+    expect(getUiAssetPath('button-primary')).toBe('/assets/ui/button-primary.webp');
+    expect(getHonorTokenPath()).toBe('/assets/tokens/honor-token.webp');
   });
 });

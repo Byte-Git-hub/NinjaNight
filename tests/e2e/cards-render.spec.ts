@@ -23,16 +23,16 @@ test('16 种卡面立绘全部成功加载且无占位色块', async ({ page }) 
     expect(isLoaded).toBe(true);
   }
 
-  // 验证 3 张 UI 素材均可成功访问
-  const responseLobby = await page.request.get('http://localhost:5173/assets/ui/lobby-bg.jpg');
+  // 验证 3 张 UI 素材与令牌均可成功访问
+  const responseLobby = await page.request.get('http://localhost:5173/assets/ui/lobby-bg.webp');
   expect(responseLobby.status()).toBe(200);
 
-  const responseTable = await page.request.get('http://localhost:5173/assets/ui/table-texture.jpg');
+  const responseTable = await page.request.get('http://localhost:5173/assets/ui/table-texture.webp');
   expect(responseTable.status()).toBe(200);
 
-  const responseBtn = await page.request.get('http://localhost:5173/assets/ui/button-primary.jpg');
+  const responseBtn = await page.request.get('http://localhost:5173/assets/ui/button-primary.webp');
   expect(responseBtn.status()).toBe(200);
 
-  const responseToken = await page.request.get('http://localhost:5173/assets/tokens/honor-token.jpg');
+  const responseToken = await page.request.get('http://localhost:5173/assets/tokens/honor-token.webp');
   expect(responseToken.status()).toBe(200);
 });
