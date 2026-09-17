@@ -1,4 +1,5 @@
 import { VISUAL_MAP } from '../../scripts/gen-assets/prompts';
+import { CARD_DESCRIPTION_ZH, CARD_PHASE_ZH } from '../data/card-text';
 
 export const CARD_CN: Record<string, string> = {
   spy: '密探',
@@ -123,6 +124,7 @@ export function getHouseDisplayName(houseId?: string): string {
  * - img src 指向 getVisualPath(getVisualId(cardId))
  * - img onerror 时显示占位色块 + 卡名文字
  * - 在卡面顶部留白区（12% 高度）叠加编号大字
+ * - 底部名称条（6F.5-fix2）+ data-tip 纯文本 tooltip（名字/编号/效果/阶段，CSS hover/:active 显示）
  */
 export function renderCardHtml(
   cardId: string,
@@ -140,19 +142,34 @@ export function renderCardHtml(
       ? `<div class="card-number" data-number="${num}">${num}</div>`
       : '';
 
+  const base = cardId.split(/[:-]/)[0] ?? cardId;
+  const desc = CARD_DESCRIPTION_ZH[base] ?? '';
+  const phaseZh = CARD_PHASE_ZH[base] ?? '';
+  const tipText = `${displayName}｜阶段：${phaseZh}｜${desc}`;
+  const tipAttr = ` data-tip="${escapeAttr(tipText)}"`;
+
   const tag = isButton ? 'button' : 'span';
   const iidAttr = instanceId ? ` data-iid="${instanceId}"` : '';
   const optAttr = dataOpt ? ` data-opt="${dataOpt}"` : '';
   const typeAttr = isButton ? ' type="button"' : '';
   const classAttr = extraClasses ? ` ${extraClasses}` : '';
 
-  return `<${tag} class="card${classAttr}"${iidAttr}${optAttr}${typeAttr}>
+  return `<${tag} class="card${classAttr}"${iidAttr}${optAttr}${typeAttr}${tipAttr}>
     <div class="card-inner">
       <img class="card-art" src="${visualPath}" alt="${displayName}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
       <div class="card-placeholder">
         <span class="card-placeholder-text">${displayName}</span>
       </div>
       ${numHtml}
+      <div class="card-name">${displayName}</div>
     </div>
   </${tag}>`;
+}
+
+function escapeAttr(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }

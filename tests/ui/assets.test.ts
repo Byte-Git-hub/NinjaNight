@@ -10,6 +10,7 @@ import {
   getNinjaCardBackPath,
   getHouseCardBackPath,
 } from '../../src/ui/assets';
+import { CARD_DESCRIPTION_ZH, CARD_PHASE_ZH } from '../../src/data/card-text';
 
 describe('UI assets mapping & card rendering', () => {
   it('getVisualId: 正确反查视觉单元', () => {
@@ -73,5 +74,47 @@ describe('UI assets mapping & card rendering', () => {
   it('getNinjaCardBackPath & getHouseCardBackPath: 卡背路径（6F 布局用）', () => {
     expect(getNinjaCardBackPath()).toBe('/assets/visuals/ninja-card-back.webp');
     expect(getHouseCardBackPath()).toBe('/assets/visuals/house-card-back.webp');
+  });
+
+  it('6F.5-fix2: 卡面底部中文名 + data-tip（含名字/阶段/效果）', () => {
+    const html = renderCardHtml('spy:3', 'inst-tip-1', true);
+    expect(html).toContain('class="card-name"');
+    expect(html).toContain('密探 3');
+    expect(html).toContain('data-tip="');
+    // tooltip 含阶段与效果（纯文本，CSS hover/:active 显示）
+    expect(html).toContain('密探');
+    expect(html).toContain('查看其 HOUSE 牌');
+    // mini 小卡同样有名称条与 tooltip
+    const mini = renderCardHtml('spy:3', 'inst-tip-2', false, 'mini');
+    expect(mini).toContain('class="card-name"');
+    expect(mini).toContain('data-tip="');
+    // 无编号特殊牌也有名称与 tooltip，不渲染编号
+    const special = renderCardHtml('mastermind', 'inst-tip-3', true);
+    expect(special).toContain('大将军');
+    expect(special).toContain('data-tip="');
+    expect(special).toContain('揭示');
+  });
+
+  it('6F.5-fix2: 13 条文案全覆盖（base 去重）', () => {
+    const bases = [
+      'spy',
+      'mystic',
+      'shapeshifter',
+      'grave_digger',
+      'troublemaker',
+      'spirit_merchant',
+      'thief',
+      'judge',
+      'blind_assassin',
+      'shinobi',
+      'mirror_monk',
+      'martyr',
+      'mastermind',
+    ];
+    expect(Object.keys(CARD_DESCRIPTION_ZH).sort()).toEqual([...bases].sort());
+    for (const b of bases) {
+      expect(CARD_DESCRIPTION_ZH[b]?.length ?? 0).toBeGreaterThan(0);
+      expect(CARD_PHASE_ZH[b]?.length ?? 0).toBeGreaterThan(0);
+    }
   });
 });
