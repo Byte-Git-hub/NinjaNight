@@ -24,3 +24,16 @@
 ## TBD-02（Q-A）
 
 - 保持 12×2 + 12×3 + 11×4 = 35；`docs/01_GAME_RULES.md` 待确认总表已补两来源说明。
+
+## Step 7 收尾（6F 全量结果）
+
+- 全量 e2e：18/18 通过（1.7 分钟，`npx playwright test`）
+  - bug2-next-round、bug3-victory、lifecycle:40 均通过；此前 P5 全量时的 3 失败未复现
+  - lifecycle:40 根因：6E.5 工作区删了 `src/net/client.ts` 的 `OUT.roomTerminated` 监听，
+    `onTerminated` 永不触发 → 一行恢复后通过（commit 6F-fix6a）
+  - bug2/bug3：隔离复跑 4/4 通过 + 全量 1/1；判定 P5 时失败为全量串行负载下偶发超时，
+    forceAdvance→startNextRound 链路本身正常（srv.log 有 `room.forceAdvance … victoryCheck → draftPick1` 为证）
+- vitest：15 文件 92 测试全绿；`npm run build:check`：dist 干净
+- 省时裁剪声明（用户明确要求去掉费时操作）：
+  - 未做整局 1 人 + 3 bot 手玩走查、未做逐点 before/after 截图 → `docs/06F_screenshots/` 空目录已删除
+  - Issue 2 未在浏览器手构 judge 杀场景（以 36 单测为准）；Fix5 横幅/提示条以 bug1 回归 e2e smoke 为准，未逐阶段截图
