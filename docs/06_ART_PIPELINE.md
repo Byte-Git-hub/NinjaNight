@@ -166,3 +166,29 @@ A small circular token, ink dot base with gold foil flecks (kintsugi style), min
 5. 不做运行时动态生图。
 6. 不在 6A 引入 `sharp`（6B 处理缩放裁剪时再安装）。
 7. 不引入额外的生图 SDK 依赖。
+
+---
+
+## 五、实际生成记录（Stage 6B 实施）
+
+- **生成时间窗口**：2026-09-17 01:42 ~ 15:42 (CST)
+- **资产归位清单**：
+  - **16 张卡面视觉单元**（全部存入 `public/assets/visuals/`，2:3 纵向）：
+    - agy-auto-generation (5 张，848×1264)：`spy.jpg` (772 KB), `shapeshifter.jpg` (689 KB), `mystic.jpg` (856 KB), `grave_digger.jpg` (729 KB), `troublemaker.jpg` (861 KB)
+    - manual-web-generation (11 张，1696×2528 / 848×1264)：`blind_assassin.jpg` (2.91 MB), `judge.jpg` (2.92 MB), `martyr.jpg` (2.56 MB), `mastermind.jpg` (3.26 MB), `mirror_monk.jpg` (2.90 MB), `ronin.jpg` (3.01 MB), `shinobi.jpg` (3.06 MB), `spirit_merchant.jpg` (886 KB), `thief.jpg` (2.79 MB), `crane.jpg` (2.81 MB), `lotus.jpg` (2.98 MB)
+  - **3 张 UI 素材**（全部存入 `public/assets/ui/`）：
+    - `lobby-bg.jpg` (2.83 MB, 2752×1536, 16:9)
+    - `table-texture.jpg` (3.33 MB, 2752×1536, 16:9)
+    - `button-primary.jpg` (2.24 MB, 2048×2048, 1:1)
+  - **1 张荣誉标记**（存入 `public/assets/tokens/`，原图保留于 `docs/06_assets/`）：
+    - `honor-token.jpg` (754 KB, 848×1264, 2:3)
+- **成功清单**：16 张卡牌 + 3 张 UI + 1 张令牌 = **共 20 项素材 100% 成功入库**
+- **失败清单**：无
+- **体积指标**：
+  - 总大小：43,151,975 字节（**41.15 MB**）
+  - 平均单张大小：卡面约 2.2 MB（高分辨率原图），UI 素材约 2.8 MB
+  - 最大 3 张：`table-texture.jpg` (3.18 MB), `mastermind.jpg` (3.11 MB), `shinobi.jpg` (2.92 MB)
+  - 最小 3 张：`shapeshifter.jpg` (673 KB), `grave_digger.jpg` (712 KB), `honor-token.jpg` (736 KB)
+- **遇到的问题与解法**：
+  - 429 配额限制：agy 内置的 `gemini-3.1-flash-image` 触发配额限流后，用户改走网页端高配额通道手动完成其余 14 张生成并存放于 `docs/06_assets/`。
+  - 文件命名与映射对齐：对齐无前缀规范（`lobby-bg.jpg` 等），`assets.ts` 补充 `UI_ASSETS` 与 `getUiAssetPath`，平滑完成资产归位与全量测试。

@@ -35,10 +35,38 @@ export function getVisualId(cardId: string): string {
 }
 
 /**
- * 返回图片路径 '/assets/visuals/{visualId}.jpg'
+ * 返回卡牌图片路径 '/assets/visuals/{visualId}.jpg'
  */
 export function getVisualPath(visualId: string): string {
   return `/assets/visuals/${visualId}.jpg`;
+}
+
+/**
+ * UI 素材映射表（对齐无前缀文件名：lobby-bg.jpg / table-texture.jpg / button-primary.jpg）
+ */
+export const UI_ASSETS: Record<string, string> = {
+  'ui-lobby-bg': '/assets/ui/lobby-bg.jpg',
+  'lobby-bg': '/assets/ui/lobby-bg.jpg',
+  'ui-table-texture': '/assets/ui/table-texture.jpg',
+  'table-texture': '/assets/ui/table-texture.jpg',
+  'ui-button-primary': '/assets/ui/button-primary.jpg',
+  'button-primary': '/assets/ui/button-primary.jpg',
+};
+
+/**
+ * 获取 UI 材质/背景资源路径
+ */
+export function getUiAssetPath(id: string): string {
+  if (UI_ASSETS[id]) return UI_ASSETS[id];
+  const stripped = id.replace(/^ui-/, '');
+  return `/assets/ui/${stripped}.jpg`;
+}
+
+/**
+ * 获取荣誉标记图片路径
+ */
+export function getHonorTokenPath(): string {
+  return '/assets/tokens/honor-token.jpg';
 }
 
 /**

@@ -5,6 +5,8 @@ import {
   getCardNumber,
   getCardDisplayName,
   renderCardHtml,
+  getUiAssetPath,
+  getHonorTokenPath,
 } from '../../src/ui/assets';
 
 describe('UI assets mapping & card rendering', () => {
@@ -54,5 +56,15 @@ describe('UI assets mapping & card rendering', () => {
     const htmlNoNum = renderCardHtml('mastermind', 'inst-2', true);
     expect(htmlNoNum).toContain('大将军');
     expect(htmlNoNum).not.toContain('class="card-number"');
+  });
+
+  it('getUiAssetPath & getHonorTokenPath: 路径解析对齐无前缀文件名', () => {
+    expect(getUiAssetPath('ui-lobby-bg')).toBe('/assets/ui/lobby-bg.jpg');
+    expect(getUiAssetPath('lobby-bg')).toBe('/assets/ui/lobby-bg.jpg');
+    expect(getUiAssetPath('ui-table-texture')).toBe('/assets/ui/table-texture.jpg');
+    expect(getUiAssetPath('table-texture')).toBe('/assets/ui/table-texture.jpg');
+    expect(getUiAssetPath('ui-button-primary')).toBe('/assets/ui/button-primary.jpg');
+    expect(getUiAssetPath('button-primary')).toBe('/assets/ui/button-primary.jpg');
+    expect(getHonorTokenPath()).toBe('/assets/tokens/honor-token.jpg');
   });
 });

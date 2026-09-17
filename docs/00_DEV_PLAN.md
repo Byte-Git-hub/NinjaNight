@@ -119,22 +119,32 @@ updated: 2026-09-16
 - [x] `scripts/gen-assets/prompts.ts` 与 `preview-prompts.ts`
 - [x] `docs/06_ART_PIPELINE.md` 锁定 `--model "Gemini 3.8 Flash (High)"`
 
-### 阶段 6B — 图片生成与 UI 资源映射 — **进行中 / 阶段性完成（待配额恢复继续批次）**
+### 阶段 6B — 图片生成与 UI 资源映射 — **完成**
 
 - [x] 6B 前置：修正拼写与 prompt 完整性（commit `24418f7`）
 - [x] 6B-1：UI 资源映射与编号渲染（commit `b618691`）
   - `src/ui/assets.ts` 映射表与降级渲染
   - `.card-placeholder` 与 `.card-number` 顶部 12% 留白区悬浮层
   - 单元测试 `tests/ui/assets.test.ts` 全绿
-- [x] 6B-2：卡牌视觉单元生图与落盘（commit `900e0a9`）
-  - `public/assets/visuals/spy.jpg`（已生成落盘，符合 One-Shot 风格）
-  - `public/assets/visuals/shapeshifter.jpg`（已生成落盘，符合 One-Shot 风格）
-  - `public/assets/tokens/honor-token.jpg`（复用 One-Shot 荣誉标记）
-  - 触发 API 限流配额（`gemini-3.1-flash-image` 配额于 2026-09-16T20:30:38Z 重置）
-  - `scripts/gen-assets/manifest.json` 记录资产状态与配额恢复时间
-- [ ] 6B-2 剩余 14 张视觉单元生图（等待配额重置后一键推进）
-- [ ] 6B-3：UI 材质（大厅背景/桌面和纸/主按钮）生图
-- [ ] 6C：UI 主题沉浸重构（水墨和纸/令牌动画/手牌动效）
+- [x] 6B-2：16 个卡牌视觉单元生成与全量入库
+  - agy-auto-generation 5 张（`spy`, `shapeshifter`, `mystic`, `grave_digger`, `troublemaker`）
+  - manual-web-generation 11 张（`blind_assassin`, `crane`, `judge`, `lotus`, `martyr`, `mastermind`, `mirror_monk`, `ronin`, `shinobi`, `spirit_merchant`, `thief`）
+  - 全部 16 张严格保持 2:3 纵向比例（0.6709）
+- [x] 6B-3：UI 材质与背景图生成全量入库
+  - `lobby-bg.jpg`（16:9）
+  - `table-texture.jpg`（16:9）
+  - `button-primary.jpg`（1:1）
+  - `honor-token.jpg`（2:3 荣誉标记）
+- [x] 资产清单登记：`scripts/gen-assets/manifest.json` 记录全部 20 项素材来源与尺寸
+- [x] 全量验证：typecheck、vitest (66)、build、playwright e2e (6) 全部通过
+
+### 阶段 6C — UI 主题沉浸重构与资产优化（待开启）
+
+- [ ] 图片后处理：卡面缩到 512 宽 + 转 webp 质量 85；UI 素材保留原尺寸转 webp
+- [ ] 风格一致性审校：对比 agy-auto 与 manual-web 生成图片的浮世绘/金箔/水墨基线
+- [ ] UI 素材沉浸式接入：大厅水墨夜景背景、牌桌和纸质感底纹、主按钮金缮材质板
+- [ ] 动效打磨：卡面 hover 微浮雕光效、出牌动画、编号霓虹描边呼吸感
+- [ ] 仓库体积监控：当前全量原图约 41 MB，评估 webp 压缩后是否需引入 git-lfs
 
 ---
 
