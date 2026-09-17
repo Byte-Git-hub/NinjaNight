@@ -83,6 +83,48 @@ body.in-game {
   font-weight: 600;
 }
 
+/* 6H-1 音效控制（顶栏小喇叭 + 弹出设置面板，新选择器） */
+.audio-ctl {
+  position: relative;
+  margin-left: auto;
+}
+#btn-sound {
+  padding: 6px 10px;
+  font-size: 16px;
+}
+.audio-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 500;
+  width: 230px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(212, 175, 55, 0.6);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+}
+.audio-pop label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.audio-pop input[type='range'] {
+  flex: 1;
+  accent-color: var(--gold-foil);
+}
+.sfx-test {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.sfx-test button {
+  padding: 6px 4px;
+  font-size: 12px;
+}
+
 /* —— 警告与状态条 —— */
 .banner {
   background: rgba(30, 41, 59, 0.85);

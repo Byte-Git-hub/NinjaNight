@@ -12,6 +12,7 @@ import { EffectNet } from '../net/effects';
 import { SocialNet } from '../net/social';
 import { VoiceClient, type VoiceClientStatus } from './voice/client';
 import { micBadge } from './voice/icons';
+import { AudioManager, SFX_NAMES, effectTimbre, type SfxName } from './audio';
 import { voiceBannerHtml, voiceBarHtml } from './voice/controls';
 import { EFFECT_ITEMS, QUICK_EMOJIS, getEffectItem, isQuickEmoji } from './effects/items';
 import { EffectLayer } from './effects/particles';
@@ -135,6 +136,13 @@ export class AppUI {
   private voiceNotice = '';
   private voiceSupported = false;
   private voiceStatus: VoiceClientStatus = 'idle';
+  /** 6H-1 音效（本地合成，不经 server） */
+  private audio = new AudioManager();
+  private lastSoundSeq = 0;
+  private lastSoundPhase = '';
+  private soundPrimed = false;
+  /** 6H-1：音效面板显隐（字段保持，避免重渲染丢失） */
+  private audioPanelOpen = false;
   /** 6G-2 互动特效 + 怀疑标记（纯社交层；状态以服务端广播为准，本地只存快照） */
   private effectNet: EffectNet | null = null;
   private socialNet: SocialNet | null = null;
@@ -155,6 +163,8 @@ export class AppUI {
 
   mount(): void {
     preloadAssets();
+    // 6H-1：首次交互后初始化 AudioContext（浏览器自动播放策略）
+    this.audio.attachGesture(window);
     this.renderShell();
     this.net.setHandlers({
       onAck: () => {
@@ -180,6 +190,7 @@ export class AppUI {
         this.view = null;
         this.selected.clear();
         this.resetIdentityUi();
+        this.soundPrimed = false;
         this.voiceClient?.leave();
         this.voiceSeats = [];
         this.resetSocialUi();
@@ -206,6 +217,8 @@ export class AppUI {
           this.markHouseSeen(v.roomCode, v.round);
           this.openIdentityModal();
         }
+        // 6H-1：新事件 → 音效（首个快照只记 seq，不补播）
+        this.playViewSounds(v);
         this.render();
       },
       onChat: (c) => {
@@ -283,6 +296,8 @@ export class AppUI {
   private onRootClick(ev: MouseEvent): void {
     const t = ev.target as HTMLElement | null;
     if (!t?.closest) return;
+    // 6H-1：点击即手势，顺手确保 AudioContext 已建（幂等， cheap）
+    void this.audio.ensure();
     const markBtn = t.closest('[data-mark]');
     if (markBtn) {
       const target = (markBtn as HTMLElement).dataset['mark'] ?? '';
@@ -305,6 +320,8 @@ export class AppUI {
         return;
       }
       const target = this.fxTarget;
+      // 6H-1：砸物音（按物品三类音色）
+      this.audio.play('effect-send', effectTimbre(itemId));
       if (this.effectNet.send(target, itemId) === 'local-only') {
         this.renderEffectLocal(target, itemId);
       }
@@ -436,6 +453,14 @@ export class AppUI {
           ${this.net.seatId ? `<span class="seat">座位 <b>${this.net.seatId}</b></span>` : ''}
         </div>
         ${this.view || this.presence ? `<button id="btn-leave-room" type="button" class="muted">返回大厅</button>` : ''}
+        <div class="audio-ctl">
+          <button id="btn-sound" type="button" title="音效设置" aria-label="音效设置">${this.audio.enabled ? '🔊' : '🔇'}</button>
+          <div class="audio-pop" id="audio-panel"${this.audioPanelOpen ? '' : ' hidden'}>
+            <label><input id="sound-enabled" type="checkbox" ${this.audio.enabled ? 'checked' : ''} /> 音效开</label>
+            <label>音量 <input id="sound-volume" type="range" min="0" max="100" step="1" value="${Math.round(this.audio.volume * 100)}" /></label>
+            <div class="sfx-test">${SFX_NAMES.map((n) => `<button type="button" data-sfx-test="${n}" title="试听 ${n}">${sfxCn(n)}</button>`).join('')}</div>
+          </div>
+        </div>
       </header>
       ${!this.view && !this.presence ? this.lobbyForm() : this.gameBody()}
     `;
@@ -494,6 +519,26 @@ export class AppUI {
       this.identityModalTimer = null;
     }
     this.render();
+  }
+
+  /** 6H-1：视图事件/阶段 → 本地音效（只播新增 seq，首快照静默记位） */
+  private playViewSounds(v: PlayerView): void {
+    const maxSeq = v.events.reduce((m, e) => Math.max(m, e.seq ?? 0), 0);
+    if (!this.soundPrimed) {
+      this.soundPrimed = true;
+      this.lastSoundSeq = maxSeq;
+      this.lastSoundPhase = v.phase;
+      return;
+    }
+    if (this.lastSoundPhase !== '' && this.lastSoundPhase !== v.phase) {
+      this.audio.play('phase-change');
+    }
+    this.lastSoundPhase = v.phase;
+    for (const e of v.events) {
+      if ((e.seq ?? 0) <= this.lastSoundSeq) continue;
+      this.audio.playForEvent(e.type, (e.payload ?? {}) as Record<string, unknown>, v.self.seatId);
+    }
+    this.lastSoundSeq = Math.max(this.lastSoundSeq, maxSeq);
   }
 
   private resetIdentityUi(): void {
@@ -1001,6 +1046,7 @@ export class AppUI {
       this.view = null;
       this.presence = null;
       this.resetIdentityUi();
+      this.soundPrimed = false;
       this.render();
     });
     // 6G-1 语音三键（降级时 client 内部消化，不抛错）
@@ -1026,6 +1072,31 @@ export class AppUI {
     // 6G-2 点击走根委托（见 mount 内 onRootClick），此处不逐个绑定。
     // 6F-4：身份弹窗点击关闭（backdrop 穿透不挡 e2e/游戏点击）
     $('#identity-modal')?.addEventListener('click', () => this.closeIdentityModal());
+    // 6H-1 音效设置：面板显隐 + 开关 + 音量 + 试听（新选择器，不碰旧 e2e）
+    $('#btn-sound')?.addEventListener('click', () => {
+      this.audioPanelOpen = !this.audioPanelOpen;
+      const panel = this.root.querySelector('#audio-panel');
+      if (panel) panel.toggleAttribute('hidden', !this.audioPanelOpen);
+    });
+    $('#sound-enabled')?.addEventListener('change', (ev) => {
+      const on = (ev.target as HTMLInputElement).checked;
+      this.audio.setEnabled(on);
+      // 只换图标，不整页重渲染（避免面板被收起）
+      const btn = this.root.querySelector('#btn-sound');
+      if (btn) btn.textContent = on ? '🔊' : '🔇';
+    });
+    $('#sound-volume')?.addEventListener('input', (ev) => {
+      this.audio.setVolume(Number((ev.target as HTMLInputElement).value) / 100);
+    });
+    this.root.querySelectorAll<HTMLButtonElement>('[data-sfx-test]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const name = btn.dataset['sfxTest'] as SfxName | undefined;
+        if (!name) return;
+        void this.audio.ensure().then((ok) => {
+          if (ok) this.audio.play(name, name === 'effect-send' ? 'bright' : 'soft');
+        });
+      });
+    });
     // 6F-4：自家卡背翻转（先播 250ms 动画再同步重渲染，更新身份名显隐）
     this.root.querySelectorAll<HTMLElement>('.flip-wrap[data-peek]').forEach((el) => {
       el.addEventListener('click', () => {
@@ -1137,6 +1208,8 @@ export class AppUI {
           pending.kind === 'merchantChoose' ||
           pending.kind === 'merchantExchange'
         ) {
+          // 6H-1：目标选择"叮"
+          this.audio.play('target-pick');
           this.net.sendCommand(v.windowId, 'night.chooseTarget', { targetSeatId: opt });
           return;
         }
@@ -1154,6 +1227,24 @@ export class AppUI {
 
 function phaseLabel(phase: string): string {
   return PHASE_CN[phase] ?? phase;
+}
+
+/** 6H-1：音效试听按钮中文名 */
+function sfxCn(n: string): string {
+  const map: Record<string, string> = {
+    'card-play': '出牌',
+    'card-reveal': '翻开',
+    'target-pick': '选目标',
+    'view-success': '查看',
+    kill: '击杀',
+    'self-die': '死亡',
+    'token-gain': '令牌',
+    'phase-change': '阶段',
+    'round-win': '本轮胜',
+    'game-win': '整局胜',
+    'effect-send': '砸物',
+  };
+  return map[n] ?? n;
 }
 
 /**
