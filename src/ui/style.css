@@ -439,6 +439,29 @@ button.card.sel {
   flex-wrap: wrap;
   gap: 10px;
 }
+.declare-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.revealed-section {
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+.revealed-section h3 {
+  margin: 6px 0 4px;
+  font-size: 14px;
+  color: var(--gold-foil);
+}
+.cards-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px dashed rgba(212, 175, 55, 0.3);
+  border-radius: 6px;
+}
 
 /* —— 对局结束横幅 —— */
 .game-over-banner {

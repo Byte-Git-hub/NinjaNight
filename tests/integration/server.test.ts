@@ -20,6 +20,20 @@ function nextView(socket: ClientSocket, timeoutMs = 5000): Promise<PlayerView> {
   return waitEvent<PlayerView>(socket, 'view.snapshot', timeoutMs);
 }
 
+function waitViewPhase(socket: ClientSocket, targetPhase: string, timeoutMs = 5000): Promise<PlayerView> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`timeout waiting for phase ${targetPhase}`)), timeoutMs);
+    const handler = (v: PlayerView) => {
+      if (v.phase === targetPhase) {
+        clearTimeout(t);
+        socket.off('view.snapshot', handler);
+        resolve(v);
+      }
+    };
+    socket.on('view.snapshot', handler);
+  });
+}
+
 async function createRoomWithPlayers(
   n: number,
 ): Promise<{ code: string; tokens: string[]; sockets: ClientSocket[]; host: ClientSocket }> {
@@ -211,6 +225,49 @@ describe('server integration', () => {
 
     // 房间回到未开始的大厅状态
     expect(room.started).toBe(false);
+  });
+
+  it('状态同步：阶段推进时所有座位均收到对应 phase 的 view.snapshot，且 forceAdvance 可推进', async () => {
+    const { code, tokens, sockets, host } = await createRoomWithPlayers(MIN_PLAYERS);
+    track(...sockets);
+    await readyAll(host, tokens);
+
+    const draft1Promises = sockets.map((s) => nextView(s));
+    host.emit('room.start', { seatToken: tokens[0] });
+    const draft1Views = await Promise.all(draft1Promises);
+    for (const v of draft1Views) {
+      expect(v.phase).toBe('draftPick1');
+    }
+    const room = server.rooms.get(code)!;
+    expect(room.state?.phase).toBe('draftPick1');
+
+    // 1. 正常推进：全员提交 draft.pick -> 推进至 draftPick2，所有座位同步收到 snapshot
+    const draft2Promises = sockets.map((s) => waitViewPhase(s, 'draftPick2'));
+    for (let i = 0; i < 4; i += 1) {
+      const v = draft1Views[i]!;
+      const cardId = v.pendingDecision!.options[0]!;
+      sockets[i]!.emit('command.send', {
+        commandId: `cmd-pick-${i}`,
+        seatToken: tokens[i],
+        windowId: v.windowId,
+        type: 'draft.pick',
+        payload: { cardInstanceId: cardId },
+      });
+    }
+    const d2Views = await Promise.all(draft2Promises);
+    for (const v of d2Views) {
+      expect(v.phase).toBe('draftPick2');
+    }
+    expect(room.state?.phase).toBe('draftPick2');
+
+    // 2. 强制推进：房主触发 forceAdvance -> applyAllDefaults 推进至无 pending (victoryCheck)，所有座位同步收到 snapshot
+    const faPromises = sockets.map((s) => waitViewPhase(s, 'victoryCheck'));
+    host.emit('room.forceAdvance', { seatToken: tokens[0] });
+    const faViews = await Promise.all(faPromises);
+    for (const v of faViews) {
+      expect(v.phase).toBe('victoryCheck');
+    }
+    expect(room.state?.phase).toBe('victoryCheck');
   });
 });
 

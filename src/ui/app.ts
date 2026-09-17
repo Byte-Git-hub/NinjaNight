@@ -80,6 +80,7 @@ export class AppUI {
       onAck: () => this.render(),
       onError: (e) => {
         this.lastReject = `${e.reasonCode}${e.message ? ': ' + e.message : ''}`;
+        this.showToast(`错误：${this.lastReject}`);
         this.render();
       },
       onPresence: (p) => {
@@ -98,6 +99,12 @@ export class AppUI {
         this.render();
       },
       onView: (v) => {
+        if (typeof window !== 'undefined' && ((window as any).__NINJA_DEBUG__ || process.env.NODE_ENV !== 'production')) {
+          console.log(`[view] phase=${v.phase} step=${v.step} pending=${v.pendingDecision?.kind ?? 'none'}`);
+        }
+        if (this.view?.phase !== v.phase) {
+          this.selected.clear();
+        }
         this.view = v;
         this.render();
       },
@@ -122,7 +129,7 @@ export class AppUI {
   }
 
   private renderShell(): void {
-    this.root.innerHTML = `<div class="app" id="ui"><div id="toast" class="toast" hidden></div></div>`;
+    this.root.innerHTML = `<div class="app" id="ui"></div><div id="toast" class="toast" hidden></div>`;
   }
 
   private showToast(msg: string): void {
@@ -271,11 +278,17 @@ export class AppUI {
   private gamePanels(v: PlayerView, pending: PendingDecision | null): string {
     const self = v.self;
     const hand = self.hand
-      .map((c) => renderCardHtml(c.cardId, c.instanceId, true))
+      .map((c) => {
+        const isSel = this.selected.has(c.instanceId);
+        return renderCardHtml(c.cardId, c.instanceId, true, isSel ? 'sel' : '');
+      })
       .join('');
     const reserved = self.reserved
       .map((c) => renderCardHtml(c.cardId, c.instanceId, false))
       .join('');
+    const revealed = v.revealedCards && v.revealedCards.length > 0
+      ? v.revealedCards.map((c) => renderCardHtml(c.cardId, c.instanceId, false)).join('')
+      : '';
     const known = self.knownHouseHistory
       .map((k) => {
         const targetSeat = v.seats.find((s) => s.seatId === k.targetSeatId);
@@ -309,6 +322,7 @@ export class AppUI {
           <h3>手牌</h3>
           <div class="hand">${hand || '<i>无手牌</i>'}</div>
         </div>
+        ${revealed ? `<div class="revealed-section"><h3>已公开打出牌</h3><div class="cards-row">${revealed}</div></div>` : ''}
         <div class="reserved"><b>预留：</b>${reserved || '无'}</div>
         <div class="known"><h3>已知身份</h3>${known || '无'}</div>
         ${this.pendingPanel(pending)}
@@ -346,6 +360,24 @@ export class AppUI {
           </button>`;
         })
         .join('');
+    } else if (pending.kind === 'declareCards') {
+      opts = pending.options
+        .map((o: string) => {
+          const card = v?.self.hand.find((c) => c.instanceId === o);
+          const isSel = this.selected.has(o);
+          const cls = `opt declare-opt${isSel ? ' sel' : ''}`;
+          if (card) {
+            return renderCardHtml(card.cardId, card.instanceId, true, cls, o);
+          }
+          return `<button class="card opt declare-opt${isSel ? ' sel' : ''}" data-opt="${escapeHtml(o)}" data-iid="${escapeHtml(o)}" type="button">
+            <div class="card-inner">
+              <div class="card-placeholder">
+                <span class="card-placeholder-text">${escapeHtml(o)}</span>
+              </div>
+            </div>
+          </button>`;
+        })
+        .join('');
     } else if (pending.kind === 'chooseTarget') {
       opts = pending.options
         .map((o: string) => {
@@ -363,7 +395,7 @@ export class AppUI {
     const kindLabel: Record<string, string> = {
       draftPick: '选一张留下（点击卡面确认）',
       draftDiscard: '弃一张（点击卡面确认）',
-      declareCards: '声明打出（在手牌中多选后确认）或跳过',
+      declareCards: '声明打出（点击卡面选择，再点确认）或跳过',
       chooseTarget: '选择目标',
       chooseOptional: '可选决策',
       reactDecide: '是否发动反应？',
@@ -375,7 +407,7 @@ export class AppUI {
       <div class="pending">
         <div>待你决策：${kindLabel[pending.kind] ?? pending.kind}</div>
         <div class="row opts">${opts}</div>
-        ${pending.kind === 'declareCards' ? `<button id="btn-declare" type="button">确认打出选中</button><button id="btn-pass" type="button">跳过</button>` : ''}
+        ${pending.kind === 'declareCards' ? `<div class="row declare-actions" style="margin-top: 10px;"><button id="btn-declare" type="button" class="btn-primary">确认打出选中 (${this.selected.size})</button><button id="btn-pass" type="button" class="muted">跳过</button></div>` : ''}
         ${pending.kind === 'chooseOptional' ? `<button class="opt" data-opt="__true" type="button">是</button><button class="opt" data-opt="__false" type="button">否</button>` : ''}
         ${pending.kind === 'reactDecide' ? `<button class="opt" data-opt="__true" type="button">发动</button><button class="opt" data-opt="__false" type="button">放弃</button>` : ''}
       </div>
@@ -399,7 +431,10 @@ export class AppUI {
     $('#btn-start')?.addEventListener('click', () => this.net.startRoom());
     $('#btn-add-bot')?.addEventListener('click', () => this.net.addBot());
     $('#btn-remove-bot')?.addEventListener('click', () => this.net.removeBot());
-    $('#btn-fa')?.addEventListener('click', () => this.net.forceAdvance());
+    $('#btn-fa')?.addEventListener('click', () => {
+      this.showToast('已发送强制推进请求…');
+      this.net.forceAdvance();
+    });
     $('#btn-leave-room')?.addEventListener('click', () => {
       this.net.leaveRoom();
       this.view = null;
@@ -423,7 +458,11 @@ export class AppUI {
     });
     $('#btn-declare')?.addEventListener('click', () => {
       const v = this.view;
-      if (!v || this.selected.size === 0) return;
+      if (!v) return;
+      if (this.selected.size === 0) {
+        this.showToast('请先点击卡面选择要打出的牌，或直接点击「跳过」');
+        return;
+      }
       this.net.sendCommand(v.windowId, 'night.declare', {
         cardInstanceIds: [...this.selected],
       });
@@ -440,29 +479,35 @@ export class AppUI {
       });
     });
 
-    // 仅手牌区可勾选多选状态（打出声明用）
-    this.root.querySelectorAll<HTMLButtonElement>('.hand .card[data-iid]').forEach((btn) => {
+    // 手牌区与声明待决策区可勾选多选状态（打出声明用）
+    const toggleCardSelection = (id: string) => {
+      if (this.selected.has(id)) {
+        this.selected.delete(id);
+      } else {
+        this.selected.add(id);
+      }
+      this.root.querySelectorAll<HTMLElement>(`[data-iid="${id}"]`).forEach((el) => {
+        el.classList.toggle('sel', this.selected.has(id));
+      });
+      const btnDeclare = this.root.querySelector<HTMLButtonElement>('#btn-declare');
+      if (btnDeclare) {
+        btnDeclare.textContent = `确认打出选中 (${this.selected.size})`;
+      }
+    };
+
+    this.root.querySelectorAll<HTMLButtonElement>('.hand .card[data-iid], .pending .declare-opt[data-iid]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.dataset['iid'];
-        if (!id) return;
-        if (this.selected.has(id)) {
-          this.selected.delete(id);
-          btn.classList.remove('sel');
-        } else {
-          this.selected.add(id);
-          btn.classList.add('sel');
-        }
+        if (id) toggleCardSelection(id);
       });
       // 双击取消选中（移动端）
       btn.addEventListener('dblclick', () => {
         const id = btn.dataset['iid'];
-        if (!id) return;
-        this.selected.delete(id);
-        btn.classList.remove('sel');
+        if (id && this.selected.has(id)) toggleCardSelection(id);
       });
     });
 
-    this.root.querySelectorAll<HTMLButtonElement>('.opt[data-opt]').forEach((btn) => {
+    this.root.querySelectorAll<HTMLButtonElement>('.opt[data-opt]:not(.declare-opt)').forEach((btn) => {
       btn.addEventListener('click', () => {
         const v = this.view;
         const pending = v?.pendingDecision;
@@ -514,6 +559,18 @@ function optLabel(o: string, v?: PlayerView | null): string {
   if (o.startsWith('s') && v) {
     const s = v.seats.find((st) => st.seatId === o);
     if (s) return `${s.nickname} (${o})`;
+  }
+  if (v) {
+    const allCards = [
+      ...v.self.hand,
+      ...v.self.reserved,
+      ...(v.self.draftHand ?? []),
+      ...(v.revealedCards ?? []),
+    ];
+    const foundCard = allCards.find((c) => c.instanceId === o);
+    if (foundCard) {
+      return getCardDisplayName(foundCard.cardId);
+    }
   }
   if (o.startsWith('tok-') || o.startsWith('t') || o.startsWith('x')) return `令牌 ${o.replace(/^(tok-|t-|x-)/, '')}`;
   return o;

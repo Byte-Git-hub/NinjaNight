@@ -107,14 +107,11 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       const beforeSeq = room.state.eventSeq;
       const result = applyAllDefaults(room.state);
       if (result.ok) {
+        room.setState(result.state);
         const newEvents = result.state.events.slice(beforeSeq);
         room.broadcastPublicEvents(newEvents.filter((e) => e.visibility === 'public'));
         room.broadcastPrivateEvents(newEvents);
-        room.broadcastView();
-        if (room.state.pending.length > 0) {
-          scheduleWindowTimeout(room, ms);
-          scheduleBots(room, handleBotCommand);
-        }
+        afterStateChange(room);
       }
     }, ms);
     t.unref?.();
@@ -140,6 +137,15 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   function afterStateChange(room: RoomRuntime): void {
     if (!room.state) return;
     if (room.state.gameOver && !room.endedAt) room.endedAt = Date.now();
+    const pendingSeats = room.state.pending.map((p) => p.seatId);
+    if (process.env.DEBUG_BROADCAST || process.env.NODE_ENV !== 'production') {
+      logger.info('broadcast.view', {
+        roomCode: room.code,
+        seatCount: room.sessions.size,
+        phase: room.state.phase,
+        pendingSeats,
+      });
+    }
     room.broadcastView();
     room.broadcastPresence();
     if (room.state.pending.length > 0) {
@@ -437,6 +443,12 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         emitError(socket, 'UNAUTHORIZED');
         return;
       }
+      logger.info('room.forceAdvance', {
+        roomCode: room.code,
+        seatId: sess.seatId,
+        pendingCount: room.state.pending.length,
+        phase: room.state.phase,
+      });
       const cmd: Command = {
         commandId: `fa-${randomUUID()}`,
         roomCode: room.code,
@@ -447,7 +459,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       };
       const res = room.applyGameCommand(cmd);
       if (!res.ok) {
-        emitError(socket, res.reason);
+        emitError(socket, res.reason, `强制推进被拒绝：${res.reason}`);
         return;
       }
       room.broadcastPublicEvents(res.newEvents.filter((e) => e.visibility === 'public'));
