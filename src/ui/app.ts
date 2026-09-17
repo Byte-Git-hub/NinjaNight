@@ -1,6 +1,6 @@
 import type { PresencePayload, ChatEventPayload } from '../shared/protocol';
 import type { ConnectionStatus, GameNet } from '../net/client';
-import type { PlayerView, PendingDecision, NinjaCardInstanceView } from '../shared/types';
+import type { PlayerView, PendingDecision, NinjaCardInstanceView, GameEvent } from '../shared/types';
 import { getCardDisplayName, getHouseDisplayName, renderCardHtml } from './assets';
 
 const PHASE_CN: Record<string, string> = {
@@ -67,6 +67,11 @@ export class AppUI {
   private chat: ChatEventPayload[] = [];
   private status: ConnectionStatus = 'idle';
   private lastReject = '';
+  public lastViewTimestamp = 0;
+
+  public get currentView(): PlayerView | null {
+    return this.view;
+  }
 
   constructor(root: HTMLElement, net: GameNet) {
     this.root = root;
@@ -99,8 +104,10 @@ export class AppUI {
         this.render();
       },
       onView: (v) => {
-        if (typeof window !== 'undefined' && ((window as any).__NINJA_DEBUG__ || process.env.NODE_ENV !== 'production')) {
-          console.log(`[view] phase=${v.phase} step=${v.step} pending=${v.pendingDecision?.kind ?? 'none'}`);
+        this.lastViewTimestamp = Date.now();
+        if (import.meta.env.DEV) {
+          const pending = v.pendingDecision ? v.pendingDecision.seatId : 'none';
+          console.log(`[view.snapshot] phase=${v.phase} pending=${pending} at=${this.lastViewTimestamp}`);
         }
         if (this.view?.phase !== v.phase) {
           this.selected.clear();
@@ -145,6 +152,12 @@ export class AppUI {
   }
 
   render(): void {
+    if (import.meta.env.DEV) {
+      console.log('[render]', {
+        viewPhase: this.view?.phase,
+        domPhase: document.querySelector('.phase')?.textContent,
+      });
+    }
     const el = this.ui();
     if (!el) return;
     const isGame = Boolean(this.view);
@@ -406,8 +419,22 @@ export class AppUI {
       opts = pending.options
         .map((o: string) => {
           const s = v?.seats.find((st) => st.seatId === o);
-          const name = s ? `${s.nickname} (${o})` : o;
-          return `<button class="opt" data-opt="${escapeHtml(o)}" type="button">${escapeHtml(name)}</button>`;
+          if (s) {
+            const name = `${s.nickname} (${o})`;
+            return `<button class="opt" data-opt="${escapeHtml(o)}" type="button">${escapeHtml(name)}</button>`;
+          }
+          // 非座位选项（如掘墓人 gravePick 的牌实例）：按卡面渲染，不再裸显 id
+          const grave = pending.context.graveChoices?.find((g) => g.instanceId === o);
+          if (grave) {
+            return renderCardHtml(grave.cardId, o, true, 'opt', o);
+          }
+          return `<button class="card opt" data-opt="${escapeHtml(o)}" data-iid="${escapeHtml(o)}" type="button">
+            <div class="card-inner">
+              <div class="card-placeholder">
+                <span class="card-placeholder-text">未知牌</span>
+              </div>
+            </div>
+          </button>`;
         })
         .join('');
     } else {

@@ -73,6 +73,7 @@ function setPending(
   kind: PendingDecision['kind'],
   options: string[],
   cardId?: string,
+  graveChoices?: { instanceId: string; cardId: string }[],
 ): void {
   const actor = state.resolveContext?.actorSeatId;
   if (!actor) return;
@@ -94,6 +95,7 @@ function setPending(
         step: state.step,
         relatedInstanceIds: state.resolveContext ? [state.resolveContext.instance.instanceId] : [],
         cardId,
+        ...(graveChoices ? { graveChoices } : {}),
       },
     },
   ];
@@ -175,6 +177,7 @@ function startGraveDigger(state: GameState): void {
     'chooseTarget',
     picked.map((c) => c.instanceId),
     ctx.instance.cardId,
+    picked.map((c) => ({ instanceId: c.instanceId, cardId: c.cardId })),
   );
 }
 

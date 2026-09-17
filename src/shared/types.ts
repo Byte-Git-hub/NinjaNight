@@ -164,6 +164,8 @@ export interface PendingDecision {
     step: StepKind;
     relatedInstanceIds: string[];
     cardId?: CardId;
+    /** 掘墓人 gravePick：选项 instanceId → cardId（仅 actor 自己的 pending 可见） */
+    graveChoices?: { instanceId: string; cardId: CardId }[];
   };
 }
 
