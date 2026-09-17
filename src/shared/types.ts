@@ -199,6 +199,8 @@ export interface PlayerSeatView {
   alive: boolean;
   isHost: boolean;
   honorTokenCount: number;
+  /** 他人手牌张数（6F-2 座位卡背堆叠用）：hand + draftHand，不含 reserved；declared 是 hand 子集不重复计 */
+  handCount: number;
   publicHouseId?: HouseId;
   isBot?: boolean;
 }

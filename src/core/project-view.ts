@@ -38,6 +38,8 @@ export function projectView(state: GameState, seatId: SeatId): PlayerView | null
     alive: s.alive,
     isHost: s.isHost,
     honorTokenCount: s.tokens.length,
+    // Q1 裁定：hand + draftHand，不含 reserved；declared 是 hand 子集不重复计
+    handCount: s.hand.length + s.draftHand.length,
     publicHouseId: revealedPublicHouse(s),
     isBot: s.isBot ?? false,
   }));

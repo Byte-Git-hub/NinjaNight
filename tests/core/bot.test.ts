@@ -12,10 +12,10 @@ function mockPlayerView(overrides: Partial<PlayerView> = {}): PlayerView {
     windowId: 'w-1',
     pendingDecision: null,
     seats: [
-      { seatId: 's0', nickname: 'Host', connected: true, alive: true, isHost: true, honorTokenCount: 0 },
-      { seatId: 's1', nickname: 'AI-1', connected: true, alive: true, isHost: false, honorTokenCount: 0 },
-      { seatId: 's2', nickname: 'AI-2', connected: true, alive: true, isHost: false, honorTokenCount: 0 },
-      { seatId: 's3', nickname: 'AI-3', connected: true, alive: true, isHost: false, honorTokenCount: 0 },
+      { seatId: 's0', nickname: 'Host', connected: true, alive: true, isHost: true, honorTokenCount: 0, handCount: 0 },
+      { seatId: 's1', nickname: 'AI-1', connected: true, alive: true, isHost: false, honorTokenCount: 0, handCount: 0 },
+      { seatId: 's2', nickname: 'AI-2', connected: true, alive: true, isHost: false, honorTokenCount: 0, handCount: 0 },
+      { seatId: 's3', nickname: 'AI-3', connected: true, alive: true, isHost: false, honorTokenCount: 0, handCount: 0 },
     ],
     self: {
       seatId: 's1',
