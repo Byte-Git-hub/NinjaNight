@@ -958,6 +958,40 @@ button.card.sel {
   font-size: 12px;
 }
 
+/* —— 6F-5 底部决策区 + 聊天/日志折叠面板 —— */
+.bottom-bar {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(34, 211, 238, 0.35);
+}
+#decision-zone {
+  margin-top: 10px;
+}
+#decision-zone .pending {
+  margin-top: 0;
+}
+details.collapsed-panel summary {
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gold-foil);
+  padding: 4px 2px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+details.collapsed-panel .log-title {
+  margin: 10px 0 2px;
+  font-size: 13px;
+  color: var(--gold-foil);
+}
+details.collapsed-panel #btn-toggle-log {
+  margin: 6px 0;
+}
+
 /* —— 移动端适配 <1024px —— */
 @media (max-width: 1023px) {
   .app {
@@ -1010,13 +1044,14 @@ button.card.sel {
     min-height: 15px;
     padding: 0 4px;
   }
+  /* 6F-5：决策区改底部 sticky，不再全屏盖住手牌 */
+  .bottom-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 60;
+  }
   .pending {
-    position: fixed;
-    inset: 0;
-    z-index: 80;
-    background: rgba(15, 23, 42, 0.96);
-    border-radius: 0;
-    padding: 24px 16px;
+    max-height: 52vh;
     overflow-y: auto;
   }
   .pending .opts {

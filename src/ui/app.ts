@@ -414,19 +414,7 @@ export class AppUI {
         </section>
         ${v ? this.gamePanels(v, pending ?? null) : ''}
         ${v ? this.identityModalHtml(v) : ''}
-        <section class="panel chat">
-          <h2>聊天</h2>
-          <div class="chat-log" id="chat-log">${this.chat
-            .map(
-              (c) =>
-                `<div><b>${escapeHtml(c.nickname)}</b>: ${escapeHtml(c.text)}</div>`,
-            )
-            .join('')}</div>
-          <div class="row">
-            <input id="chat-input" maxlength="200" placeholder="说点什么…" />
-            <button id="btn-chat" type="button">发送</button>
-          </div>
-        </section>
+        ${this.chatLogPanel(v ?? null)}
       </div>
     `;
   }
@@ -492,12 +480,6 @@ export class AppUI {
         return `<div class="known-item"><b>${escapeHtml(targetName)}</b> → <span class="house-name">${escapeHtml(getHouseDisplayName(k.houseId))}</span>${escapeHtml(via)}</div>`;
       })
       .join('');
-    // 日志：中文友好行 + 全量 payload（超长由 CSS 省略，不再硬截断丢字符）
-    const events = v.events
-      .slice(-40)
-      .map((e) => `<div class="ev" title="${escapeHtml(e.type)}">${escapeHtml(eventLabel(e, v))}</div>`)
-      .join('');
-
     // 本轮横幅：只看本 round 的 roundWinner（跨轮后旧事件自动隐藏）
     const lastRound = [...v.events].reverse().find((e) => e.type === 'score.roundWinner');
     const roundBanner =
@@ -537,22 +519,45 @@ export class AppUI {
         ${roundBanner}
         ${nextRoundBtn}
         ${central}
-        <div class="hand-section">
-          <h3>手牌</h3>
-          <div class="hand">${hand || '<i>无手牌</i>'}</div>
+        <div class="bottom-bar">
+          <div class="hand-section">
+            <h3>手牌</h3>
+            <div class="hand">${hand || '<i>无手牌</i>'}</div>
+          </div>
+          <div id="decision-zone">${this.pendingPanel(pending)}</div>
         </div>
         <div class="reserved"><b>预留：</b>${reserved || '无'}</div>
         <div class="known"><h3>已知身份</h3>${known || '无'}</div>
-        ${this.pendingPanel(pending)}
         <div class="row">
           ${this.net.isHost ? `<button id="btn-fa" type="button">强制推进</button>` : ''}
           ${this.net.isHost ? `<button id="btn-end" type="button" class="danger">终止本局</button>` : ''}
         </div>
         ${this.net.isHost ? this.kickButtons() : ''}
-        <button type="button" id="btn-toggle-log" class="muted">日志折叠</button>
-        <div class="log" id="game-log">${events}</div>
       </section>
     `;
+  }
+
+  /** 6F-5 聊天/日志折叠面板（默认折叠；DOM 常驻，关闭态由 details 原生折叠） */
+  private chatLogPanel(v: PlayerView | null): string {
+    const chatHtml = this.chat
+      .map((c) => `<div><b>${escapeHtml(c.nickname)}</b>: ${escapeHtml(c.text)}</div>`)
+      .join('');
+    const logHtml = v
+      ? v.events
+          .slice(-40)
+          .map((e) => `<div class="ev" title="${escapeHtml(e.type)}">${escapeHtml(eventLabel(e, v))}</div>`)
+          .join('')
+      : '';
+    return `<details class="panel chat collapsed-panel" id="chat-log-panel">
+      <summary>聊天/日志</summary>
+      <button type="button" id="btn-toggle-log" class="muted">展开/收起</button>
+      <div class="chat-log" id="chat-log">${chatHtml}</div>
+      <div class="row">
+        <input id="chat-input" maxlength="200" placeholder="说点什么…" />
+        <button id="btn-chat" type="button">发送</button>
+      </div>
+      ${v ? `<h3 class="log-title">对局日志</h3><div class="log" id="game-log">${logHtml}</div>` : ''}
+    </details>`;
   }
 
   /**
@@ -779,7 +784,8 @@ export class AppUI {
     });
     $('#btn-end')?.addEventListener('click', () => this.net.endGame());
     $('#btn-toggle-log')?.addEventListener('click', () => {
-      this.root.querySelector('#game-log')?.classList.toggle('collapsed');
+      const d = this.root.querySelector<HTMLDetailsElement>('#chat-log-panel');
+      if (d) d.open = !d.open;
     });
     this.root.querySelectorAll<HTMLButtonElement>('.kick[data-seat]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -962,8 +968,17 @@ function eventLabel(e: GameEvent, v: PlayerView): string {
       return `💀 ${sid('seatId')} 出局`;
     case 'night.optionalResolved':
       return 'killed' in p
-        ? `${sid('actorSeatId')} 选择${p['killed'] ? '击杀' : '放过'}`
-        : `可选决策：${JSON.stringify(p)}`;
+        ? `${sid('actorSeatId')} 选择了${p['killed'] ? '击杀' : '放过'}`
+        : `${sid('actorSeatId')} 作出可选决策`;
+    case 'night.targetChosen': {
+      const card = typeof p['cardId'] === 'string' ? `（${getCardDisplayName(p['cardId'])}）` : '';
+      return `${sid('actorSeatId')}${card}查看了 ${sid('targetSeatId')} 的身份`;
+    }
+    case 'night.cardResolved': {
+      const who = 'actorSeatId' in p ? sid('actorSeatId') : '有人';
+      const cn = typeof p['cardId'] === 'string' ? getCardDisplayName(p['cardId']) : '牌';
+      return `${who} 的 ${cn} 结算完毕`;
+    }
     case 'night.houseViewed':
       return `👁 你查看了身份`;
     case 'night.ninjaViewed':
