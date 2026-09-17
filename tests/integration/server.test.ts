@@ -149,4 +149,68 @@ describe('server integration', () => {
     // 至少 self 不同且 secret house 不同可能相同种子但投影 seatId 不同
     expect(JSON.stringify(views[0]?.self)).not.toBe(JSON.stringify(views[1]?.self));
   });
+
+  it('room.leave: 大厅中离开房间并触发房主移交与幂等', async () => {
+    const { code, tokens, sockets, host } = await createRoomWithPlayers(2);
+    track(...sockets);
+    const room = server.rooms.get(code)!;
+    expect(room.lobby.length).toBe(2);
+    expect(room.hostSeatId).toBe('s0');
+
+    // 房主 (s0) 离开
+    const ackP = waitEvent<{ ok: boolean }>(host, 'room.leave.ack');
+    host.emit('room.leave', { seatToken: tokens[0] });
+    const ack = await ackP;
+    expect(ack.ok).toBe(true);
+
+    // 此时 s0 已被移除，房主移交给剩余玩家 (s1)
+    expect(room.lobby.length).toBe(1);
+    expect(room.hostSeatId).toBe('s1');
+
+    // 幂等性：再次调用 room.leave 依然成功 ack
+    const ack2P = waitEvent<{ ok: boolean }>(host, 'room.leave.ack');
+    host.emit('room.leave', { seatToken: tokens[0] });
+    const ack2 = await ack2P;
+    expect(ack2.ok).toBe(true);
+  });
+
+  it('room.leave: 对局中离开标记断线', async () => {
+    const { code, tokens, sockets, host } = await createRoomWithPlayers(MIN_PLAYERS);
+    track(...sockets);
+    await readyAll(host, tokens);
+    await startGame(host, tokens);
+
+    const room = server.rooms.get(code)!;
+    expect(room.started).toBe(true);
+
+    // P1 (s1) 离开对局
+    const p1 = sockets[1] as ClientSocket;
+    const ackP = waitEvent<{ ok: boolean }>(p1, 'room.leave.ack');
+    p1.emit('room.leave', { seatToken: tokens[1] });
+    const ack = await ackP;
+    expect(ack.ok).toBe(true);
+
+    // 对应座位应被标记为断开连接
+    const s1Seat = room.state?.seats.find((s) => s.seatId === 's1');
+    expect(s1Seat?.connected).toBe(false);
+  });
+
+  it('room.end: 房主终止本局向所有客户端广播 room.terminated', async () => {
+    const { code, tokens, sockets, host } = await createRoomWithPlayers(MIN_PLAYERS);
+    track(...sockets);
+    await readyAll(host, tokens);
+    await startGame(host, tokens);
+
+    const room = server.rooms.get(code)!;
+    expect(room.started).toBe(true);
+
+    // 监听所有客户端的 room.terminated 广播
+    const termPs = sockets.map((s) => waitEvent(s, 'room.terminated'));
+    host.emit('room.end', { seatToken: tokens[0] });
+    await Promise.all(termPs);
+
+    // 房间回到未开始的大厅状态
+    expect(room.started).toBe(false);
+  });
 });
+

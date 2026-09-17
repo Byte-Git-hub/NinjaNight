@@ -5,8 +5,8 @@
   --vermilion: #dc2626;
   --gold-foil: #d4af37;
   --neon-cyan: #22d3ee;
-  --text-main: #e2e8f0;
-  --text-muted: #94a3b8;
+  --text-main: #f1f5f9;
+  --text-muted: #cbd5e1;
 }
 
 * {
@@ -23,16 +23,16 @@ body {
   transition: background 0.3s ease;
 }
 
-/* —— 背景材质应用 —— */
+/* —— 背景材质应用（6D 提亮遮罩） —— */
 body.in-lobby {
-  background: linear-gradient(rgba(10, 15, 30, 0.65), rgba(10, 15, 30, 0.75)),
+  background: linear-gradient(rgba(10, 15, 30, 0.38), rgba(10, 15, 30, 0.45)),
               url('/assets/ui/lobby-bg.webp') no-repeat center center fixed;
   background-size: cover;
 }
 
 body.in-game {
   background-color: var(--ink-base);
-  background-image: linear-gradient(rgba(10, 15, 30, 0.75), rgba(10, 15, 30, 0.85)),
+  background-image: linear-gradient(rgba(10, 15, 30, 0.42), rgba(10, 15, 30, 0.50)),
                     url('/assets/ui/table-texture.webp');
   background-repeat: repeat;
   background-size: 800px;
@@ -48,29 +48,34 @@ body.in-game {
 /* —— 顶栏与房间信息 —— */
 .top {
   display: flex;
-  gap: 16px;
-  align-items: baseline;
-  border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.4);
   padding-bottom: 10px;
   margin-bottom: 14px;
+}
+.brand-group {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  flex-wrap: wrap;
 }
 .top h1 {
   font-size: 22px;
   margin: 0;
   color: var(--gold-foil);
-  text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.6);
   letter-spacing: 2px;
 }
 .room,
 .seat {
-  color: var(--text-muted);
   font-size: 14px;
 }
 .room {
   color: var(--gold-foil);
   font-size: 16px;
   font-weight: 700;
-  text-shadow: 0 0 8px rgba(212, 175, 55, 0.7);
+  text-shadow: 0 0 8px rgba(212, 175, 55, 0.8);
   letter-spacing: 1px;
 }
 .seat {
@@ -80,15 +85,15 @@ body.in-game {
 
 /* —— 警告与状态条 —— */
 .banner {
-  background: rgba(26, 35, 51, 0.9);
-  border: 1px solid rgba(58, 74, 102, 0.8);
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(212, 175, 55, 0.4);
   padding: 10px 14px;
   border-radius: 8px;
   margin-bottom: 12px;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(6px);
 }
 .banner.warn {
-  border-color: rgba(212, 175, 55, 0.6);
+  border-color: rgba(212, 175, 55, 0.8);
   color: #ffd666;
 }
 .banner.err {
@@ -109,18 +114,18 @@ body.in-game {
 }
 
 .panel {
-  background: rgba(17, 24, 39, 0.82);
-  border: 1px solid rgba(212, 175, 55, 0.3);
+  background: rgba(30, 41, 59, 0.72);
+  border: 1px solid rgba(212, 175, 55, 0.5);
   border-radius: 8px;
   padding: 14px;
   backdrop-filter: blur(8px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
 }
 .panel h2 {
   margin: 0 0 10px;
   font-size: 16px;
   color: var(--gold-foil);
-  border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.3);
   padding-bottom: 6px;
   display: flex;
   align-items: center;
@@ -147,8 +152,8 @@ body.in-game {
 }
 
 input {
-  background: rgba(10, 15, 30, 0.85);
-  border: 1px solid rgba(212, 175, 55, 0.4);
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(212, 175, 55, 0.5);
   color: #fff;
   border-radius: 6px;
   padding: 8px 10px;
@@ -158,17 +163,17 @@ input {
 }
 input:focus {
   border-color: var(--neon-cyan);
-  box-shadow: 0 0 8px rgba(34, 211, 238, 0.4);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
 }
 
-/* —— 按钮材质与光效 —— */
+/* —— 按钮材质与光效（6D 提亮） —— */
 button:not(.card) {
   background-image: url('/assets/ui/button-primary.webp');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   color: var(--gold-foil);
-  border: 1px solid rgba(212, 175, 55, 0.5);
+  border: 1px solid rgba(212, 175, 55, 0.6);
   border-radius: 6px;
   padding: 8px 16px;
   font-weight: 600;
@@ -176,13 +181,13 @@ button:not(.card) {
   letter-spacing: 0.5px;
   cursor: pointer;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
-  box-shadow: inset 0 0 16px rgba(34, 211, 238, 0.15), 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 0 16px rgba(34, 211, 238, 0.2), 0 0 8px rgba(212, 175, 55, 0.2), 0 2px 8px rgba(0, 0, 0, 0.4);
   transition: filter 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
 }
 button:not(.card):hover:not(:disabled) {
   filter: brightness(1.15);
   border-color: var(--gold-foil);
-  box-shadow: inset 0 0 20px rgba(34, 211, 238, 0.3), 0 0 12px rgba(212, 175, 55, 0.5);
+  box-shadow: inset 0 0 20px rgba(34, 211, 238, 0.35), 0 0 14px rgba(212, 175, 55, 0.6);
   transform: translateY(-1px);
 }
 button:not(.card):active:not(:disabled) {
@@ -196,20 +201,20 @@ button:disabled {
 }
 
 button.danger {
-  border-color: rgba(220, 38, 38, 0.7) !important;
+  border-color: rgba(220, 38, 38, 0.8) !important;
   color: #fca5a5 !important;
-  box-shadow: inset 0 0 20px rgba(220, 38, 38, 0.3), 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+  box-shadow: inset 0 0 20px rgba(220, 38, 38, 0.4), 0 2px 8px rgba(0, 0, 0, 0.4) !important;
 }
 button.danger:hover:not(:disabled) {
-  box-shadow: inset 0 0 25px rgba(220, 38, 38, 0.5), 0 0 12px rgba(220, 38, 38, 0.5) !important;
+  box-shadow: inset 0 0 25px rgba(220, 38, 38, 0.6), 0 0 14px rgba(220, 38, 38, 0.6) !important;
 }
 
 button.muted {
-  filter: grayscale(40%);
-  border-color: rgba(148, 163, 184, 0.3);
-  color: #cbd5e1;
-  font-size: 12px;
-  padding: 4px 8px;
+  filter: brightness(1.05);
+  border-color: rgba(212, 175, 55, 0.4);
+  color: var(--gold-foil);
+  font-size: 13px;
+  padding: 6px 12px;
 }
 
 button.opt {
@@ -226,24 +231,24 @@ button.card, span.card {
   border-radius: 6px;
   padding: 0;
   margin: 4px 4px 0 0;
-  background: linear-gradient(145deg, #181d28 0%, #0d111a 100%);
-  border: 1px solid rgba(212, 175, 55, 0.35);
+  background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid rgba(212, 175, 55, 0.45);
   display: inline-block;
   vertical-align: top;
   box-sizing: border-box;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out;
   cursor: pointer;
 }
 button.card:hover {
   transform: translateY(-4px) scale(1.03);
-  box-shadow: 0 8px 20px rgba(212, 175, 55, 0.4);
+  box-shadow: 0 8px 22px rgba(212, 175, 55, 0.45);
   border-color: var(--gold-foil);
   z-index: 10;
 }
 button.card.sel {
   border-color: var(--neon-cyan) !important;
-  box-shadow: 0 0 12px var(--neon-cyan), 0 8px 24px rgba(34, 211, 238, 0.3) !important;
+  box-shadow: 0 0 14px var(--neon-cyan), 0 8px 24px rgba(34, 211, 238, 0.35) !important;
   transform: translateY(-6px) scale(1.05);
   z-index: 20;
 }
@@ -255,7 +260,7 @@ button.card.sel {
   height: 100%;
   position: relative;
   overflow: hidden;
-  background: #181d28;
+  background: #1e293b;
 }
 .card-placeholder {
   position: absolute;
@@ -265,8 +270,8 @@ button.card.sel {
   justify-content: center;
   padding: 4px;
   text-align: center;
-  background: #181d28;
-  color: #e8ecf1;
+  background: #1e293b;
+  color: var(--text-main);
   font-size: 13px;
   z-index: 1;
 }
@@ -277,6 +282,7 @@ button.card.sel {
   height: 100%;
   object-fit: cover;
   z-index: 2;
+  filter: brightness(1.05) contrast(1.05);
 }
 .card-art.img-error,
 .card-art[style*="display: none"] {
@@ -297,11 +303,11 @@ button.card.sel {
   font-size: 18px;
   font-weight: 800;
   color: var(--gold-foil);
-  background: rgba(10, 15, 30, 0.85);
-  border: 1px solid rgba(212, 175, 55, 0.7);
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(212, 175, 55, 0.8);
   border-radius: 4px;
   padding: 0 6px;
-  box-shadow: 0 0 6px rgba(212, 175, 55, 0.6);
+  box-shadow: 0 0 6px rgba(212, 175, 55, 0.7);
   text-shadow: 0 0 6px rgba(212, 175, 55, 0.8), 0 1px 2px #000;
   z-index: 5;
   pointer-events: none;
@@ -314,7 +320,7 @@ button.card.sel {
     border-color: rgba(212, 175, 55, 0.7);
   }
   50% {
-    box-shadow: 0 0 14px rgba(34, 211, 238, 0.8), 0 0 8px var(--gold-foil);
+    box-shadow: 0 0 14px rgba(34, 211, 238, 0.9), 0 0 8px var(--gold-foil);
     border-color: var(--neon-cyan);
   }
 }
@@ -330,7 +336,7 @@ button.card.sel {
 }
 .seats li {
   padding: 8px 4px;
-  border-bottom: 1px solid rgba(36, 48, 68, 0.8);
+  border-bottom: 1px solid rgba(51, 65, 85, 0.8);
   font-size: 14px;
   display: flex;
   align-items: center;
@@ -349,15 +355,41 @@ button.card.sel {
 }
 
 /* —— 游戏面板内部区域 —— */
+.private-info {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.private-info p {
+  margin: 0;
+}
+.house-badge {
+  color: var(--gold-foil);
+  font-size: 15px;
+  text-shadow: 0 0 6px rgba(212, 175, 55, 0.5);
+}
+.token-val {
+  color: var(--neon-cyan);
+}
+.house-name {
+  color: var(--gold-foil);
+}
+.hand-section h3 {
+  margin: 6px 0 4px;
+  font-size: 14px;
+  color: var(--gold-foil);
+}
 .hand {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 6px;
-  background: rgba(10, 15, 30, 0.5);
+  gap: 8px;
+  padding: 8px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(212, 175, 55, 0.25);
   border-radius: 6px;
-  min-height: 145px;
+  min-height: 150px;
 }
 .hand .card {
   min-width: 90px;
@@ -373,8 +405,8 @@ button.card.sel {
 .known {
   margin-top: 12px;
   padding: 8px;
-  background: rgba(15, 20, 32, 0.7);
-  border: 1px solid rgba(212, 175, 55, 0.2);
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(212, 175, 55, 0.3);
   border-radius: 6px;
 }
 .known h3 {
@@ -382,20 +414,47 @@ button.card.sel {
   color: var(--gold-foil);
   margin: 0 0 6px;
 }
+.known-item {
+  padding: 2px 0;
+}
 
-/* —— 待决策面板 —— */
+/* —— 待决策面板（6D 霓虹青高亮） —— */
 .pending {
   margin-top: 14px;
-  padding: 12px;
-  background: rgba(26, 36, 54, 0.9);
-  border: 1px solid rgba(34, 211, 238, 0.4);
+  padding: 14px;
+  background: rgba(30, 41, 59, 0.88);
+  border: 1px solid var(--neon-cyan);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.25), 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 .pending > div:first-child {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 15px;
   color: var(--neon-cyan);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  letter-spacing: 0.5px;
+}
+.pending .row.opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* —— 对局结束横幅 —— */
+.game-over-banner {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid var(--gold-foil);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+}
+.game-over-banner h3 {
+  margin: 0 0 6px;
+  color: var(--gold-foil);
+}
+.game-over-banner p {
+  margin: 0 0 10px;
 }
 
 /* —— 日志与聊天 —— */
@@ -404,19 +463,19 @@ button.card.sel {
   max-height: 180px;
   overflow-y: auto;
   font-size: 12px;
-  color: #9aabbf;
+  color: var(--text-muted);
   margin-top: 8px;
-  background: rgba(10, 14, 24, 0.7);
+  background: rgba(15, 23, 42, 0.75);
   padding: 8px;
   border-radius: 6px;
-  border: 1px solid rgba(36, 48, 68, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.7);
 }
 .chat-log {
   max-height: 240px;
 }
 .ev {
   padding: 3px 0;
-  border-bottom: 1px solid rgba(30, 40, 56, 0.6);
+  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
 }
 .hint {
   color: var(--gold-foil);
@@ -461,8 +520,8 @@ button.card.sel {
   .seats li {
     flex: 0 0 auto;
     min-width: 120px;
-    border: 1px solid rgba(36, 48, 68, 0.8);
-    background: rgba(17, 24, 39, 0.7);
+    border: 1px solid rgba(51, 65, 85, 0.8);
+    background: rgba(30, 41, 59, 0.75);
     border-radius: 6px;
     padding: 6px 8px;
   }
@@ -471,7 +530,7 @@ button.card.sel {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(17, 24, 39, 0.95);
+    background: rgba(30, 41, 59, 0.95);
     border-top: 1px solid var(--gold-foil);
     padding: 8px 10px 12px;
     z-index: 50;
@@ -497,17 +556,21 @@ button.card.sel {
     position: fixed;
     inset: 0;
     z-index: 80;
-    background: rgba(10, 15, 30, 0.96);
+    background: rgba(15, 23, 42, 0.96);
     border-radius: 0;
     padding: 24px 16px;
     overflow-y: auto;
   }
   .pending .opts {
-    flex-direction: column;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
   }
-  .pending .opt {
+  .pending .opt:not(.card) {
     min-height: 44px;
     font-size: 16px;
+    width: 100%;
   }
   button:not(.card) {
     min-height: 40px;

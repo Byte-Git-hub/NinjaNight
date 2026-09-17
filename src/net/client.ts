@@ -16,6 +16,7 @@ export interface NetHandlers {
   onError?: (payload: RoomErrorPayload) => void;
   onPresence?: (payload: PresencePayload) => void;
   onStarted?: (payload: { roomCode: string }) => void;
+  onTerminated?: (payload: { roomCode: string }) => void;
   onView?: (view: PlayerView) => void;
   onPublicEvents?: (events: GameEvent[]) => void;
   onPrivateEvents?: (events: GameEvent[]) => void;
@@ -89,6 +90,7 @@ export class GameNet {
     });
     this.socket.on(OUT.roomPresence, (p: PresencePayload) => this.handlers.onPresence?.(p));
     this.socket.on(OUT.roomStarted, (p: { roomCode: string }) => this.handlers.onStarted?.(p));
+    this.socket.on(OUT.roomTerminated, (p: { roomCode: string }) => this.handlers.onTerminated?.(p));
     this.socket.on(OUT.viewSnapshot, (v: PlayerView) => this.handlers.onView?.(v));
     this.socket.on(OUT.eventPublic, (e: GameEvent[]) => this.handlers.onPublicEvents?.(e));
     this.socket.on(OUT.eventPrivate, (e: GameEvent[]) => this.handlers.onPrivateEvents?.(e));
@@ -141,6 +143,31 @@ export class GameNet {
   endGame(): void {
     if (!this.seatToken) return;
     this.socket?.emit(EV.roomEnd, { seatToken: this.seatToken });
+  }
+
+  leaveRoom(): void {
+    if (this.seatToken) {
+      this.socket?.emit(EV.roomLeave, { seatToken: this.seatToken });
+    }
+    try {
+      if (typeof localStorage !== 'undefined') {
+        if (this.roomCode) {
+          localStorage.removeItem(`ninja-night:seatToken:${this.roomCode}`);
+        }
+        const last = localStorage.getItem('ninja-night:lastRoomCode');
+        if (last) localStorage.removeItem(`ninja-night:seatToken:${last}`);
+        localStorage.removeItem('ninja-night:lastRoomCode');
+      }
+      if (typeof history !== 'undefined' && history.replaceState) {
+        const u = new URL(window.location.href);
+        u.searchParams.delete('room');
+        history.replaceState(null, '', u.toString());
+      }
+    } catch {}
+    this.roomCode = null;
+    this.seatToken = null;
+    this.seatId = null;
+    this.isHost = false;
   }
 
   addBot(): void {

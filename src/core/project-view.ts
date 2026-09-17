@@ -56,6 +56,11 @@ export function projectView(state: GameState, seatId: SeatId): PlayerView | null
       cardId: c.cardId,
       number: c.number,
     })),
+    draftHand: self.draftHand.map((c) => ({
+      instanceId: c.instanceId,
+      cardId: c.cardId,
+      number: c.number,
+    })),
     honorTokens: self.tokens.map((t) => ({
       instanceId: t.instanceId,
       value: t.value,

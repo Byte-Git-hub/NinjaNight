@@ -92,12 +92,31 @@ export function getCardDisplayName(cardId: string): string {
 }
 
 /**
+ * 获取阵营/身份中文显示名（如 'crane:2' -> '仙鹤 · 地位 2', 'lotus:1' -> '莲花 · 地位 1', 'ronin' -> '浪人'）
+ */
+export function getHouseDisplayName(houseId?: string): string {
+  if (!houseId) return '未知';
+  if (houseId === 'ronin') return '浪人';
+  const parts = houseId.split(/[:-]/);
+  const fam = parts[0];
+  const rank = parts[1];
+  const famZh = fam === 'crane' ? '仙鹤' : fam === 'lotus' ? '莲花' : fam;
+  return rank ? `${famZh} · 地位 ${rank}` : famZh;
+}
+
+/**
  * 渲染卡面内部 DOM：
  * - img src 指向 getVisualPath(getVisualId(cardId))
  * - img onerror 时显示占位色块 + 卡名文字
  * - 在卡面顶部留白区（12% 高度）叠加编号大字
  */
-export function renderCardHtml(cardId: string, instanceId?: string, isButton = true): string {
+export function renderCardHtml(
+  cardId: string,
+  instanceId?: string,
+  isButton = true,
+  extraClasses = '',
+  dataOpt?: string,
+): string {
   const visualId = getVisualId(cardId);
   const visualPath = getVisualPath(visualId);
   const displayName = getCardDisplayName(cardId);
@@ -109,9 +128,11 @@ export function renderCardHtml(cardId: string, instanceId?: string, isButton = t
 
   const tag = isButton ? 'button' : 'span';
   const iidAttr = instanceId ? ` data-iid="${instanceId}"` : '';
+  const optAttr = dataOpt ? ` data-opt="${dataOpt}"` : '';
   const typeAttr = isButton ? ' type="button"' : '';
+  const classAttr = extraClasses ? ` ${extraClasses}` : '';
 
-  return `<${tag} class="card"${iidAttr}${typeAttr}>
+  return `<${tag} class="card${classAttr}"${iidAttr}${optAttr}${typeAttr}>
     <div class="card-inner">
       <img class="card-art" src="${visualPath}" alt="${displayName}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
       <div class="card-placeholder">

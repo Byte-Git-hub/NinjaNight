@@ -74,6 +74,7 @@ export const OUT = {
   eventPublic: 'event.public',
   eventPrivate: 'event.private',
   chatEvent: 'chat.event',
+  roomTerminated: 'room.terminated',
 } as const;
 
 export interface RoomAckPayload {

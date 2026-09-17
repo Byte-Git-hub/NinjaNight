@@ -775,7 +775,11 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     socket.on(EV.roomLeave, (payload: unknown) => {
       const body = (payload ?? {}) as { seatToken?: unknown };
       const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
-      if (sess) leaveSession(sess, socket);
+      if (sess) {
+        handleRoomLeave(sess, socket);
+      } else {
+        socket.emit('room.leave.ack', { ok: true });
+      }
     });
 
     socket.on('disconnect', () => {
@@ -785,6 +789,62 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       if (sess) leaveSession(sess, socket);
     });
   });
+
+  function handleRoomLeave(sess: SessionInfo, socket: Socket): void {
+    const room = rooms.get(sess.roomCode);
+    socket.leave(room?.roomChannel() ?? '');
+    socket.emit('room.leave.ack', { ok: true });
+
+    if (!room) {
+      sessionsByToken.delete(sess.seatToken);
+      return;
+    }
+
+    if (!room.started) {
+      // 对局未开始：彻底移除座位与 session
+      room.sessions.delete(sess.seatToken);
+      sessionsByToken.delete(sess.seatToken);
+      room.lobby = room.lobby.filter((l) => l.seatToken !== sess.seatToken);
+
+      const humanSeats = room.lobby.filter((s) => !room.bots.has(s.seatId));
+      if (humanSeats.length === 0) {
+        room.clearTimer?.();
+        room.clearBotTimers?.();
+        rooms.delete(room.code);
+        logger.info('room.destroy_empty', { roomCode: room.code });
+        return;
+      }
+      if (room.hostSeatId === sess.seatId) {
+        room.hostSeatId = humanSeats[0].seatId;
+        for (const s of room.lobby) {
+          s.isHost = s.seatId === room.hostSeatId;
+        }
+      }
+      room.markEmpty();
+      room.broadcastPresence();
+      logger.info('room.leave_lobby', { roomCode: room.code, seatId: sess.seatId });
+    } else {
+      // 对局进行中：标记该玩家断开
+      sess.connected = false;
+      sess.disconnectedAt = Date.now();
+      sess.socketId = '';
+      if (room.state) {
+        const seat = room.state.seats.find((s) => s.seatId === sess.seatId);
+        if (seat) seat.connected = false;
+      }
+      room.markEmpty();
+      room.broadcastPresence();
+      logger.info('room.leave_game', { roomCode: room.code, seatId: sess.seatId });
+
+      // 若所有人类都已离线，重置房间回大厅
+      const anyHumanConnected = [...room.sessions.values()].some(
+        (s) => s.connected && !room.bots.has(s.seatId),
+      );
+      if (!anyHumanConnected) {
+        resetRoomToLobby(room);
+      }
+    }
+  }
 
   function leaveSession(sess: SessionInfo, socket: Socket): void {
     const room = rooms.get(sess.roomCode);
@@ -839,6 +899,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     room.emptySince = room.sessions.size === 0 ? Date.now() : null;
     room.broadcastPresence();
     for (const sess of room.sessions.values()) {
+      room.emitToSeat(sess.seatToken, OUT.roomTerminated, { roomCode: room.code });
       room.emitToSeat(sess.seatToken, OUT.roomStarted, { roomCode: room.code, reset: true });
     }
   }

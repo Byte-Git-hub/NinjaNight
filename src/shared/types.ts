@@ -207,6 +207,7 @@ export interface SelfView {
   canViewOwnHouse: boolean;
   hand: NinjaCardInstanceView[];
   reserved: NinjaCardInstanceView[];
+  draftHand?: NinjaCardInstanceView[];
   honorTokens: HonorTokenInstanceView[];
   knownHouseHistory: KnownHouseRecord[];
   declaredThisPhase: string[];

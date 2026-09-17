@@ -1,7 +1,7 @@
-import type { PresencePayload, ChatEventPayload, RoomErrorPayload } from '../shared/protocol';
+import type { PresencePayload, ChatEventPayload } from '../shared/protocol';
 import type { ConnectionStatus, GameNet } from '../net/client';
 import type { PlayerView, PendingDecision, NinjaCardInstanceView } from '../shared/types';
-import { getCardDisplayName, renderCardHtml } from './assets';
+import { getCardDisplayName, getHouseDisplayName, renderCardHtml } from './assets';
 
 const PHASE_CN: Record<string, string> = {
   roomLobby: '大厅',
@@ -22,8 +22,41 @@ const PHASE_CN: Record<string, string> = {
   gameOver: '结束',
 };
 
-function cardName(cardId: string): string {
-  return getCardDisplayName(cardId);
+const PRELOAD_VISUALS = [
+  'spy',
+  'mystic',
+  'shapeshifter',
+  'grave_digger',
+  'troublemaker',
+  'spirit_merchant',
+  'thief',
+  'judge',
+  'blind_assassin',
+  'shinobi',
+  'mirror_monk',
+  'martyr',
+  'mastermind',
+  'crane',
+  'lotus',
+  'ronin',
+];
+
+function preloadAssets(): void {
+  if (typeof window === 'undefined') return;
+  for (const v of PRELOAD_VISUALS) {
+    const img = new Image();
+    img.src = `/assets/visuals/${v}.webp`;
+  }
+  const uiAssets = [
+    '/assets/ui/lobby-bg.webp',
+    '/assets/ui/table-texture.webp',
+    '/assets/ui/button-primary.webp',
+    '/assets/tokens/honor-token.webp',
+  ];
+  for (const u of uiAssets) {
+    const img = new Image();
+    img.src = u;
+  }
 }
 
 export class AppUI {
@@ -34,7 +67,6 @@ export class AppUI {
   private chat: ChatEventPayload[] = [];
   private status: ConnectionStatus = 'idle';
   private lastReject = '';
-  private deadlineLeft = 60;
 
   constructor(root: HTMLElement, net: GameNet) {
     this.root = root;
@@ -42,6 +74,7 @@ export class AppUI {
   }
 
   mount(): void {
+    preloadAssets();
     this.renderShell();
     this.net.setHandlers({
       onAck: () => this.render(),
@@ -55,6 +88,13 @@ export class AppUI {
       },
       onStarted: () => {
         this.lastReject = '';
+        this.render();
+      },
+      onTerminated: () => {
+        this.view = null;
+        this.selected.clear();
+        this.lastReject = '';
+        this.showToast('对局已终止，回到大厅');
         this.render();
       },
       onView: (v) => {
@@ -117,9 +157,12 @@ export class AppUI {
     el.innerHTML = `
       ${banner}${reject}
       <header class="top">
-        <h1>忍者之夜</h1>
-        ${this.view || this.presence ? `<span class="room">房间 <b>${this.net.roomCode ?? ''}</b></span>` : ''}
-        ${this.net.seatId ? `<span class="seat">座位 <b>${this.net.seatId}</b></span>` : ''}
+        <div class="brand-group">
+          <h1>忍者之夜</h1>
+          ${this.view || this.presence ? `<span class="room">房间 <b>${this.net.roomCode ?? ''}</b></span>` : ''}
+          ${this.net.seatId ? `<span class="seat">座位 <b>${this.net.seatId}</b></span>` : ''}
+        </div>
+        ${this.view || this.presence ? `<button id="btn-leave-room" type="button" class="muted">返回大厅</button>` : ''}
       </header>
       ${!this.view && !this.presence ? this.lobbyForm() : this.gameBody()}
     `;
@@ -156,13 +199,12 @@ export class AppUI {
           ${s.connected ? '●' : '○'}
           ${!isBot && ready ? '准备' : ''}
           ${alive === false ? '死亡' : ''}
-          ${tokens !== undefined ? `令牌${tokens}` : ''}
-          ${house ? `身份:${escapeHtml(house)}` : ''}
+          ${tokens !== undefined ? `令牌:${tokens}` : ''}
+          ${house ? `身份:${escapeHtml(getHouseDisplayName(house))}` : ''}
         </li>`;
       })
       .join('');
 
-    const phase = v ? (PHASE_CN[v.phase] ?? v.phase) : (PHASE_CN[p?.phase ?? ''] ?? '');
     const pending = v?.pendingDecision;
 
     return `
@@ -235,7 +277,12 @@ export class AppUI {
       .map((c) => renderCardHtml(c.cardId, c.instanceId, false))
       .join('');
     const known = self.knownHouseHistory
-      .map((k) => `<div>${escapeHtml(k.targetSeatId)} → ${escapeHtml(k.houseId)}（${escapeHtml(k.viaCardId ?? '')}）</div>`)
+      .map((k) => {
+        const targetSeat = v.seats.find((s) => s.seatId === k.targetSeatId);
+        const targetName = targetSeat ? `${targetSeat.nickname} (${k.targetSeatId})` : k.targetSeatId;
+        const via = k.viaCardId ? ` · 借由 ${getCardDisplayName(k.viaCardId)}` : '';
+        return `<div class="known-item"><b>${escapeHtml(targetName)}</b> → <span class="house-name">${escapeHtml(getHouseDisplayName(k.houseId))}</span>${escapeHtml(via)}</div>`;
+      })
       .join('');
     const tokens = self.honorTokens.map((t) => t.value).join(', ');
     const events = v.events
@@ -243,12 +290,26 @@ export class AppUI {
       .map((e) => `<div class="ev">${escapeHtml(e.type)} ${escapeHtml(JSON.stringify(e.payload).slice(0, 80))}</div>`)
       .join('');
 
+    const gameOverBanner = v.gameOver
+      ? `<div class="game-over-banner panel">
+          <h3>🏆 对局结束</h3>
+          <p>胜出玩家：<b>${v.winners.map((w) => v.seats.find((s) => s.seatId === w)?.nickname ?? w).join(', ') || '平局/无'}</b></p>
+          ${this.net.isHost ? `<button id="btn-game-over-lobby" type="button">返回大厅（再来一局）</button>` : '<p class="hint">等待房主重置大厅…</p>'}
+        </div>`
+      : '';
+
     return `
-      <section class="panel">
+      <section class="panel in-game-table">
         <h2>对局 <span class="phase">${escapeHtml(phaseLabel(v.phase))}</span></h2>
-        <p>你的身份：<b>${escapeHtml(self.houseId)}</b> · 令牌面值：[${escapeHtml(tokens)}]</p>
-        <div class="hand">${hand || '<i>无手牌</i>'}</div>
-        <div class="reserved">预留：${reserved || '无'}</div>
+        ${gameOverBanner}
+        <div class="private-info">
+          <p>你的身份：<b class="house-badge">${escapeHtml(getHouseDisplayName(self.houseId))}</b> · 令牌面值：[<span class="token-val">${escapeHtml(tokens || '无')}</span>]</p>
+        </div>
+        <div class="hand-section">
+          <h3>手牌</h3>
+          <div class="hand">${hand || '<i>无手牌</i>'}</div>
+        </div>
+        <div class="reserved"><b>预留：</b>${reserved || '无'}</div>
         <div class="known"><h3>已知身份</h3>${known || '无'}</div>
         ${this.pendingPanel(pending)}
         <div class="row">
@@ -264,19 +325,52 @@ export class AppUI {
 
   private pendingPanel(pending: PendingDecision | null): string {
     if (!pending) return `<div class="pending">等待其他玩家…</div>`;
-    const opts = pending.options
-      .map((o: string) => `<button class="opt" data-opt="${escapeHtml(o)}" type="button">${escapeHtml(optLabel(o))}</button>`)
-      .join('');
+    const v = this.view;
+    let opts = '';
+
+    if (pending.kind === 'draftPick' || pending.kind === 'draftDiscard') {
+      opts = pending.options
+        .map((o: string) => {
+          const card =
+            v?.self.draftHand?.find((c) => c.instanceId === o) ??
+            v?.self.hand.find((c) => c.instanceId === o);
+          if (card) {
+            return renderCardHtml(card.cardId, card.instanceId, true, 'opt', o);
+          }
+          return `<button class="card opt" data-opt="${escapeHtml(o)}" data-iid="${escapeHtml(o)}" type="button">
+            <div class="card-inner">
+              <div class="card-placeholder">
+                <span class="card-placeholder-text">${escapeHtml(o)}</span>
+              </div>
+            </div>
+          </button>`;
+        })
+        .join('');
+    } else if (pending.kind === 'chooseTarget') {
+      opts = pending.options
+        .map((o: string) => {
+          const s = v?.seats.find((st) => st.seatId === o);
+          const name = s ? `${s.nickname} (${o})` : o;
+          return `<button class="opt" data-opt="${escapeHtml(o)}" type="button">${escapeHtml(name)}</button>`;
+        })
+        .join('');
+    } else {
+      opts = pending.options
+        .map((o: string) => `<button class="opt" data-opt="${escapeHtml(o)}" type="button">${escapeHtml(optLabel(o, v))}</button>`)
+        .join('');
+    }
+
     const kindLabel: Record<string, string> = {
-      draftPick: '选一张留下',
-      draftDiscard: '弃一张',
-      declareCards: '声明打出（可多选后确认）或跳过',
+      draftPick: '选一张留下（点击卡面确认）',
+      draftDiscard: '弃一张（点击卡面确认）',
+      declareCards: '声明打出（在手牌中多选后确认）或跳过',
       chooseTarget: '选择目标',
       chooseOptional: '可选决策',
       reactDecide: '是否发动反应？',
-      merchantChoose: '商人：查看 HOUSE 或 HONOR（必选）',
+      merchantChoose: '商人：查看身份或令牌（必选）',
       merchantExchange: '商人：交换令牌（可放弃）',
     };
+
     return `
       <div class="pending">
         <div>待你决策：${kindLabel[pending.kind] ?? pending.kind}</div>
@@ -306,6 +400,15 @@ export class AppUI {
     $('#btn-add-bot')?.addEventListener('click', () => this.net.addBot());
     $('#btn-remove-bot')?.addEventListener('click', () => this.net.removeBot());
     $('#btn-fa')?.addEventListener('click', () => this.net.forceAdvance());
+    $('#btn-leave-room')?.addEventListener('click', () => {
+      this.net.leaveRoom();
+      this.view = null;
+      this.presence = null;
+      this.render();
+    });
+    $('#btn-game-over-lobby')?.addEventListener('click', () => {
+      this.net.endGame();
+    });
     $('#btn-chat')?.addEventListener('click', () => {
       const input = this.root.querySelector('#chat-input') as HTMLInputElement | null;
       if (input?.value) {
@@ -337,7 +440,8 @@ export class AppUI {
       });
     });
 
-    this.root.querySelectorAll<HTMLButtonElement>('.card[data-iid]').forEach((btn) => {
+    // 仅手牌区可勾选多选状态（打出声明用）
+    this.root.querySelectorAll<HTMLButtonElement>('.hand .card[data-iid]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.dataset['iid'];
         if (!id) return;
@@ -395,7 +499,7 @@ function phaseLabel(phase: string): string {
   return PHASE_CN[phase] ?? phase;
 }
 
-function optLabel(o: string): string {
+function optLabel(o: string, v?: PlayerView | null): string {
   if (o === 'view_honor') return '查看令牌';
   if (o === 'view_house') return '查看身份';
   if (o === 'play_now') return '立即打出';
@@ -407,8 +511,11 @@ function optLabel(o: string): string {
   if (o === 'keep' || o === 'no' || o === 'hide' || o === 'spare') return '否';
   if (o === 'kill') return '击杀';
   if (o === 'reveal') return '公开';
-  if (o.startsWith('s')) return o;
-  if (o.startsWith('tok-') || o.startsWith('t') || o.startsWith('x')) return `令牌 ${o}`;
+  if (o.startsWith('s') && v) {
+    const s = v.seats.find((st) => st.seatId === o);
+    if (s) return `${s.nickname} (${o})`;
+  }
+  if (o.startsWith('tok-') || o.startsWith('t') || o.startsWith('x')) return `令牌 ${o.replace(/^(tok-|t-|x-)/, '')}`;
   return o;
 }
 
