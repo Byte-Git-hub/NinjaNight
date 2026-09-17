@@ -10,6 +10,7 @@ import {
   enterHouseReveal,
   enterMastermindReveal,
   enterPassPhaseDraft,
+  startNextRound,
 } from './setup';
 import {
   afterDeclareSeat,
@@ -82,6 +83,11 @@ export function applyCommand(state: GameState, cmd: Command): EngineResult {
  */
 export function applyAllDefaults(state: GameState): EngineResult {
   if (state.pending.length === 0) {
+    // victoryCheck 无待办是轮间停留态：forceAdvance/超时触发下一轮（Q3 裁定）
+    if (state.phase === 'victoryCheck' && !state.gameOver) {
+      startNextRound(state);
+      return { ok: true, state };
+    }
     return { ok: true, state };
   }
   let progressed = false;

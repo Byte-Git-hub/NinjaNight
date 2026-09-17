@@ -31,6 +31,7 @@ import {
 import { RoomRuntime, generateRoomCode, newSeatToken, type SessionInfo } from './room';
 import { logger } from './logger';
 import { DISCONNECT_RETAIN_MS } from '../shared/timeouts';
+import { VICTORY_AUTO_ADVANCE_MS } from '../shared/timeouts';
 import { scheduleBots } from './bot-scheduler';
 
 const VALID_TYPES = new Set<CommandType>([
@@ -153,6 +154,44 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       scheduleWindowTimeout(room);
       scheduleBots(room, handleBotCommand);
     }
+    scheduleVictoryAuto(room);
+  }
+
+  const victoryTimers = new Map<string, NodeJS.Timeout>();
+  function clearVictoryAuto(code: string): void {
+    const t = victoryTimers.get(code);
+    if (t) {
+      clearTimeout(t);
+      victoryTimers.delete(code);
+    }
+  }
+  /**
+   * Q3 裁定：victoryCheck 轮间停留，多人房等房主手动 forceAdvance；
+   * 仅当在线真人 ≤1 时 5s 后自动进下一轮（可视倒计时 TODO 6F）。
+   */
+  function scheduleVictoryAuto(room: RoomRuntime): void {
+    clearVictoryAuto(room.code);
+    if (!room.state || room.state.gameOver || room.state.phase !== 'victoryCheck') return;
+    const humans = [...room.sessions.values()].filter(
+      (s) => s.connected && !room.bots.has(s.seatId),
+    );
+    if (humans.length > 1) return;
+    const t = setTimeout(() => {
+      victoryTimers.delete(room.code);
+      if (rooms.get(room.code) !== room || !room.state) return;
+      if (room.state.phase !== 'victoryCheck' || room.state.gameOver) return;
+      const beforeSeq = room.state.eventSeq;
+      const result = applyAllDefaults(room.state);
+      if (!result.ok) return;
+      room.setState(result.state);
+      const newEvents = result.state.events.slice(beforeSeq);
+      room.broadcastPublicEvents(newEvents.filter((e) => e.visibility === 'public'));
+      room.broadcastPrivateEvents(newEvents);
+      logger.info('room.victoryAuto', { roomCode: room.code });
+      afterStateChange(room);
+    }, VICTORY_AUTO_ADVANCE_MS);
+    t.unref?.();
+    victoryTimers.set(room.code, t);
   }
 
   function emitError(socket: Socket, reason: ReasonCode, message?: string): void {

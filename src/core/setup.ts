@@ -122,7 +122,6 @@ export function enterDraftDiscard(state: GameState): void {
   for (const seat of state.seats) seat.declaredResponded = false;
   rebuildDraftPending(state);
 }
-
 export function afterDraftComplete(state: GameState): void {
   for (const seat of state.seats) {
     if (seat.draftHand.length > 0) {
@@ -131,6 +130,50 @@ export function afterDraftComplete(state: GameState): void {
     seat.draftHand = [];
   }
   enterNightPhase(state, 'nightSpy');
+}
+
+/**
+ * 开启下一轮（Q2 裁定）：保留 tokens/round+1/rng 连续，其余重置。
+ * 重发身份、重组忍者牌堆并重发 draftHand；knownHouses 保留（append-only 历史，
+ * 记录自带 round 戳）；tokenPool 保留剩余（耗尽不再发，不重洗）。
+ * 注意：不重置牌实例计数器，保证 instanceId 跨轮唯一。
+ */
+export function startNextRound(state: GameState): void {
+  state.round += 1;
+  const n = state.seats.length;
+  const houses = state.rng.shuffle(housesForPlayerCount(n));
+
+  const ninjaDeck: CardInstance[] = CARD_DEFS.map((def) => ({
+    instanceId: nextInstanceId('card'),
+    cardId: def.cardId,
+    number: def.number,
+  }));
+  const shuffled = state.rng.shuffle(ninjaDeck);
+
+  let idx = 0;
+  state.seats.forEach((seat, i) => {
+    seat.alive = true;
+    seat.house = houses[i] as HouseId;
+    seat.houseRevealed = false;
+    seat.hand = [];
+    seat.reserved = [];
+    seat.declared = [];
+    seat.declaredResponded = false;
+    seat.draftHand = shuffled.slice(idx, idx + 3);
+    idx += 3;
+  });
+  state.zones = { undrawn: shuffled.slice(idx), draftDiscard: [], revealedInPlay: [], spent: [] };
+  state.resolveQueue = [];
+  state.resolveContext = null;
+  state.winners = [];
+  state.startingHouses = Object.fromEntries(
+    state.seats.map((s) => [s.seatId, s.house]),
+  ) as Record<string, HouseId>;
+
+  for (const seat of state.seats) {
+    pushEvent(state, 'draft.cardDealt', 'server', { seatId: seat.seatId, count: 3 });
+  }
+  beginDraftPick(state, 1);
 }
 
 export function enterPassPhaseDraft(state: GameState): void {

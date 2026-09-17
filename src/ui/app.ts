@@ -413,7 +413,6 @@ export class AppUI {
         <div>待你决策：${kindLabel[pending.kind] ?? pending.kind}</div>
         <div class="row opts">${opts}</div>
         ${pending.kind === 'declareCards' ? `<div class="row declare-actions" style="margin-top: 10px;"><button id="btn-declare" type="button" class="btn-primary">确认打出选中 (${this.selected.size})</button><button id="btn-pass" type="button" class="muted">跳过</button></div>` : ''}
-        ${pending.kind === 'chooseOptional' ? `<button class="opt" data-opt="__true" type="button">是</button><button class="opt" data-opt="__false" type="button">否</button>` : ''}
         ${pending.kind === 'reactDecide' ? `<button class="opt" data-opt="__true" type="button">发动</button><button class="opt" data-opt="__false" type="button">放弃</button>` : ''}
       </div>
     `;
@@ -518,11 +517,16 @@ export class AppUI {
         const pending = v?.pendingDecision;
         if (!v || !pending) return;
         const opt = btn.dataset['opt'] ?? '';
-        if (pending.kind === 'chooseOptional' || pending.kind === 'reactDecide') {
-          const choose = opt === '__true';
-          const type = pending.kind === 'reactDecide' ? 'react.decide' : 'night.chooseOptional';
-          const payload = pending.kind === 'reactDecide' ? { react: choose } : { choose };
-          this.net.sendCommand(v.windowId, type, payload);
+        if (pending.kind === 'chooseOptional') {
+          // 显式映射表（kill/swap/reveal → true；spare/keep/hide → false）。
+          // 新增 options 必须在此表登记，禁止 __true 暗语。
+          const choose = CHOOSE_OPTIONAL_TRUE.has(opt);
+          this.net.sendCommand(v.windowId, 'night.chooseOptional', { choose });
+          return;
+        }
+        if (pending.kind === 'reactDecide') {
+          const react = opt === '__true';
+          this.net.sendCommand(v.windowId, 'react.decide', { react });
           return;
         }
         if (
@@ -548,6 +552,13 @@ export class AppUI {
 function phaseLabel(phase: string): string {
   return PHASE_CN[phase] ?? phase;
 }
+
+/**
+ * chooseOptional 选项 → boolean 显式映射（Q4 裁定）。
+ * true 侧：kill（上忍击杀）/ swap（百变者交换）/ reveal（捣蛋鬼公开）；
+ * 其余（spare/keep/hide 等）一律 false。新增 options 必须在此登记。
+ */
+const CHOOSE_OPTIONAL_TRUE = new Set(['kill', 'swap', 'reveal']);
 
 function optLabel(o: string, v?: PlayerView | null): string {
   if (o === 'view_honor') return '查看令牌';
