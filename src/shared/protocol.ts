@@ -61,6 +61,18 @@ export const EV = {
   roomRemoveBot: 'room.removeBot',
   commandSend: 'command.send',
   chatSend: 'chat.send',
+  // 6G-1 语音信令（复用 Socket.IO；音频字节只走 mediasoup worker，不经游戏状态机）
+  voiceJoin: 'voice.join',
+  voiceLeave: 'voice.leave',
+  voiceMute: 'voice.mute',
+  voiceSpeaking: 'voice.speaking',
+  voiceGetRouter: 'voice.getRouter',
+  voiceCreateTransport: 'voice.createTransport',
+  voiceConnectTransport: 'voice.connectTransport',
+  voiceProduce: 'voice.produce',
+  voiceConsume: 'voice.consume',
+  voiceCloseProducer: 'voice.closeProducer',
+  voiceListProducers: 'voice.listProducers',
 } as const;
 
 export const OUT = {
@@ -75,6 +87,10 @@ export const OUT = {
   eventPrivate: 'event.private',
   chatEvent: 'chat.event',
   roomTerminated: 'room.terminated',
+  // 6G-1 语音状态广播（仅布尔状态，不含音频流信息）
+  voiceState: 'voice.state',
+  voiceUnavailable: 'voice.unavailable',
+  voiceProducers: 'voice.producers',
 } as const;
 
 export interface RoomAckPayload {
@@ -110,6 +126,29 @@ export interface ChatEventPayload {
 export interface RoomErrorPayload {
   reasonCode: string;
   message?: string;
+}
+
+// ---------------------------------------------------------------------------
+// 6G-1 语音信令 payload（只传布尔状态与 WebRTC 握手参数，不传音频字节）
+// ---------------------------------------------------------------------------
+
+/** 单座位语音状态：仅 inVoice/muted/speaking 三个布尔 */
+export interface VoiceSeatState {
+  seatId: string;
+  inVoice: boolean;
+  muted: boolean;
+  speaking: boolean;
+}
+
+export interface VoiceStatePayload {
+  roomCode: string;
+  seats: VoiceSeatState[];
+}
+
+/** voice.join 请求： SeatToken 鉴权 + 客户端 RTP 能力（ mediasoup 握手用） */
+export interface VoiceJoinPayload {
+  seatToken: string;
+  rtpCapabilities?: unknown;
 }
 
 const CTRL_RE = new RegExp('[\\u0000-\\u001F\\u007F]', 'g');

@@ -1,6 +1,7 @@
-import { createServer } from 'node:http';
+import { createServer as createHttpServer } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import express from 'express';
 import { Server, type Socket } from 'socket.io';
@@ -30,6 +31,7 @@ import {
 } from '../shared/protocol';
 import { RoomRuntime, generateRoomCode, newSeatToken, type SessionInfo } from './room';
 import { logger } from './logger';
+import { VoiceManager } from './voice';
 import { DISCONNECT_RETAIN_MS } from '../shared/timeouts';
 import { VICTORY_AUTO_ADVANCE_MS } from '../shared/timeouts';
 import { scheduleBots } from './bot-scheduler';
@@ -62,8 +64,11 @@ export function createApp() {
 
 export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   const app = createApp();
-  const httpServer = createServer(app);
+  // 6G-1 自签证书：仅当 NINJA_TLS=1 且 certs/ 下证书齐全时跑 https，
+  // 否则降级为 http（默认，保证现有 e2e 不受影响）。
+  const httpServer = buildHttpServer(app);
   const io = new Server(httpServer, { cors: { origin: true } });
+  const voice = new VoiceManager(io);
 
   const rooms = new Map<string, RoomRuntime>();
   const sessionsByToken = new Map<string, SessionInfo>();
@@ -534,6 +539,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         if (s.seatId === targetSeatId) {
           room.sessions.delete(tok);
           sessionsByToken.delete(tok);
+          voice.removeSeatEverywhere(targetSeatId, room.code);
           io.to(s.socketId).emit(OUT.roomError, {
             reasonCode: 'UNAUTHORIZED',
             message: '你已被房主踢出',
@@ -812,6 +818,221 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       afterStateChange(room);
     });
 
+    // ---- 6G-1 语音信令（seatToken 鉴权；只传状态与握手参数，不碰音频） ----
+    type VoiceAck = (res: unknown) => void;
+    function voiceSess(body: Record<string, unknown>): SessionInfo | undefined {
+      return typeof body.seatToken === 'string'
+        ? sessionsByToken.get(body.seatToken)
+        : undefined;
+    }
+    function voiceRoomOf(sess: SessionInfo) {
+      return rooms.get(sess.roomCode);
+    }
+
+    socket.on(EV.voiceJoin, (payload: unknown, ack?: VoiceAck) => {
+      const body = (payload ?? {}) as Record<string, unknown>;
+      const sess = voiceSess(body);
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      const room = voiceRoomOf(sess);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      // Bot 座位不参与语音
+      if (room.bots.has(sess.seatId)) {
+        emitError(socket, 'INVALID_PAYLOAD', '人机不参与语音');
+        return;
+      }
+      voice.join(room.code, sess.seatId);
+      voice.broadcastState(room.code);
+      void voice.ensureRouter().then((router) => {
+        if (!router) {
+          socket.emit(OUT.voiceUnavailable, { message: '语音暂不可用' });
+          if (typeof ack === 'function') ack({ error: 'VOICE_UNAVAILABLE' });
+          return;
+        }
+        if (typeof ack === 'function') {
+          ack({ routerRtpCapabilities: voice.getRouterCapabilities() });
+        }
+      });
+      logger.info('voice.signal', { roomCode: room.code, seatId: sess.seatId, type: 'join' });
+    });
+
+    socket.on(EV.voiceLeave, (payload: unknown) => {
+      const body = (payload ?? {}) as Record<string, unknown>;
+      const sess = voiceSess(body);
+      if (!sess) return;
+      const room = voiceRoomOf(sess);
+      if (!room) return;
+      voice.leave(room.code, sess.seatId);
+      voice.broadcastState(room.code);
+    });
+
+    socket.on(EV.voiceMute, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; muted?: unknown };
+      const sess = voiceSess(body);
+      if (!sess) return;
+      const room = voiceRoomOf(sess);
+      if (!room) return;
+      voice.setMuted(room.code, sess.seatId, body.muted === true);
+      voice.broadcastState(room.code);
+    });
+
+    socket.on(EV.voiceSpeaking, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; speaking?: unknown };
+      const sess = voiceSess(body);
+      if (!sess) return;
+      const room = voiceRoomOf(sess);
+      if (!room) return;
+      const snap = voice.setSpeaking(room.code, sess.seatId, body.speaking === true);
+      if (snap) voice.broadcastState(room.code);
+    });
+
+    socket.on(EV.voiceGetRouter, (payload: unknown, ack?: VoiceAck) => {
+      const body = (payload ?? {}) as Record<string, unknown>;
+      if (!voiceSess(body)) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      void voice.ensureRouter().then((router) => {
+        if (typeof ack !== 'function') return;
+        if (!router) ack({ error: 'VOICE_UNAVAILABLE' });
+        else ack({ routerRtpCapabilities: voice.getRouterCapabilities() });
+      });
+    });
+
+    socket.on(EV.voiceCreateTransport, (payload: unknown, ack?: VoiceAck) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; direction?: unknown };
+      const sess = voiceSess(body);
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      const room = voiceRoomOf(sess);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      const direction = body.direction === 'recv' ? 'recv' : 'send';
+      void voice.createTransport(room.code, sess.seatId, direction).then((t) => {
+        if (typeof ack !== 'function') return;
+        if (!t) ack({ error: 'VOICE_UNAVAILABLE' });
+        else ack(t);
+      });
+    });
+
+    socket.on(EV.voiceConnectTransport, (payload: unknown, ack?: VoiceAck) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; transportId?: unknown; dtlsParameters?: unknown };
+      if (!voiceSess(body)) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      if (typeof body.transportId !== 'string' || !body.dtlsParameters) {
+        if (typeof ack === 'function') ack({ error: 'INVALID_PAYLOAD' });
+        return;
+      }
+      void voice.connectTransport(body.transportId, body.dtlsParameters).then((ok) => {
+        if (typeof ack === 'function') ack({ ok });
+      });
+    });
+
+    socket.on(EV.voiceProduce, (payload: unknown, ack?: VoiceAck) => {
+      const body = (payload ?? {}) as {
+        seatToken?: unknown;
+        transportId?: unknown;
+        kind?: unknown;
+        rtpParameters?: unknown;
+      };
+      const sess = voiceSess(body);
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      const room = voiceRoomOf(sess);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      if (typeof body.transportId !== 'string' || !body.rtpParameters) {
+        if (typeof ack === 'function') ack({ error: 'INVALID_PAYLOAD' });
+        return;
+      }
+      void voice
+        .produce(room.code, sess.seatId, body.transportId, String(body.kind ?? ''), body.rtpParameters)
+        .then((producerId) => {
+          if (typeof ack === 'function') {
+            if (!producerId) ack({ error: 'VOICE_UNAVAILABLE' });
+            else ack({ producerId });
+          }
+          if (producerId) {
+            io.to(room.roomChannel()).emit(OUT.voiceProducers, {
+              roomCode: room.code,
+              producers: voice.listProducers(room.code),
+            });
+          }
+        });
+    });
+
+    socket.on(EV.voiceConsume, (payload: unknown, ack?: VoiceAck) => {
+      const body = (payload ?? {}) as {
+        seatToken?: unknown;
+        recvTransportId?: unknown;
+        producerId?: unknown;
+        rtpCapabilities?: unknown;
+      };
+      const sess = voiceSess(body);
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      const room = voiceRoomOf(sess);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      if (
+        typeof body.recvTransportId !== 'string' ||
+        typeof body.producerId !== 'string' ||
+        !body.rtpCapabilities
+      ) {
+        if (typeof ack === 'function') ack({ error: 'INVALID_PAYLOAD' });
+        return;
+      }
+      void voice
+        .consume(room.code, sess.seatId, body.recvTransportId, body.producerId, body.rtpCapabilities)
+        .then((c) => {
+          if (typeof ack !== 'function') return;
+          if (!c) ack({ error: 'VOICE_UNAVAILABLE' });
+          else ack(c);
+        });
+    });
+
+    socket.on(EV.voiceCloseProducer, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown };
+      const sess = voiceSess(body);
+      if (!sess) return;
+      const room = voiceRoomOf(sess);
+      if (!room) return;
+      voice.removeSeatEverywhere(sess.seatId, room.code);
+      voice.join(room.code, sess.seatId);
+      voice.broadcastState(room.code);
+    });
+
+    socket.on(EV.voiceListProducers, (payload: unknown, ack?: VoiceAck) => {
+      const body = (payload ?? {}) as Record<string, unknown>;
+      const sess = voiceSess(body);
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      const room = voiceRoomOf(sess);
+      if (!room || typeof ack !== 'function') return;
+      ack({ producers: voice.listProducers(room.code) });
+    });
+
     socket.on(EV.chatSend, (payload: unknown) => {
       const body = (payload ?? {}) as { seatToken?: unknown; text?: unknown };
       const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
@@ -916,6 +1137,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   function leaveSession(sess: SessionInfo, socket: Socket): void {
     const room = rooms.get(sess.roomCode);
     socket.leave(room?.roomChannel() ?? '');
+    // 6G-1：断线即离语音（重连后需重新加入语音；听语音偏好不持久）
+    voice.removeSeatEverywhere(sess.seatId, sess.roomCode);
     // 断线：保留 session 映射，标记 disconnected（阶段 5）
     sess.connected = false;
     sess.disconnectedAt = Date.now();
@@ -937,6 +1160,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   function resetRoomToLobby(room: RoomRuntime): void {
     room.clearTimer?.();
     room.clearBotTimers?.();
+    voice.cleanupRoom(room.code);
     room.state = null;
     room.started = false;
     room.endedAt = null;
@@ -976,6 +1200,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     io,
     rooms,
     sessionsByToken,
+    voice,
     listen(portNum = port) {
       return new Promise<void>((resolve) => {
         httpServer.listen(portNum, () => resolve());
@@ -993,6 +1218,28 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
 }
 
 // 仅作为库导出；启动入口见 scripts/dev-server.ts
+
+/** 6G-1：有证书 + NINJA_TLS=1 时返回 https server，否则 http（降级开发模式） */
+function buildHttpServer(app: ReturnType<typeof createApp>) {
+  const wantTls = process.env.NINJA_TLS === '1';
+  const keyPath = join(process.cwd(), 'certs', 'key.pem');
+  const certPath = join(process.cwd(), 'certs', 'cert.pem');
+  if (wantTls && existsSync(keyPath) && existsSync(certPath)) {
+    try {
+      const s = createHttpsServer(
+        { key: readFileSync(keyPath), cert: readFileSync(certPath) },
+        app,
+      );
+      logger.info('server.tls', { mode: 'https' });
+      return s;
+    } catch (err) {
+      logger.warn('server.tls_fallback', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return createHttpServer(app);
+}
 
 process.on('uncaughtException', (err) => {
   logger.error('process.uncaughtException', { error: err.message });

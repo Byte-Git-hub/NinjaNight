@@ -1,5 +1,9 @@
-import type { PresencePayload, ChatEventPayload } from '../shared/protocol';
+import type { PresencePayload, ChatEventPayload, VoiceSeatState } from '../shared/protocol';
 import type { ConnectionStatus, GameNet } from '../net/client';
+import { VoiceNet } from '../net/voice';
+import { VoiceClient, type VoiceClientStatus } from './voice/client';
+import { micBadge } from './voice/icons';
+import { voiceBannerHtml, voiceBarHtml } from './voice/controls';
 import type { PlayerView, PendingDecision, NinjaCardInstanceView, GameEvent } from '../shared/types';
 import {
   getCardDisplayName,
@@ -109,6 +113,13 @@ export class AppUI {
   private identityModalTimer: ReturnType<typeof setTimeout> | null = null;
   /** 6F-4 身份窥视：点击自家卡背翻转查看（纯本地），再点/点外部盖回 */
   private housePeek = false;
+  /** 6G-1 语音：房间级状态（ seatToken 鉴权后的 voice.state 快照），纯展示层 */
+  private voiceNet: VoiceNet | null = null;
+  private voiceClient: VoiceClient | null = null;
+  private voiceSeats: VoiceSeatState[] = [];
+  private voiceNotice = '';
+  private voiceSupported = false;
+  private voiceStatus: VoiceClientStatus = 'idle';
 
   public get currentView(): PlayerView | null {
     return this.view;
@@ -141,6 +152,8 @@ export class AppUI {
         this.view = null;
         this.selected.clear();
         this.resetIdentityUi();
+        this.voiceClient?.leave();
+        this.voiceSeats = [];
         this.lastReject = '';
         this.showToast('对局已终止，回到大厅');
         this.render();
@@ -182,6 +195,32 @@ export class AppUI {
       onPublicEvents: () => {
         /* view 已含 public events */
       },
+    });
+    // 6G-1 语音接线（独立于游戏 Command 链路；异常只降级不抛）
+    this.voiceSupported = VoiceClient.isSupported();
+    const vnet = new VoiceNet(this.net);
+    vnet.attach();
+    this.voiceNet = vnet;
+    this.voiceClient = new VoiceClient(vnet, {
+      onStatus: (s) => {
+        this.voiceStatus = s;
+        this.render();
+      },
+      onNotice: (msg) => {
+        this.voiceNotice = msg;
+        this.render();
+      },
+    });
+    vnet.onStateChange((seats) => {
+      this.voiceSeats = seats;
+      this.render();
+    });
+    vnet.onUnavailableNotice((msg) => {
+      this.voiceNotice = msg;
+      this.render();
+    });
+    vnet.onProducersChange(() => {
+      void this.voiceClient?.refreshRemote();
     });
   }
 
@@ -228,8 +267,9 @@ export class AppUI {
     const reject = this.lastReject
       ? `<div class="banner err">${escapeHtml(this.lastReject)}</div>`
       : '';
+    const voiceBanner = voiceBannerHtml(this.voiceNotice);
     el.innerHTML = `
-      ${banner}${reject}
+      ${banner}${reject}${voiceBanner}
       <header class="top">
         <div class="brand-group">
           <h1>忍者之夜</h1>
@@ -381,9 +421,20 @@ export class AppUI {
       dead ? '死亡' : '',
       !inGame && !isBot && ready ? '准备' : '',
     ].filter(Boolean);
+    // 6G-1 语音徽章：纯社交层展示，不进规则
+    const vs = this.voiceSeats.find((x) => x.seatId === s.seatId);
+    const mic = vs
+      ? micBadge({
+          inVoice: vs.inVoice,
+          muted: vs.muted,
+          speaking: vs.speaking,
+          listening: this.voiceClient?.listening ?? true,
+        })
+      : '';
+    const speakingCls = vs?.speaking && !vs.muted ? ' speaking' : '';
 
-    return `<li class="seat-card${s.isHost ? ' host' : ''}${isBot ? ' bot' : ''}${dead ? ' dead' : ''}${isSelf ? ' self' : ''}" data-seat="${escapeHtml(s.seatId)}">
-      <div class="seat-head"><b>${isBot ? '🤖 ' : ''}${escapeHtml(s.nickname)}</b> <span class="seat-id">${escapeHtml(s.seatId)}</span>${s.isHost ? '👑' : ''} ${s.connected ? '●' : '○'}${isSelf ? '<em class="you">你</em>' : ''}</div>
+    return `<li class="seat-card${s.isHost ? ' host' : ''}${isBot ? ' bot' : ''}${dead ? ' dead' : ''}${isSelf ? ' self' : ''}${speakingCls}" data-seat="${escapeHtml(s.seatId)}">
+      <div class="seat-head"><b>${isBot ? '🤖 ' : ''}${escapeHtml(s.nickname)}</b> <span class="seat-id">${escapeHtml(s.seatId)}</span>${s.isHost ? '👑' : ''} ${s.connected ? '●' : '○'}${mic}${isSelf ? '<em class="you">你</em>' : ''}</div>
       ${inGame ? `<div class="seat-body">${houseImg}${handStack}${tokenStack}</div>` : ''}
       ${selfMeta}
       ${metaBits.length > 0 ? `<div class="seat-meta">${metaBits.join(' ')}</div>` : ''}
@@ -411,6 +462,7 @@ export class AppUI {
             <ul class="seats ring">${seats}</ul>
           </div>
           ${!v ? this.lobbyControls() : ''}
+          ${this.voiceBar()}
         </section>
         ${v ? this.gamePanels(v, pending ?? null) : ''}
         ${v ? this.identityModalHtml(v) : ''}
@@ -439,8 +491,19 @@ export class AppUI {
     `;
   }
 
-  private kickButtons(): string {
-    const seats = this.presence?.seats ?? [];
+  /** 6G-1 语音条：房间内可见（大厅/对局）；离线连接时隐藏 */
+  private voiceBar(): string {
+    if (!this.presence && !this.view) return '';
+    if (!this.voiceClient) return '';
+    return voiceBarHtml({
+      status: this.voiceStatus,
+      muted: this.voiceClient.muted,
+      listening: this.voiceClient.listening,
+      supported: this.voiceSupported,
+    });
+  }
+
+  private kickButtons(): string {    const seats = this.presence?.seats ?? [];
     const offline = seats.filter((s) => !s.connected && !s.isHost);
     if (offline.length === 0) return '';
     return `
@@ -726,11 +789,34 @@ export class AppUI {
       this.net.forceAdvance();
     });
     $('#btn-leave-room')?.addEventListener('click', () => {
+      this.voiceClient?.leave();
+      this.voiceSeats = [];
+      this.voiceNotice = '';
       this.net.leaveRoom();
       this.view = null;
       this.presence = null;
       this.resetIdentityUi();
       this.render();
+    });
+    // 6G-1 语音三键（降级时 client 内部消化，不抛错）
+    $('#btn-voice-join')?.addEventListener('click', () => {
+      if (this.voiceStatus === 'active') {
+        this.voiceClient?.leave();
+        this.voiceSeats = [];
+      } else {
+        void this.voiceClient?.join();
+      }
+    });
+    $('#btn-voice-mute')?.addEventListener('click', () => {
+      const vc = this.voiceClient;
+      if (vc) vc.setMuted(!vc.muted);
+    });
+    $('#btn-voice-listen')?.addEventListener('click', () => {
+      const vc = this.voiceClient;
+      if (vc) {
+        vc.setListening(!vc.listening);
+        this.render();
+      }
     });
     // 6F-4：身份弹窗点击关闭（backdrop 穿透不挡 e2e/游戏点击）
     $('#identity-modal')?.addEventListener('click', () => this.closeIdentityModal());

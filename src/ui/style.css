@@ -1087,3 +1087,55 @@ details.collapsed-panel #btn-toggle-log {
     max-height: 120px;
   }
 }
+
+/* —— 6G-1 语音连麦 —— */
+.voice-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.voice-btn {
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  background: rgba(30, 41, 59, 0.85);
+  color: var(--text-main);
+  font-size: 14px;
+  cursor: pointer;
+}
+.voice-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.voice-btn .mic {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+.mic-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.mic-badge.live {
+  color: #4ade80;
+}
+.mic-badge.muted {
+  color: #f87171;
+}
+.mic-badge.deaf {
+  color: #94a3b8;
+}
+.mic-badge.absent {
+  color: #475569;
+}
+/* 说话中：座位卡轻微光效（纯 CSS，不阻塞操作） */
+.seat-card.speaking {
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.55);
+  border-color: rgba(74, 222, 128, 0.8);
+}
+.voice-banner {
+  margin-bottom: 12px;
+}

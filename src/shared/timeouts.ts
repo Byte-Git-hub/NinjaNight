@@ -1,9 +1,17 @@
 /** 超时与限频常量（阶段 4 集中定义；阶段 5 支持环境变量） */
+// 6G-1：浏览器侧（ui/voice）也会 import 本模块，process 访问必须加卫语句
 function envInt(name: string, fallback: number): number {
-  const raw = process.env[name];
+  const raw =
+    typeof process !== 'undefined' ? process.env?.[name] : undefined;
   if (raw === undefined || raw === '') return fallback;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+function envStr(name: string, fallback: string): string {
+  const raw =
+    typeof process !== 'undefined' ? process.env?.[name] : undefined;
+  return raw === undefined ? fallback : raw;
 }
 
 export const DEFAULT_WINDOW_MS = envInt('NINJA_WINDOW_MS', 60_000);
@@ -20,3 +28,13 @@ export const MAX_NICKNAME_LEN = 16;
 export const MAX_CHAT_LEN = 200;
 export const MIN_PLAYERS = 4;
 export const MAX_PLAYERS = 11;
+
+/** 6G-1 语音：服务端 mediasoup 监听地址（固定 0.0.0.0） */
+export const VOICE_LISTEN_IP = envStr('NINJA_MEDIA_LISTEN_IP', '0.0.0.0');
+/** 6G-1 语音：对外宣告的局域网 IP（未配则启动时自动探测 192.168/10.x 兜底） */
+export const VOICE_ANNOUNCED_IP = envStr('NINJA_MEDIA_ANNOUNCED_IP', '');
+/** 6G-1 语音：mediasoup RTC UDP 端口段（Windows 防火墙需放行） */
+export const VOICE_PORT_MIN = envInt('NINJA_MEDIA_PORT_MIN', 40000);
+export const VOICE_PORT_MAX = envInt('NINJA_MEDIA_PORT_MAX', 40100);
+/** 6G-1 语音：speaking 广播节流窗口（毫秒，客户端限频用） */
+export const VOICE_SPEAKING_THROTTLE_MS = 1000;

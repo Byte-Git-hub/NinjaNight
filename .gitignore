@@ -11,3 +11,5 @@ blob-report/
 public/assets/**/_originals/
 # e2e 自动重存的测试截图（capture-6d 等），不进版本控制
 docs/06_assets/screenshots/
+# 6G-1 自签证书（本地生成，不进版本控制）
+certs/

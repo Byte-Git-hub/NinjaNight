@@ -312,3 +312,12 @@ updated: 2026-09-18
 
 - 本文件头部 + 6B.5–6F.8 小节 + D13–D22 + TBD 状态 + 三件套关闭 + 短语定稿 + 技术债约定；commit `docs: 同步 00_DEV_PLAN 至 6F.8`。
 
+### 阶段 6G-1 — 语音连麦（mediasoup 集成） — **完成**
+
+- [x] mediasoup 3.27.1（预编译 worker 正常，无需降级）+ mediasoup-client；SFU 纯音频 Opus，信令复用 Socket.IO（`voice.*`），游戏 Command 链路零依赖
+- [x] 服务端 `src/server/voice.ts`（状态 + 懒启动 worker/router）+ `src/server/index.ts` 语音信令接线 + `certs/` 自签 https（`NINJA_TLS=1`，默认 http 降级）
+- [x] 客户端 `src/net/voice.ts` + `src/ui/voice/`（编排/SVG 图标/控制条）+ 座位卡徽章 + speaking 光效 + 降级三件套横幅
+- [x] 超时/端口常量进 `src/shared/timeouts.ts`（浏览器安全卫语句）；`.env.example` 补媒体端口段与防火墙注释
+- [x] 测试：`tests/integration/voice-state.test.ts`（6）+ `tests/e2e/voice-nomic.spec.ts`（无麦克风不阻塞开局）；typecheck + vitest 107 + e2e 23/23 全绿
+- [ ] 局域网 2 机手工验证（待用户环境）：开/闭麦同步、全局不听、杀 worker 降级
+

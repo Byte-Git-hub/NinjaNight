@@ -36,10 +36,14 @@ export default defineConfig({
     },
   },
   server: {
+    // 6G-1：NINJA_TLS=1 且 certs/ 齐全时跑 https（局域网麦克风必需），否则 http
+    ...(loadLocalTls() ?? {}),
     proxy: {
       '/socket.io': {
-        target: 'http://127.0.0.1:3000',
+        target: process.env.NINJA_TLS === '1' && tlsCertsExist() ? 'https://127.0.0.1:3000' : 'http://127.0.0.1:3000',
         ws: true,
+        // 自签证书：开发代理跳过校验
+        secure: false,
       },
     },
   },
@@ -50,3 +54,21 @@ export default defineConfig({
     passWithNoTests: true,
   },
 });
+
+/** 6G-1：certs/key.pem + certs/cert.pem 齐全即 true */
+function tlsCertsExist(): boolean {
+  return (
+    fs.existsSync(path.resolve('certs/key.pem')) && fs.existsSync(path.resolve('certs/cert.pem'))
+  );
+}
+
+/** 6G-1：NINJA_TLS=1 且证书齐全时返回 vite https 配置，否则 undefined（降级 http） */
+function loadLocalTls(): { https: { key: Buffer; cert: Buffer } } | undefined {
+  if (process.env.NINJA_TLS !== '1' || !tlsCertsExist()) return undefined;
+  return {
+    https: {
+      key: fs.readFileSync(path.resolve('certs/key.pem')),
+      cert: fs.readFileSync(path.resolve('certs/cert.pem')),
+    },
+  };
+}

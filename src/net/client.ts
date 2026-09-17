@@ -110,10 +110,65 @@ export class GameNet {
       this.handlers.onCommandReject?.(p.commandId, p.reasonCode),
     );
     this.socket.on(OUT.chatEvent, (p: ChatEventPayload) => this.handlers.onChat?.(p));
+    this.bindPendingHandlers();
   }
 
   setHandlers(h: NetHandlers): void {
     this.handlers = { ...this.handlers, ...h };
+  }
+
+  /**
+   * 6G-1 语音信令透传：复用同一 Socket，不另建连接。
+   * 游戏 Command 链路零依赖；语音事件走独立命名空间（voice.*）。
+   * mount 时 socket 可能尚未建立，handler 先记入 pending，connect 后补绑。
+   */
+  private pendingSocketHandlers = new Map<string, Set<(...args: never[]) => void>>();
+
+  private bindPendingHandlers(): void {
+    if (!this.socket) return;
+    for (const [event, handlers] of this.pendingSocketHandlers) {
+      for (const h of handlers) {
+        this.socket.on(event, h as (...args: unknown[]) => void);
+      }
+    }
+  }
+
+  onSocketEvent(event: string, handler: (...args: never[]) => void): void {
+    let set = this.pendingSocketHandlers.get(event);
+    if (!set) {
+      set = new Set();
+      this.pendingSocketHandlers.set(event, set);
+    }
+    set.add(handler);
+    this.socket?.on(event, handler as (...args: unknown[]) => void);
+  }
+
+  offSocketEvent(event: string, handler: (...args: never[]) => void): void {
+    this.pendingSocketHandlers.get(event)?.delete(handler);
+    this.socket?.off(event, handler as (...args: unknown[]) => void);
+  }
+
+  emitWithAck(event: string, payload: Record<string, unknown>): Promise<unknown> {
+    const sock = this.socket;
+    if (!sock || !this.seatToken) return Promise.resolve({ error: 'NO_SOCKET' });
+    return new Promise((resolve) => {
+      try {
+        sock.emit(event, { ...payload, seatToken: this.seatToken }, (res: unknown) => {
+          resolve(res);
+        });
+      } catch {
+        resolve({ error: 'EMIT_FAILED' });
+      }
+    });
+  }
+
+  emitVoice(event: string, payload: Record<string, unknown>): void {
+    if (!this.socket || !this.seatToken) return;
+    this.socket.emit(event, { ...payload, seatToken: this.seatToken });
+  }
+
+  get isSocketConnected(): boolean {
+    return this.socket?.connected ?? false;
   }
 
   private setStatus(s: ConnectionStatus): void {
