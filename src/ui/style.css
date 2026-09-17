@@ -1207,6 +1207,11 @@ details.collapsed-panel #btn-toggle-log {
   60% { transform: translateX(-3px); }
   80% { transform: translateX(3px); }
 }
+/* 6G-3 快捷短语按钮（复用 .fx-btn 骨架，字号收小以容纳 15 条文本） */
+.fx-btn.phrase {
+  font-size: 13px;
+  min-height: 34px;
+}
 .mark-badge {
   display: inline-flex;
   align-items: center;

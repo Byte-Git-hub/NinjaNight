@@ -1,8 +1,8 @@
 /**
- * 6G-2 怀疑标记发送封装（复用 Socket.IO；纯社交层，不进 core）。
- * 状态全量由服务端 mark.state 下发，本地只存快照；打标/取消即时发，不合并。
+ * 6G-2 怀疑标记 + 6G-3 快捷短语发送封装（复用 Socket.IO；纯社交层，不进 core）。
+ * 标记状态全量由服务端 mark.state 下发，本地只存快照；打标/取消/短语即时发，不合并。
  */
-import { EV, OUT, type MarkPair } from '../shared/protocol';
+import { EV, OUT, type ChatEventPayload, type MarkPair } from '../shared/protocol';
 import type { GameNet } from './client';
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -10,10 +10,12 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 export type MarksHandler = (marks: MarkPair[]) => void;
+export type PhraseHandler = (p: ChatEventPayload) => void;
 
 export class SocialNet {
   private net: GameNet;
   private marksHandlers = new Set<MarksHandler>();
+  private phraseHandlers = new Set<PhraseHandler>();
   private bound = false;
 
   private onMarks = (p: unknown): void => {
@@ -22,26 +24,41 @@ export class SocialNet {
     }
   };
 
+  private onPhrase = (p: unknown): void => {
+    if (isRecord(p) && typeof p['text'] === 'string' && typeof p['nickname'] === 'string') {
+      this.phraseHandlers.forEach((h) =>
+        h(p as unknown as ChatEventPayload),
+      );
+    }
+  };
+
   constructor(net: GameNet) {
     this.net = net;
   }
 
-  /** 挂载 mark.state 监听（mount 时一次） */
+  /** 挂载 mark.state + phrase.event 监听（mount 时一次） */
   attach(): void {
     if (this.bound) return;
     this.bound = true;
     this.net.onSocketEvent(OUT.markState, this.onMarks as (...args: never[]) => void);
+    this.net.onSocketEvent(OUT.phraseEvent, this.onPhrase as (...args: never[]) => void);
   }
 
   detach(): void {
     if (!this.bound) return;
     this.bound = false;
     this.net.offSocketEvent(OUT.markState, this.onMarks as (...args: never[]) => void);
+    this.net.offSocketEvent(OUT.phraseEvent, this.onPhrase as (...args: never[]) => void);
   }
 
   onMarksChange(h: MarksHandler): () => void {
     this.marksHandlers.add(h);
     return () => this.marksHandlers.delete(h);
+  }
+
+  onPhraseArrive(h: PhraseHandler): () => void {
+    this.phraseHandlers.add(h);
+    return () => this.phraseHandlers.delete(h);
   }
 
   /** 打标（服务端重复点同一目标视为取消；自标/非法目标由服务端拒收） */
@@ -58,5 +75,11 @@ export class SocialNet {
   /** 拉全量快照（入房/重连后对齐用，服务端单播回 mark.state） */
   sync(): void {
     this.net.emitVoice(EV.markSync, {});
+  }
+
+  /** 快捷短语：只发下标（整数 0..14），文本以服务端 lookup 为准；非法下标本地直接丢 */
+  sendPhrase(phraseId: number): void {
+    if (!Number.isInteger(phraseId) || phraseId < 0) return;
+    this.net.emitVoice(EV.phraseSend, { phraseId });
   }
 }

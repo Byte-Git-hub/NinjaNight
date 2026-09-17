@@ -79,6 +79,8 @@ export const EV = {
   markSet: 'mark.set',
   markClear: 'mark.clear',
   markSync: 'mark.sync',
+  // 6G-3 快捷短语（纯社交层，不进 core；只发 id，文本服务端 lookup 后广播，不存）
+  phraseSend: 'phrase.send',
 } as const;
 
 export const OUT = {
@@ -101,6 +103,8 @@ export const OUT = {
   effectBatch: 'effect.batch',
   // 6G-2b 怀疑标记全量快照
   markState: 'mark.state',
+  // 6G-3 快捷短语广播（payload 复用 ChatEventPayload：seatId/nickname/text/ts）
+  phraseEvent: 'phrase.event',
 } as const;
 
 export interface RoomAckPayload {
@@ -233,6 +237,12 @@ export interface MarkClearPayload {
 export interface MarkStatePayload {
   roomCode: string;
   marks: MarkPair[];
+}
+
+/** phrase.send 上行：只发下标，文本以服务端 lookup 为准 */
+export interface PhraseSendPayload {
+  seatToken: string;
+  phraseId: number;
 }
 
 const CTRL_RE = new RegExp('[\\u0000-\\u001F\\u007F]', 'g');

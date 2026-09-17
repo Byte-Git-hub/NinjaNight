@@ -33,7 +33,7 @@ import { RoomRuntime, generateRoomCode, newSeatToken, type SessionInfo } from '.
 import { logger } from './logger';
 import { VoiceManager } from './voice';
 import { EffectRelay, validateEffectItems } from './effects';
-import { SocialMarks } from './social';
+import { SocialMarks, validatePhrase } from './social';
 import { DISCONNECT_RETAIN_MS } from '../shared/timeouts';
 import { VICTORY_AUTO_ADVANCE_MS } from '../shared/timeouts';
 import { scheduleBots } from './bot-scheduler';
@@ -1168,6 +1168,34 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         return;
       }
       socket.emit(OUT.markState, { roomCode: sess.roomCode, marks: social.snapshot(sess.roomCode) });
+    });
+
+    // ---- 6G-3 快捷短语（seatToken 鉴权；共享限频桶，超限静默丢弃；只广播不存） ----
+    socket.on(EV.phraseSend, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; phraseId?: unknown };
+      const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      if (!takeSharedRate(sess)) return;
+      const room = rooms.get(sess.roomCode);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      const text = validatePhrase(body.phraseId);
+      if (!text) {
+        emitError(socket, 'INVALID_PAYLOAD');
+        return;
+      }
+      io.to(room.roomChannel()).emit(OUT.phraseEvent, {
+        seatId: sess.seatId,
+        nickname: nicknameOf(room, sess.seatId),
+        text,
+        ts: Date.now(),
+      });
+      logger.info('phrase.relay', { roomCode: room.code, seatId: sess.seatId });
     });
 
 

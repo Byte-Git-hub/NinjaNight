@@ -1,9 +1,9 @@
 # 00 — 开发计划与进度
 
-status: 6F.8 完成  
+status: 6G 完成  
 updated: 2026-09-18  
-阶段: **6（桌游布局 6F.8 完成，已推 GitHub private，HEAD `f7cb2e1`）**  
-资产口径: **22 项（16 视觉单元 + 2 卡背 + 3 UI 素材 + 1 令牌）**（历史记录中的 16/20 为旧口径，保留原样；当前总量以此处为准）
+阶段: **6（6G 语音连麦 + 互动特效 + 快捷短语全部完成）**  
+资产口径: **22 项（16 视觉单元 + 2 卡背 + 3 UI 素材 + 1 令牌）+ 图集切割 21 件（9 物品 + 12 表情）**（历史记录中的 16/20 为旧口径，保留原样；当前总量以此处为准）
 
 ---
 
@@ -320,4 +320,32 @@ updated: 2026-09-18
 - [x] 超时/端口常量进 `src/shared/timeouts.ts`（浏览器安全卫语句）；`.env.example` 补媒体端口段与防火墙注释
 - [x] 测试：`tests/integration/voice-state.test.ts`（6）+ `tests/e2e/voice-nomic.spec.ts`（无麦克风不阻塞开局）；typecheck + vitest 107 + e2e 23/23 全绿
 - [ ] 局域网 2 机手工验证（待用户环境）：开/闭麦同步、全局不听、杀 worker 降级
+
+### 阶段 6G-1-fix — 移动端手牌遮挡修复 — **完成**
+
+- [x] 诊断：`.hand { position: fixed }`（150px 高）盖住已知身份区与终止按钮；修复为 `sticky` + 决策条改 `static`（`94eaa10`）
+- [x] 新增 `tests/e2e/mobile-hand.spec.ts`（底部/中段无重叠断言；无修复必红）；全量 e2e 24/24
+
+### 阶段 6G-2a — 互动特效网络层（无 UI） — **完成**
+
+- [x] `effect.send` 50ms 合并批发送（10 条/批，comboId 分组）+ 服务端只广播不存（共享 `COMMAND_RATE_PER_SEC` 限频桶）；`8af02af`
+- [x] `6G-2a-fix`：`EFFECT_ITEM_IDS` 扩至定稿 9 串（加 `shuriken`，`718728e`，不 amend）
+- [x] `EffectSocket` 结构接口解耦 `./client`（node 工程无 DOM lib）；后 6G-2b 在 `tsconfig.node.json` 补 DOM lib，双保险并存
+
+### 阶段 6G-2b — 图集切割 + 渲染层 + 社交标记 — **完成**
+
+- [x] 切割工具链 `scripts/gen-assets/slice-sheet.ts`（`npm run gen:slice`，`SLICE_INSET` 可调）+ `manifest.json`（`source: sheet-sliced`）；`d5fc0d6`
+- [x] 产物：`public/assets/items/` 9 + `public/assets/emoji/` 12，全部 <30KB（最大 18.5KB）；geta/忍者头/能面边缘检查通过，无需 inset
+- [x] 渲染层：`src/ui/effects/`（Canvas 覆盖层 `pointer-events:none` + 对象池 + rAF + 200 粒子上限 + 超限 `+N` + 座位卡抖动 0.3s + `N 连击` 1.5s 窗口）+ 怀疑标记（服务端快照 + 每人最多 2 个 + 可取消 + 全房广播）；`2df56a5`
+- [x] 测试：`tests/e2e/stage6g-effects.spec.ts`（广播到达 + Canvas 绘制计数 + 打标/取消同步）；vitest 131 + stage6g e2e 全绿
+- [x] 手工探针（临时 e2e，跑完即删）：21 切图全部解码 + 10 连击后 2s 平均 FPS ≈ 35（headless 软件渲染；真机 GPU 更高）；fx-bar 切图渲染截图确认
+
+### 阶段 6G-3 — 快捷短语与收尾 — **完成**
+
+- [x] `src/data/phrases.ts` 定稿 15 条；`phrase.send` 只发下标，服务端 `validatePhrase` 校验后广播 `phrase.event`（复用 `ChatEventPayload` 形状），不存储
+- [x] UI：快捷短语折叠面板（与聊天同区，`#phrase-panel` + 15 个 `data-phrase` 按钮）+ 全房 toast 浮层 3s（`showToast(msg, ms)` 默认 2500 保持兼容）
+- [x] 分层：`src/ui/social/phrases.ts` + `src/net/social.ts`（`SocialNet.sendPhrase/onPhraseArrive`）+ `src/server/social.ts`（`validatePhrase`）
+- [x] 测试：`tests/integration/phrases.test.ts`（15 条逐字锁定 + 越界拒收）+ `tests/ui/phrases.test.ts` + `tests/e2e/stage6g-phrases.spec.ts`（面板 + toast 回声 + 3s 消失）
+- [x] 收尾：`build:check` 无 dev 泄漏 + 全量 e2e + README 语音端口/防火墙段落 + 本文件更新至 6G 完成
+- [ ] 局域网 2 机手工验证（待用户环境）：语音 + 特效 + 短语跨机同步
 

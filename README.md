@@ -51,6 +51,17 @@ npm run dev
 Windows 防火墙需放行 Node 的入站连接：
 控制面板 → Windows Defender 防火墙 → 允许应用通过防火墙 → 勾选 Node.js。
 
+### 语音连麦端口（6G-1 mediasoup）
+
+- 信令走 Socket.IO（与游戏同端口，无需额外放行）。
+- 音频走 UDP 端口段，默认 `40000–40100`（`NINJA_MEDIA_PORT_MIN/MAX` 可改，
+  见 `.env.example`），Windows 防火墙需放行该 UDP 段的入站，否则表现为
+  能进语音房但听不到声音。
+- 对外宣告 IP 默认自动探测（`192.168/10.x` 优先），探测失败时置
+  `NINJA_MEDIA_ANNOUNCED_IP` 为本机局域网 IP。
+- 自签证书在 `certs/`（gitignored，`npm run certs` 生成），仅 `NINJA_TLS=1`
+  时启用 https；默认 http 即可局域网联机。
+
 ### 超时/清理（可选环境变量）
 
 见 `.env.example`：

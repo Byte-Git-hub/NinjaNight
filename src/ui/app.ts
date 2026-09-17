@@ -16,6 +16,7 @@ import { voiceBannerHtml, voiceBarHtml } from './voice/controls';
 import { EFFECT_ITEMS, QUICK_EMOJIS, getEffectItem, isQuickEmoji } from './effects/items';
 import { EffectLayer } from './effects/particles';
 import { markBadge, markButton, myMarkedTargets } from './social/marks';
+import { phrasesPanelHtml, phraseToastText } from './social/phrases';
 import type { PlayerView, PendingDecision, NinjaCardInstanceView, GameEvent } from '../shared/types';
 import {
   getCardDisplayName,
@@ -264,13 +265,17 @@ export class AppUI {
       this.marks = marks;
       this.render();
     });
+    // 6G-3 快捷短语：全房 toast 浮层 3s（#toast 在 #ui 之外，无需重渲染）
+    snet.onPhraseArrive((p) => {
+      this.showToast(phraseToastText(p.nickname, p.text), 3000);
+    });
     // 6G-2：根点击委托（mount 时一次）。render 会重建 #ui 内所有节点，
     // 逐个绑定会被重渲染竞态吞点击；委托挂在常驻 root 上，天然免疫。
     this.root.addEventListener('click', (ev) => this.onRootClick(ev));
   }
 
   /**
-   * 6G-2 根委托点击：怀疑标记切换 / 扔物品 / 快捷表情 / 座位卡选目标。
+   * 6G-2 根委托点击：怀疑标记切换 / 扔物品 / 快捷表情 / 快捷短语 / 座位卡选目标。
    * 顺序：先处理按钮类（[data-mark] 在座位卡 li 内，必须先于座位卡分支），
    * 再处理座位卡（按钮/卡背翻转/输入区点击不触发选目标）。
    */
@@ -302,6 +307,14 @@ export class AppUI {
       if (this.effectNet.send(target, itemId) === 'local-only') {
         this.renderEffectLocal(target, itemId);
       }
+      return;
+    }
+    const phraseBtn = t.closest('[data-phrase]');
+    if (phraseBtn) {
+      const raw = (phraseBtn as HTMLElement).dataset['phrase'] ?? '';
+      const id = Number(raw);
+      if (!Number.isInteger(id) || !this.socialNet) return;
+      this.socialNet.sendPhrase(id);
       return;
     }
     const emojiBtn = t.closest('[data-emoji]');
@@ -372,12 +385,12 @@ export class AppUI {
     this.root.innerHTML = `<div class="app" id="ui"></div><div id="toast" class="toast" hidden></div>`;
   }
 
-  private showToast(msg: string): void {
+  private showToast(msg: string, ms = 2500): void {
     const t = this.root.querySelector('#toast');
     if (!t) return;
     t.textContent = msg;
     t.removeAttribute('hidden');
-    window.setTimeout(() => t.setAttribute('hidden', ''), 2500);
+    window.setTimeout(() => t.setAttribute('hidden', ''), ms);
   }
 
   private ui(): HTMLElement | null {
@@ -624,6 +637,7 @@ export class AppUI {
         ${v ? this.gamePanels(v, pending ?? null) : ''}
         ${v ? this.identityModalHtml(v) : ''}
         ${this.chatLogPanel(v ?? null)}
+        ${phrasesPanelHtml()}
       </div>
     `;
   }

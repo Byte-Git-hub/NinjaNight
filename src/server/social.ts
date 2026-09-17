@@ -6,7 +6,18 @@
 import type { MarkPair } from '../shared/protocol';
 import { OUT } from '../shared/protocol';
 import { MARK_PER_SEAT_MAX } from '../shared/timeouts';
+import { PHRASES, normalizePhraseId } from '../data/phrases';
 import { logger } from './logger';
+
+/**
+ * 6G-3 快捷短语校验（纯函数）：下标合法返回对应文本，否则 null（调用方整条拒收）。
+ * 服务端只做长度/频率校验后广播，不存储、不记历史。
+ */
+export function validatePhrase(v: unknown): string | null {
+  const id = normalizePhraseId(v);
+  if (id === null) return null;
+  return PHRASES[id];
+}
 
 type IoLike = {
   to(room: string): { emit(event: string, payload: unknown): void };
