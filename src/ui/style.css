@@ -111,12 +111,6 @@ body.in-game {
 .grid > * {
   min-width: 0;
 }
-@media (max-width: 900px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 .panel {
   background: rgba(30, 41, 59, 0.72);
   border: 1px solid rgba(212, 175, 55, 0.5);
@@ -821,13 +815,31 @@ button.card.sel {
     overflow-x: auto;
     gap: 8px;
     -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
   }
   .seats.ring li.seat-card {
     flex: 0 0 auto;
     min-width: 168px;
+    scroll-snap-align: start;
   }
   .seat-card.self {
     margin: 2px 0 0;
+  }
+  /* 6F-6：中央区缩小，mini 卡 38px */
+  .central {
+    padding: 8px;
+  }
+  .central .card.mini {
+    width: 38px;
+    height: 57px;
+  }
+  .central .card.mini .card-number {
+    font-size: 10px;
+    min-height: 12px;
+  }
+  .central .card.mini .card-name {
+    font-size: 9px;
+    min-height: 12px;
   }
 }
 
