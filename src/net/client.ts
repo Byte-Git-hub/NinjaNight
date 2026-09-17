@@ -91,7 +91,16 @@ export class GameNet {
     this.socket.on(OUT.roomPresence, (p: PresencePayload) => this.handlers.onPresence?.(p));
     this.socket.on(OUT.roomStarted, (p: { roomCode: string }) => this.handlers.onStarted?.(p));
     this.socket.on(OUT.roomTerminated, (p: { roomCode: string }) => this.handlers.onTerminated?.(p));
-    this.socket.on(OUT.viewSnapshot, (v: PlayerView) => this.handlers.onView?.(v));
+    this.socket.on(OUT.viewSnapshot, (v: PlayerView) => {
+      if (import.meta.env.DEV) {
+        console.log('[view]', {
+          phase: v.phase,
+          pending: v.pendingDecision?.kind ?? null,
+          receivedAt: Date.now(),
+        });
+      }
+      this.handlers.onView?.(v);
+    });
     this.socket.on(OUT.eventPublic, (e: GameEvent[]) => this.handlers.onPublicEvents?.(e));
     this.socket.on(OUT.eventPrivate, (e: GameEvent[]) => this.handlers.onPrivateEvents?.(e));
     this.socket.on(OUT.commandAck, (p: { commandId: string }) =>
