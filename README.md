@@ -1,5 +1,13 @@
 # 忍者之夜（ninja-night）
 
+![build status](https://img.shields.io/badge/build-todo-lightgrey)
+![license](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)
+![node](https://img.shields.io/badge/node-%3E%3D20-green)
+
+远程仓库：https://github.com/Byte-Git-hub/NinjaNight
+
+Private repository，如需协作请联系维护者。
+
 中文网页多人联机：4–11 人，浏览器完成一整局基础规则对战。
 
 ## 当前阶段

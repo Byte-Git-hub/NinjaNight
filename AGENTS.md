@@ -39,6 +39,8 @@ $env:NINJA_WINDOW_MS=5000; npm run dev:server  # 短超时调试
 - **规则**：标记优先级 官方 > 已确认决策 > 网页版 > 待确认；未确认必须标「待确认」，不得静默删牌/改效果/改胜负；`docs` 不替代 `src/shared` 权威类型。
 - **联机**：房间码 6 位（`sanitizeRoomCode`）；鉴权靠 `seatToken`；4–11 人、全员 ready 房主才能 `room.start`，开局后禁加入；`commandId` 幂等缓存 50，旧 `windowId` 回 `STALE_WINDOW`；单 socket 限频 10/s；`room.forceAdvance` 对所有未响应座位走 `applyAllDefaults`（`draftPick/discard→options[0]`、`declare/chooseTarget→pass/options[0]`、`chooseOptional/react→false`）。
 - **UI 选项映射**：`chooseOptional` 的选项→boolean 必须走 `app.ts` 的 `CHOOSE_OPTIONAL_TRUE` 显式映射表（`kill/swap/reveal→true`，其余 false），新增 options 必须登记，禁止 `__true` 暗语；`reactDecide` 的 `__true/__false` 保持不动。
+- **e2e 前置检查**：跑 `npm run test:e2e` 前先确认 `:3000` 无残留 node 进程（`Get-Process node` 或 `netstat -ano | findstr :3000`，有残留先杀掉），避免 Playwright `reuseExistingServer` 复用旧服务端代码导致验证失效。
+- **大文件不进 git**：`public/assets/**/_originals/` 保持 gitignore；`docs/06_assets/screenshots/`（e2e 自动重存产物）不进版本控制；生图原稿放 `docs/06_assets/` 的 `.jpg`/`.png` 可提交，但单个需 <1MB。
 
 ## 贡献流程
 
