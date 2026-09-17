@@ -350,9 +350,10 @@ export class AppUI {
       if (!el) continue;
       const meta = getEffectItem(it.itemId);
       if (!meta) continue;
-      layer.burstAt(el, meta);
-      this.fxHit.set(it.targetSeatId, now);
       const combo = layer.combos.hit(it.comboId, now);
+      // 6G-4a：连击主粒子放大至 particleMax（48px 上限），不遮挡公共区
+      layer.burstAt(el, meta, combo >= 2 ? { big: true } : undefined);
+      this.fxHit.set(it.targetSeatId, now);
       if (combo >= 2) layer.textAt(el, `${combo} 连击`);
     }
     this.render();
@@ -367,9 +368,9 @@ export class AppUI {
     const meta = getEffectItem(itemId);
     if (!meta) return;
     const now = Date.now();
-    layer.burstAt(el, meta);
-    this.fxHit.set(targetSeatId, now);
     const combo = layer.combos.hit(`local-${targetSeatId}-${itemId}`, now);
+    layer.burstAt(el, meta, combo >= 2 ? { big: true } : undefined);
+    this.fxHit.set(targetSeatId, now);
     if (combo >= 2) layer.textAt(el, `${combo} 连击`);
     this.render();
   }

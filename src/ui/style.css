@@ -1188,6 +1188,19 @@ details.collapsed-panel #btn-toggle-log {
 .fx-btn:active {
   transform: scale(0.94);
 }
+/* 6G-4a：互动条图标统一收敛到 badge 尺寸（20px），不再用切图自然尺寸 */
+.fx-btn img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex: none;
+}
+/* 6G-4a 防御：座位卡内若出现物品痕迹图标，上限 20px */
+.seat-card img.fx-trace {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
 .fx-hint {
   font-size: 12px;
   color: var(--text-muted);

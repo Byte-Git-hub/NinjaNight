@@ -10,7 +10,7 @@ import {
   EFFECT_PARTICLE_MAX,
 } from '../../shared/timeouts';
 import { EMOJI_IDS, getEmojiPath } from '../assets';
-import { EFFECT_ITEMS, type EffectItemMeta } from './items';
+import { EFFECT_ICON_SIZE, EFFECT_ITEMS, type EffectItemMeta } from './items';
 
 export interface Particle {
   active: boolean;
@@ -124,6 +124,8 @@ export class ComboTracker {
 export interface BurstOptions {
   /** 自适应降级中（上一帧 dt>24ms）：生成数减半 */
   degraded?: boolean;
+  /** 连击放大：主粒子绘制边长取 particleMax（6G-4a 上限 48px，不遮挡公共区） */
+  big?: boolean;
 }
 
 function rand(min: number, max: number): number {
@@ -235,10 +237,11 @@ export class EffectLayer {
       });
       if (!ok) overflow += 1;
     }
+    const mainSize = opts?.big ? EFFECT_ICON_SIZE.particleMax : EFFECT_ICON_SIZE.particle;
     const okMain = this.pool.spawn({
       x, y: y - 8,
       vx: rand(-12, 12), vy: -46,
-      maxLife: 900, size: 30,
+      maxLife: 900, size: mainSize,
       color: '#fff', char: '', img: item.img, grav: -18,
     });
     if (!okMain) overflow += 1;
@@ -254,7 +257,7 @@ export class EffectLayer {
     const ok = this.pool.spawn({
       x, y: y - r.height / 2 - 14,
       vx: rand(-8, 8), vy: -30,
-      maxLife: 3000, size: 34,
+      maxLife: 3000, size: EFFECT_ICON_SIZE.particle,
       color: '#fff', char: '', img: getEmojiPath(emojiId), grav: -6,
     });
     if (!ok) this.textAtPoint(x, y - 40, '!');
@@ -312,12 +315,12 @@ export class EffectLayer {
     }
   }
 
-  /** 缓存命中且已解码则居中绘制（边长 = size*2），返回是否绘制成功 */
+  /** 缓存命中且已解码则居中绘制（边长 = size，图片粒子 size 即绘制边长），返回是否绘制成功 */
   private drawImageCached(src: string, s: Readonly<Particle>): boolean {
     const ctx = this.ctx;
     const im = this.images.get(src);
     if (!ctx || !im || !im.complete || im.naturalWidth === 0) return false;
-    const d = s.size * 2;
+    const d = s.size;
     ctx.drawImage(im, s.x - d / 2, s.y - d / 2, d, d);
     return true;
   }

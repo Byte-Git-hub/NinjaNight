@@ -1,9 +1,22 @@
 /**
  * 6G-2b 互动物品视觉定义（定稿 9 种，id 与 src/shared/protocol.EFFECT_ITEM_IDS 对齐，不得改名）。
  * 图标走图集切割产物（getItemPath），不保留 emoji 兜底；Canvas 用 drawImage 绘制。
+ * 6G-4a：全部尺寸从 EFFECT_ICON_SIZE 取，不散落（particle 系为 Canvas 绘制边长 px）。
  */
 import type { EffectItemId } from '../../shared/protocol';
 import { EMOJI_IDS, type EmojiId, getItemPath } from '../assets';
+
+/** 6G-4a 物品/表情图标尺寸集中定义（px） */
+export const EFFECT_ICON_SIZE = {
+  /** 飞向目标的粒子（Canvas 主粒子绘制边长） */
+  particle: 32,
+  /** 连击时最大放大（Canvas 主粒子绘制边长上限） */
+  particleMax: 48,
+  /** 若保留选择器预览，预览图边长（当前无预览弹窗，备用） */
+  preview: 96,
+  /** 座位卡上的痕迹小图标 / 互动条按钮图标边长 */
+  badge: 20,
+} as const;
 
 export interface EffectItemMeta {
   id: EffectItemId;
