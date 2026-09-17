@@ -52,7 +52,20 @@ export const UI_ASSETS: Record<string, string> = {
   'table-texture': '/assets/ui/table-texture.webp',
   'ui-button-primary': '/assets/ui/button-primary.webp',
   'button-primary': '/assets/ui/button-primary.webp',
+  'ui-washi-central-bg': '/assets/ui/washi-central-bg.webp',
+  'washi-central-bg': '/assets/ui/washi-central-bg.webp',
+  'ui-table-emblem': '/assets/ui/table-emblem.webp',
+  'table-emblem': '/assets/ui/table-emblem.webp',
+  'ui-identity-modal-bg': '/assets/ui/identity-modal-bg.webp',
+  'identity-modal-bg': '/assets/ui/identity-modal-bg.webp',
 };
+
+/**
+ * 获取桌心家徽装饰路径（6F-2 座位环中央装饰，PNG/JPG 半透明叠加）
+ */
+export function getTableEmblemPath(): string {
+  return '/assets/ui/table-emblem.webp';
+}
 
 /**
  * 获取 UI 材质/背景资源路径

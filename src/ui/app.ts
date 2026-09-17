@@ -1,7 +1,17 @@
 import type { PresencePayload, ChatEventPayload } from '../shared/protocol';
 import type { ConnectionStatus, GameNet } from '../net/client';
 import type { PlayerView, PendingDecision, NinjaCardInstanceView, GameEvent } from '../shared/types';
-import { getCardDisplayName, getHouseDisplayName, renderCardHtml } from './assets';
+import {
+  getCardDisplayName,
+  getHonorTokenPath,
+  getHouseCardBackPath,
+  getHouseDisplayName,
+  getNinjaCardBackPath,
+  getTableEmblemPath,
+  getVisualId,
+  getVisualPath,
+  renderCardHtml,
+} from './assets';
 
 const PHASE_CN: Record<string, string> = {
   roomLobby: '大厅',
@@ -61,6 +71,11 @@ function preloadAssets(): void {
     '/assets/ui/table-texture.webp',
     '/assets/ui/button-primary.webp',
     '/assets/tokens/honor-token.webp',
+    '/assets/visuals/ninja-card-back.webp',
+    '/assets/visuals/house-card-back.webp',
+    '/assets/ui/table-emblem.webp',
+    '/assets/ui/washi-central-bg.webp',
+    '/assets/ui/identity-modal-bg.webp',
   ];
   for (const u of uiAssets) {
     const img = new Image();
@@ -219,35 +234,85 @@ export class AppUI {
     `;
   }
 
+  /**
+   * 6F-2 座位卡片：ul.seats > li 结构保留（e2e 靠 .seats li 计数/文本），
+   * li 升级为 .seat-card（身份缩略 + 手牌背堆叠 + 令牌），自己置末全宽。
+   */
+  private seatCard(
+    s: { seatId: string; nickname: string; connected: boolean; isHost: boolean; isBot?: boolean },
+    v: PlayerView | null,
+    isSelf: boolean,
+  ): string {
+    const alive = 'alive' in s ? (s as { alive?: boolean }).alive : undefined;
+    const tokens = 'honorTokenCount' in s ? (s as { honorTokenCount?: number }).honorTokenCount : undefined;
+    const house = 'publicHouseId' in s ? (s as { publicHouseId?: string }).publicHouseId : undefined;
+    const handCount = 'handCount' in s ? (s as { handCount?: number }).handCount : undefined;
+    const ready = 'ready' in s ? (s as { ready?: boolean }).ready : false;
+    const isBot = Boolean(s.isBot);
+    const dead = alive === false;
+    const inGame = Boolean(v);
+
+    // 身份缩略：死者强制卡背；他人按 publicHouseId 切正/背；自己暂显示卡背+文字（6F-4 接弹窗翻转）
+    let houseImg = '';
+    if (inGame) {
+      if (isSelf) {
+        houseImg = `<img class="house-mini back" src="${getHouseCardBackPath()}" alt="你的身份牌（未公开）" title="你的身份牌" />`;
+      } else if (!dead && house) {
+        const front = getVisualPath(getVisualId(house));
+        houseImg = `<img class="house-mini front" src="${front}" alt="${escapeHtml(getHouseDisplayName(house))}" title="${escapeHtml(getHouseDisplayName(house))}" />`;
+      } else {
+        houseImg = `<img class="house-mini back" src="${getHouseCardBackPath()}" alt="未公开身份" title="未公开身份" />`;
+      }
+    }
+
+    const handStack =
+      inGame && !isSelf && handCount !== undefined
+        ? `<span class="hand-stack" title="手牌 ${handCount} 张"><img src="${getNinjaCardBackPath()}" alt="手牌背面" /><i>×${handCount}</i></span>`
+        : '';
+    const tokenStack =
+      inGame && tokens !== undefined
+        ? `<span class="token-stack" title="令牌 ${tokens} 枚"><img src="${getHonorTokenPath()}" alt="令牌" /><i>×${tokens}</i></span>`
+        : '';
+
+    // 自己的身份/令牌面值（原 private-info 内容搬入自己卡片，6F-4 再覆盖为卡背+弹窗）
+    let selfMeta = '';
+    if (inGame && isSelf && v) {
+      const vals = v.self.honorTokens.map((t) => t.value).join(', ');
+      selfMeta = `<div class="seat-meta self-meta">你的身份：<b class="house-badge">${escapeHtml(getHouseDisplayName(v.self.houseId))}</b> · 令牌面值：[<span class="token-val">${escapeHtml(vals || '无')}</span>]</div>`;
+    }
+    const metaBits = [
+      tokens !== undefined ? `令牌:${tokens}` : '',
+      !isSelf && !dead && house ? `身份:${escapeHtml(getHouseDisplayName(house))}` : '',
+      dead ? '死亡' : '',
+      !inGame && !isBot && ready ? '准备' : '',
+    ].filter(Boolean);
+
+    return `<li class="seat-card${s.isHost ? ' host' : ''}${isBot ? ' bot' : ''}${dead ? ' dead' : ''}${isSelf ? ' self' : ''}" data-seat="${escapeHtml(s.seatId)}">
+      <div class="seat-head"><b>${isBot ? '🤖 ' : ''}${escapeHtml(s.nickname)}</b> <span class="seat-id">${escapeHtml(s.seatId)}</span>${s.isHost ? '👑' : ''} ${s.connected ? '●' : '○'}${isSelf ? '<em class="you">你</em>' : ''}</div>
+      ${inGame ? `<div class="seat-body">${houseImg}${handStack}${tokenStack}</div>` : ''}
+      ${selfMeta}
+      ${metaBits.length > 0 ? `<div class="seat-meta">${metaBits.join(' ')}</div>` : ''}
+    </li>`;
+  }
+
   private gameBody(): string {
     const p = this.presence;
     const v = this.view;
-    const seats = (p?.seats ?? v?.seats ?? [])
-      .map((s) => {
-        const ready = 'ready' in s ? (s as { ready?: boolean }).ready : false;
-        const alive = 'alive' in s ? (s as { alive?: boolean }).alive : undefined;
-        const tokens = 'honorTokenCount' in s ? (s as { honorTokenCount?: number }).honorTokenCount : undefined;
-        const house = 'publicHouseId' in s ? (s as { publicHouseId?: string }).publicHouseId : undefined;
-        const isBot = Boolean(s.isBot);
-        return `<li class="${s.isHost ? 'host' : ''} ${isBot ? 'bot' : ''} ${alive === false ? 'dead' : ''}">
-          <b>${isBot ? '🤖 ' : ''}${escapeHtml(s.nickname)}</b> ${s.seatId}
-          ${s.isHost ? '👑' : ''}
-          ${s.connected ? '●' : '○'}
-          ${!isBot && ready ? '准备' : ''}
-          ${alive === false ? '死亡' : ''}
-          ${tokens !== undefined ? `令牌:${tokens}` : ''}
-          ${house ? `身份:${escapeHtml(getHouseDisplayName(house))}` : ''}
-        </li>`;
-      })
-      .join('');
+    const allSeats = p?.seats ?? v?.seats ?? [];
+    const selfId = v?.self.seatId ?? this.net.seatId ?? '';
+    // 保持服务端座位顺序（e2e 靠 nth() 定位）；自己视觉置底由 CSS order + grid-column 实现
+    const seats = allSeats.map((s) => this.seatCard(s, v ?? null, s.seatId === selfId)).join('');
 
     const pending = v?.pendingDecision;
 
     return `
-      <div class="grid">
-        <section class="panel">
+      <div class="grid table-layout">
+        <section class="panel seats-panel">
           <h2>座位</h2>
-          <ul class="seats">${seats}</ul>
+          <div class="table">
+            <img class="table-emblem" src="${getTableEmblemPath()}" alt="" aria-hidden="true" />
+            <ul class="seats ring">${seats}</ul>
+          </div>
           ${!v ? this.lobbyControls() : ''}
         </section>
         ${v ? this.gamePanels(v, pending ?? null) : ''}
@@ -331,7 +396,6 @@ export class AppUI {
         return `<div class="known-item"><b>${escapeHtml(targetName)}</b> → <span class="house-name">${escapeHtml(getHouseDisplayName(k.houseId))}</span>${escapeHtml(via)}</div>`;
       })
       .join('');
-    const tokens = self.honorTokens.map((t) => t.value).join(', ');
     // 日志：中文友好行 + 全量 payload（超长由 CSS 省略，不再硬截断丢字符）
     const events = v.events
       .slice(-40)
@@ -396,9 +460,6 @@ export class AppUI {
         ${gameOverBanner}
         ${roundBanner}
         ${nextRoundBtn}
-        <div class="private-info">
-          <p>你的身份：<b class="house-badge">${escapeHtml(getHouseDisplayName(self.houseId))}</b> · 令牌面值：[<span class="token-val">${escapeHtml(tokens || '无')}</span>]</p>
-        </div>
         <div class="hand-section">
           <h3>手牌</h3>
           <div class="hand">${hand || '<i>无手牌</i>'}</div>

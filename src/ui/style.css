@@ -684,6 +684,153 @@ button.card.sel {
   display: none;
 }
 
+/* —— 6F-2 桌游座位环（CSS Grid 固定槽位，自己置底全宽） —— */
+.table {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+}
+.table-emblem {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(300px, 55%);
+  opacity: 0.12;
+  pointer-events: none;
+  user-select: none;
+}
+.seats.ring {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.seats.ring li.seat-card {
+  display: block;
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.82);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  padding: 8px;
+  backdrop-filter: blur(6px);
+}
+.seat-card .seat-head {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.seat-card .seat-id {
+  color: #93c5fd;
+  font-size: 12px;
+}
+.seat-card .you {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--neon-cyan);
+  border: 1px solid var(--neon-cyan);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-left: auto;
+}
+.seat-card .seat-body {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+.house-mini {
+  width: 44px;
+  height: 66px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--gold-foil);
+  background: #1e293b;
+}
+.hand-stack,
+.token-stack {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+.hand-stack img {
+  width: 34px;
+  height: 51px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid rgba(212, 175, 55, 0.6);
+  box-shadow: 2px 0 0 rgba(30, 41, 59, 0.9), 4px 0 0 rgba(212, 175, 55, 0.35);
+}
+.token-stack img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 4px rgba(212, 175, 55, 0.6));
+}
+.hand-stack i,
+.token-stack i {
+  position: absolute;
+  right: -8px;
+  bottom: -6px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--gold-foil);
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(212, 175, 55, 0.7);
+  border-radius: 8px;
+  padding: 0 4px;
+  line-height: 1.5;
+}
+.seat-card .seat-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.seat-card .self-meta {
+  font-size: 13px;
+  color: var(--text-main);
+}
+.seat-card.self {
+  grid-column: 1 / -1;
+  order: 99;
+  width: 100%;
+  max-width: 460px;
+  margin: 2px auto 0;
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.25), 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+.seats.ring li.seat-card.dead {
+  opacity: 0.55;
+  filter: grayscale(60%);
+  text-decoration: none;
+}
+.seats.ring li.seat-card.dead .seat-head {
+  text-decoration: line-through;
+}
+@media (max-width: 1023px) {
+  .seats.ring {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .seats.ring li.seat-card {
+    flex: 0 0 auto;
+    min-width: 168px;
+  }
+  .seat-card.self {
+    margin: 2px 0 0;
+  }
+}
+
 /* —— 移动端适配 <1024px —— */
 @media (max-width: 1023px) {
   .app {
