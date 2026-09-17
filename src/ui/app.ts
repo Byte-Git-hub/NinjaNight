@@ -22,6 +22,15 @@ const PHASE_CN: Record<string, string> = {
   gameOver: '结束',
 };
 
+/** 夜晚五阶段一句话说明（阶段横幅用；Q-D：只做横幅，不做倒计时/音效） */
+const NIGHT_HINT: Record<string, string> = {
+  nightSpy: '查看一名其他玩家的阵营牌',
+  nightMystic: '查看一名玩家的阵营牌和一张忍者牌',
+  nightTrickster: '打出本阶段牌，发动各自效果',
+  nightBlindAssassin: '击杀一名其他玩家',
+  nightShinobi: '查看阵营牌，可选择是否击杀',
+};
+
 const PRELOAD_VISUALS = [
   'spy',
   'mystic',
@@ -67,6 +76,9 @@ export class AppUI {
   private chat: ChatEventPayload[] = [];
   private status: ConnectionStatus = 'idle';
   private lastReject = '';
+  /** 阶段横幅：记录最近一次 phase 切换（仅夜晚五阶段弹横幅，3s 后自行隐藏） */
+  private bannerPhase: string | null = null;
+  private bannerAt = 0;
   public lastViewTimestamp = 0;
 
   public get currentView(): PlayerView | null {
@@ -161,6 +173,10 @@ export class AppUI {
     const el = this.ui();
     if (!el) return;
     const isGame = Boolean(this.view);
+    if (this.view && this.view.phase !== this.bannerPhase) {
+      this.bannerPhase = this.view.phase;
+      this.bannerAt = Date.now();
+    }
     if (typeof document !== 'undefined') {
       document.body.classList.toggle('in-game', isGame);
       document.body.classList.toggle('in-lobby', !isGame);
@@ -346,7 +362,35 @@ export class AppUI {
           : '<p class="hint">等待房主开始下一轮…</p>'
         : '';
 
+    // 阶段横幅：夜晚五阶段切换后 3s 内展示（非阻塞浮层，CSS 淡出）
+    const hint = NIGHT_HINT[this.bannerPhase ?? ''];
+    const phaseBanner =
+      hint && Date.now() - this.bannerAt < 3000
+        ? `<div class="phase-banner"><b>当前阶段：${escapeHtml(phaseLabel(this.bannerPhase ?? ''))}</b><span>${escapeHtml(hint)}</span></div>`
+        : '';
+
+    // 本阶段已打出：取本 round + 本 phase 的 cardsDeclared 公开事件，署名 + 小卡面
+    const declaredEv = [...v.events].reverse().find(
+      (e) =>
+        e.type === 'night.cardsDeclared' &&
+        e.round === v.round &&
+        (e.payload as { phase?: string } | undefined)?.phase === v.phase,
+    );
+    const declaredCards =
+      (declaredEv?.payload as { cards?: Array<{ actorSeatId: string; cardId: string; instanceId: string }> } | undefined)
+        ?.cards ?? [];
+    const playedStrip =
+      declaredCards.length > 0
+        ? `<div class="played-strip"><h3>本阶段已打出</h3><div class="cards-row">${declaredCards
+            .map(
+              (c) =>
+                `<span class="played-item"><span class="played-who">${escapeHtml(seatName(v, c.actorSeatId))} 打出了 ${escapeHtml(getCardDisplayName(c.cardId))}</span>${renderCardHtml(c.cardId, c.instanceId, false, 'mini')}</span>`,
+            )
+            .join('')}</div></div>`
+        : '';
+
     return `
+      ${phaseBanner}
       <section class="panel in-game-table">
         <h2>对局 <span class="phase">${escapeHtml(phaseLabel(v.phase))}</span></h2>
         ${gameOverBanner}
@@ -360,6 +404,7 @@ export class AppUI {
           <div class="hand">${hand || '<i>无手牌</i>'}</div>
         </div>
         ${revealed ? `<div class="revealed-section"><h3>已公开打出牌</h3><div class="cards-row">${revealed}</div></div>` : ''}
+        ${playedStrip}
         <div class="reserved"><b>预留：</b>${reserved || '无'}</div>
         <div class="known"><h3>已知身份</h3>${known || '无'}</div>
         ${this.pendingPanel(pending)}
