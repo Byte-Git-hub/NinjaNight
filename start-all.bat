@@ -18,7 +18,7 @@ if %errorlevel%==0 (
   echo [璺宠繃] :3000 宸茶鍗犵敤
 ) else (
   echo [鍚姩] Server...
-  start "NinjaNight-Server" powershell -NoProfile -NoExit -Command "npm run dev:server 2>&1 | Tee-Object -FilePath 'logs/server-%D%-%T%.log'"
+  start "NinjaNight-Server" powershell -NoProfile -NoExit -Command "chcp 65001 >$null; npm run dev:server 2>&1 | Tee-Object -FilePath 'logs/server-%D%-%T%.log' -Encoding utf8"
   timeout /t 2 /nobreak >nul
 )
 
@@ -27,7 +27,7 @@ if %errorlevel%==0 (
   echo [璺宠繃] :5173 宸茶鍗犵敤
 ) else (
   echo [鍚姩] Client...
-  start "NinjaNight-Client" powershell -NoProfile -NoExit -Command "npm run dev 2>&1 | Tee-Object -FilePath 'logs/client-%D%-%T%.log'"
+  start "NinjaNight-Client" powershell -NoProfile -NoExit -Command "chcp 65001 >$null; npm run dev 2>&1 | Tee-Object -FilePath 'logs/client-%D%-%T%.log' -Encoding utf8"
 )
 
 echo.

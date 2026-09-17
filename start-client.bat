@@ -11,4 +11,4 @@ set LOGFILE=logs\client-%D%-%T%.log
 
 echo Client 鏃ュ織: %LOGFILE%
 echo.
-powershell -NoProfile -NoExit -Command "npm run dev 2>&1 | Tee-Object -FilePath '%LOGFILE%'"
+powershell -NoProfile -NoExit -Command "chcp 65001 >$null; npm run dev 2>&1 | Tee-Object -FilePath '%LOGFILE%' -Encoding utf8"

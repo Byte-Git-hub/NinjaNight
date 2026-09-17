@@ -24,4 +24,4 @@ if errorlevel 1 (
 echo.
 echo [2/2] 鍚姩鐢熶骇鏈嶅姟... 鏃ュ織: %LOGFILE%
 echo.
-powershell -NoProfile -NoExit -Command "npm start 2>&1 | Tee-Object -FilePath '%LOGFILE%'"
+powershell -NoProfile -NoExit -Command "chcp 65001 >$null; npm start 2>&1 | Tee-Object -FilePath '%LOGFILE%' -Encoding utf8"
