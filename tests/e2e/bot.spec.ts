@@ -76,7 +76,8 @@ test('单玩家与 3 个 Bot 完整对局流程', async ({ page }) => {
   }
 
   // 5. 验证事件流正常推进：日志区有事件产生
-  await expect(page.locator('#game-log .ev').first()).toBeVisible({ timeout: 10000 });
+  // 6F-5：聊天/日志默认折叠（DOM 常驻），可见性断言改为 attached
+  await expect(page.locator('#game-log .ev').first()).toBeAttached({ timeout: 10000 });
   const logCount = await page.locator('#game-log .ev').count();
   expect(logCount).toBeGreaterThan(0);
 

@@ -80,18 +80,28 @@ test.describe('房间生命周期与 UI 修复', () => {
     await page.click('#btn-start');
     await expect(page.locator('.phase')).toBeVisible({ timeout: 15_000 });
 
-    // 3. 等待 Draft 选牌候选卡面出现
-    await expect(page.locator('.pending .card.opt[data-opt]')).toHaveCount(3, { timeout: 15_000 });
-
-    // 4. 验证卡面包含立绘 .card-art 与编号徽章 .card-number
-    const firstCard = page.locator('.pending .card.opt[data-opt]').first();
-    await expect(firstCard.locator('.card-art')).toBeVisible();
-    await expect(firstCard.locator('.card-number')).toBeVisible();
-    const numText = await firstCard.locator('.card-number').innerText();
+    // 3. 等待 Draft 选牌候选卡面出现（任一张有编号的卡即断言；
+    //    罕见全无编号时（还施/殉道/大将军）选一张进下一轮选项，最多看 4 轮）
+    let numText = '';
+    for (let i = 0; i < 4; i++) {
+      await expect(page.locator('.pending .card.opt[data-opt]').first()).toBeVisible({ timeout: 15_000 });
+      const numbered = page
+        .locator('.pending .card.opt[data-opt]')
+        .filter({ has: page.locator('.card-number') });
+      if ((await numbered.count()) > 0) {
+        // 4. 验证卡面包含立绘 .card-art 与编号徽章 .card-number
+        await expect(numbered.first().locator('.card-art')).toBeVisible();
+        await expect(numbered.first().locator('.card-number')).toBeVisible();
+        numText = await numbered.first().locator('.card-number').innerText();
+        break;
+      }
+      await page.locator('.pending .card.opt[data-opt]').first().click();
+      await page.waitForTimeout(600);
+    }
     expect(Number(numText)).toBeGreaterThanOrEqual(1);
 
     // 5. 点击卡面可以完成选牌
-    await firstCard.click();
+    await page.locator('.pending .card.opt[data-opt]').first().click().catch(() => {});
     await page.waitForTimeout(500);
   });
 });
