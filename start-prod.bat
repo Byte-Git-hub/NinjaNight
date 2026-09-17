@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 cd /d "%~dp0"
 if not exist logs mkdir logs
 
@@ -10,18 +9,18 @@ set T=%T:.=%
 set LOGFILE=logs\prod-%D%-%T%.log
 
 echo ============================================
-echo  NinjaNight é¢ç†¶éª‡é‹å‹«ç¼“ + éšîˆšå§©
+echo  NinjaNight Éú²ú¹¹½¨ + Æô¶¯
 echo ============================================
 echo.
-echo [1/2] é‹å‹«ç¼“æ¶“?..
-call npm run build
+echo [1/2] ¹¹½¨??..
+powershell -NoProfile -Command "chcp 65001 >$null; npm run build 2>&1 | Tee-Object -FilePath '%LOGFILE%' -Encoding utf8; exit $LASTEXITCODE"
 if errorlevel 1 (
   echo.
-  echo é‹å‹«ç¼“æ¾¶è¾«è§¦é”›å±½å‡¡é–«â‚¬é‘æ’â‚¬?  pause
+  echo ¹¹½¨Ê§°Ü£¬ÒÑÍË³ö??  pause
   exit /b 1
 )
 
 echo.
-echo [2/2] éšîˆšå§©é¢ç†¶éª‡éˆå¶…å§Ÿ... éƒãƒ¥ç¹”: %LOGFILE%
+echo [2/2] Æô¶¯Éú²ú·þÎñ... ÈÕÖ¾: %LOGFILE%
 echo.
 powershell -NoProfile -NoExit -Command "chcp 65001 >$null; npm start 2>&1 | Tee-Object -FilePath '%LOGFILE%' -Encoding utf8"
