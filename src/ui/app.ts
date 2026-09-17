@@ -32,6 +32,15 @@ const PHASE_CN: Record<string, string> = {
   gameOver: '结束',
 };
 
+/** 中央公共区阶段分组展示顺序（6F-3；未知阶段排末尾） */
+const CENTRAL_PHASE_ORDER = [
+  'nightSpy',
+  'nightMystic',
+  'nightTrickster',
+  'nightBlindAssassin',
+  'nightShinobi',
+];
+
 /** 夜晚五阶段一句话说明（阶段横幅用；Q-D：只做横幅，不做倒计时/音效） */
 const NIGHT_HINT: Record<string, string> = {
   nightSpy: '查看一名其他玩家的阵营牌',
@@ -385,9 +394,7 @@ export class AppUI {
     const reserved = self.reserved
       .map((c) => renderCardHtml(c.cardId, c.instanceId, false))
       .join('');
-    const revealed = v.revealedCards && v.revealedCards.length > 0
-      ? v.revealedCards.map((c) => renderCardHtml(c.cardId, c.instanceId, false)).join('')
-      : '';
+    const central = this.centralArea(v);
     const known = self.knownHouseHistory
       .map((k) => {
         const targetSeat = v.seats.find((s) => s.seatId === k.targetSeatId);
@@ -433,26 +440,6 @@ export class AppUI {
         ? `<div class="phase-banner"><b>当前阶段：${escapeHtml(phaseLabel(this.bannerPhase ?? ''))}</b><span>${escapeHtml(hint)}</span></div>`
         : '';
 
-    // 本阶段已打出：取本 round + 本 phase 的 cardsDeclared 公开事件，署名 + 小卡面
-    const declaredEv = [...v.events].reverse().find(
-      (e) =>
-        e.type === 'night.cardsDeclared' &&
-        e.round === v.round &&
-        (e.payload as { phase?: string } | undefined)?.phase === v.phase,
-    );
-    const declaredCards =
-      (declaredEv?.payload as { cards?: Array<{ actorSeatId: string; cardId: string; instanceId: string }> } | undefined)
-        ?.cards ?? [];
-    const playedStrip =
-      declaredCards.length > 0
-        ? `<div class="played-strip"><h3>本阶段已打出</h3><div class="cards-row">${declaredCards
-            .map(
-              (c) =>
-                `<span class="played-item"><span class="played-who">${escapeHtml(seatName(v, c.actorSeatId))} 打出了 ${escapeHtml(getCardDisplayName(c.cardId))}</span>${renderCardHtml(c.cardId, c.instanceId, false, 'mini')}</span>`,
-            )
-            .join('')}</div></div>`
-        : '';
-
     return `
       ${phaseBanner}
       <section class="panel in-game-table">
@@ -460,12 +447,11 @@ export class AppUI {
         ${gameOverBanner}
         ${roundBanner}
         ${nextRoundBtn}
+        ${central}
         <div class="hand-section">
           <h3>手牌</h3>
           <div class="hand">${hand || '<i>无手牌</i>'}</div>
         </div>
-        ${revealed ? `<div class="revealed-section"><h3>已公开打出牌</h3><div class="cards-row">${revealed}</div></div>` : ''}
-        ${playedStrip}
         <div class="reserved"><b>预留：</b>${reserved || '无'}</div>
         <div class="known"><h3>已知身份</h3>${known || '无'}</div>
         ${this.pendingPanel(pending)}
@@ -478,6 +464,53 @@ export class AppUI {
         <div class="log" id="game-log">${events}</div>
       </section>
     `;
+  }
+
+  /**
+   * 6F-3 中央公共出牌区：本 round 全部 night.cardsDeclared 按 phase 分组，
+   * 当前阶段高亮、过往半透明，每牌署名 + mini 正面。
+   * TODO(6F-1 deferred)：掘墓人 play_now 即时带出的牌只进 revealedInPlay、
+   * 不发 cardsDeclared（resolve.ts L656-672），此处缺署名映射，需 core 在
+   * revealed 卡上补 actorSeatId/phase 元数据后接入。
+   */
+  private centralArea(v: PlayerView): string {
+    const groups = new Map<
+      string,
+      Array<{ actorSeatId: string; cardId: string; instanceId: string }>
+    >();
+    for (const e of v.events) {
+      if (e.type !== 'night.cardsDeclared' || e.round !== v.round) continue;
+      const p = e.payload as
+        | {
+            phase?: string;
+            cards?: Array<{ actorSeatId: string; cardId: string; instanceId: string }>;
+          }
+        | undefined;
+      const phase = typeof p?.phase === 'string' ? p.phase : 'unknown';
+      if (!groups.has(phase)) groups.set(phase, []);
+      groups.get(phase)!.push(...(p?.cards ?? []));
+    }
+    const orderOf = (ph: string): number => {
+      const i = CENTRAL_PHASE_ORDER.indexOf(ph);
+      return i >= 0 ? i : 99;
+    };
+    const phases = [...groups.keys()].sort((a, b) => orderOf(a) - orderOf(b));
+    if (phases.length === 0) {
+      return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3><div class="central-empty">本轮暂无打出</div></section>`;
+    }
+    const body = phases
+      .map((ph) => {
+        const isNow = ph === v.phase;
+        const items = (groups.get(ph) ?? [])
+          .map(
+            (c) =>
+              `<span class="played-item"><span class="played-who">${escapeHtml(seatName(v, c.actorSeatId))} 打出了 ${escapeHtml(getCardDisplayName(c.cardId))}</span>${renderCardHtml(c.cardId, c.instanceId, false, 'mini')}</span>`,
+          )
+          .join('');
+        return `<div class="phase-group${isNow ? ' now' : ' past'}" data-phase="${escapeHtml(ph)}"><h4>${escapeHtml(phaseLabel(ph))}${isNow ? ' <span class="phase-now">进行中</span>' : ''}</h4><div class="cards-row">${items}</div></div>`;
+      })
+      .join('');
+    return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3>${body}</section>`;
   }
 
   private pendingPanel(pending: PendingDecision | null): string {
