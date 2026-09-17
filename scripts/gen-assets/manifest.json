@@ -1,11 +1,12 @@
 {
-  "updatedAt": "2026-09-17T01:48:00+08:00",
-  "quotaResetTime": "2026-09-16T20:30:38Z",
+  "updatedAt": "2026-09-17T14:23:30+08:00",
+  "quotaResetTime": "2026-09-17T11:19:55Z",
   "summary": {
     "totalVisualUnits": 19,
-    "completed": 2,
-    "pendingQuota": 17,
-    "tokens": 1
+    "completed": 5,
+    "pendingQuota": 14,
+    "tokens": 1,
+    "currentBatchProgress": "3/14"
   },
   "tokens": [
     {
@@ -28,7 +29,7 @@
       "aspectRatio": "2:3",
       "status": "completed",
       "coveredCards": ["spy-1", "spy-2", "spy-3", "spy-4", "spy-5", "spy-6"],
-      "note": "生成的密探立绘：水墨夜色竹帘、金色眼眸与金箔微光卷轴、顶部12%与底部22%纯色留白符合预期"
+      "note": "水墨夜色竹帘、金色瞳眸金箔微光、卷轴金线、顶部12%与底部22%留白严格达标"
     },
     {
       "visualId": "shapeshifter",
@@ -39,43 +40,40 @@
       "aspectRatio": "2:3",
       "status": "completed",
       "coveredCards": ["shapeshifter"],
-      "note": "生成的百变者立绘：手持能面、碎裂青铜镜、异色双影、金箔金缮裂纹、留白符合预期"
-    },
-    {
-      "visualId": "mastermind",
-      "nameZh": "大将军",
-      "file": "public/assets/visuals/mastermind.jpg",
-      "aspectRatio": "2:3",
-      "status": "pending_quota",
-      "coveredCards": ["mastermind"],
-      "note": "等待生图配额重置 (gemini-3.1-flash-image resets at 2026-09-16T20:30:38Z)"
+      "note": "能面半遮、破裂青铜镜、蓝紫异色双影、衣服金缮裂纹、留白严格达标"
     },
     {
       "visualId": "mystic",
       "nameZh": "隐士",
       "file": "public/assets/visuals/mystic.jpg",
+      "sourcePath": "C:/Users/chr/.gemini/antigravity-cli/brain/8b7ad90d-55ea-4a2d-9ddb-472919c5b56f/mystic_1789626014518.jpg",
+      "sizeBytes": 856401,
       "aspectRatio": "2:3",
-      "status": "pending_quota",
+      "status": "completed",
       "coveredCards": ["mystic-1", "mystic-2", "mystic-3", "mystic-4", "mystic-5", "mystic-6"],
-      "note": "等待生图配额重置"
+      "note": "神秘隐士双掌微悬、三张占卜符牌弧形环绕、月光水墨夜景与金箔符文、留白达标"
     },
     {
       "visualId": "grave_digger",
       "nameZh": "掘墓人",
       "file": "public/assets/visuals/grave_digger.jpg",
+      "sourcePath": "C:/Users/chr/.gemini/antigravity-cli/brain/8b7ad90d-55ea-4a2d-9ddb-472919c5b56f/grave_digger_1789626063419.jpg",
+      "sizeBytes": 729346,
       "aspectRatio": "2:3",
-      "status": "pending_quota",
+      "status": "completed",
       "coveredCards": ["grave_digger"],
-      "note": "等待生图配额重置"
+      "note": "跪于荒冢前、铁铲掘新土、枯骨与残存金缮裂纹古牌、水墨石灯笼幽光、留白达标"
     },
     {
       "visualId": "troublemaker",
       "nameZh": "捣蛋鬼",
       "file": "public/assets/visuals/troublemaker.jpg",
+      "sourcePath": "C:/Users/chr/.gemini/antigravity-cli/brain/8b7ad90d-55ea-4a2d-9ddb-472919c5b56f/troublemaker_1789626113208.jpg",
+      "sizeBytes": 861281,
       "aspectRatio": "2:3",
-      "status": "pending_quota",
+      "status": "completed",
       "coveredCards": ["troublemaker"],
-      "note": "等待生图配额重置"
+      "note": "掀翻茶馆木桌、杯盏骰子飞溅、挥舞烈火火把与红莲火星、动感水墨洒溅、留白达标"
     },
     {
       "visualId": "spirit_merchant",
@@ -84,7 +82,7 @@
       "aspectRatio": "2:3",
       "status": "pending_quota",
       "coveredCards": ["spirit_merchant"],
-      "note": "等待生图配额重置"
+      "note": "等待配额重置 (gemini-3.1-flash-image resets at 2026-09-17T11:19:55Z)"
     },
     {
       "visualId": "thief",
@@ -93,7 +91,7 @@
       "aspectRatio": "2:3",
       "status": "pending_quota",
       "coveredCards": ["thief"],
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
     },
     {
       "visualId": "judge",
@@ -102,7 +100,7 @@
       "aspectRatio": "2:3",
       "status": "pending_quota",
       "coveredCards": ["judge"],
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
     },
     {
       "visualId": "blind_assassin",
@@ -111,7 +109,7 @@
       "aspectRatio": "2:3",
       "status": "pending_quota",
       "coveredCards": ["blind_assassin-1", "blind_assassin-2", "blind_assassin-3", "blind_assassin-4", "blind_assassin-5", "blind_assassin-6"],
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
     },
     {
       "visualId": "shinobi",
@@ -120,7 +118,7 @@
       "aspectRatio": "2:3",
       "status": "pending_quota",
       "coveredCards": ["shinobi-1", "shinobi-2", "shinobi-3", "shinobi-4", "shinobi-5", "shinobi-6"],
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
     },
     {
       "visualId": "mirror_monk",
@@ -129,7 +127,7 @@
       "aspectRatio": "2:3",
       "status": "pending_quota",
       "coveredCards": ["mirror_monk"],
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
     },
     {
       "visualId": "martyr",
@@ -138,7 +136,16 @@
       "aspectRatio": "2:3",
       "status": "pending_quota",
       "coveredCards": ["martyr"],
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
+    },
+    {
+      "visualId": "mastermind",
+      "nameZh": "大将军",
+      "file": "public/assets/visuals/mastermind.jpg",
+      "aspectRatio": "2:3",
+      "status": "pending_quota",
+      "coveredCards": ["mastermind"],
+      "note": "等待配额重置"
     },
     {
       "visualId": "crane",
@@ -147,7 +154,7 @@
       "aspectRatio": "2:3",
       "status": "pending_quota",
       "coveredCards": ["crane-1", "crane-2", "crane-3", "crane-4", "crane-5"],
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
     },
     {
       "visualId": "lotus",
@@ -156,7 +163,7 @@
       "aspectRatio": "2:3",
       "status": "pending_quota",
       "coveredCards": ["lotus-1", "lotus-2", "lotus-3", "lotus-4", "lotus-5"],
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
     },
     {
       "visualId": "ronin",
@@ -165,7 +172,7 @@
       "aspectRatio": "2:3",
       "status": "pending_quota",
       "coveredCards": ["ronin"],
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
     }
   ],
   "ui": [
@@ -175,7 +182,7 @@
       "file": "public/assets/ui/lobby-bg.jpg",
       "aspectRatio": "16:9",
       "status": "pending_quota",
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
     },
     {
       "visualId": "ui-table-texture",
@@ -183,7 +190,7 @@
       "file": "public/assets/ui/table-texture.jpg",
       "aspectRatio": "16:9",
       "status": "pending_quota",
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
     },
     {
       "visualId": "ui-button-primary",
@@ -191,7 +198,7 @@
       "file": "public/assets/ui/button-primary.jpg",
       "aspectRatio": "1:1",
       "status": "pending_quota",
-      "note": "等待生图配额重置"
+      "note": "等待配额重置"
     }
   ]
 }
