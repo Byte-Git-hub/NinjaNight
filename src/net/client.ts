@@ -143,6 +143,16 @@ export class GameNet {
     this.socket?.emit(EV.roomEnd, { seatToken: this.seatToken });
   }
 
+  addBot(): void {
+    if (!this.seatToken) return;
+    this.socket?.emit(EV.roomAddBot, { seatToken: this.seatToken });
+  }
+
+  removeBot(botSeatId?: string): void {
+    if (!this.seatToken) return;
+    this.socket?.emit(EV.roomRemoveBot, { seatToken: this.seatToken, botSeatId });
+  }
+
   sendCommand(
     windowId: string,
     type: string,

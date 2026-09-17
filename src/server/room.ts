@@ -35,6 +35,9 @@ export class RoomRuntime {
   state: GameState | null = null;
   hostSeatId: string;
   sessions = new Map<string, SessionInfo>();
+  bots = new Set<string>();
+  botTimers = new Map<string, NodeJS.Timeout>();
+  botScheduledKeys = new Set<string>();
   createdAt = Date.now();
   endedAt: number | null = null;
   emptySince: number | null = Date.now();
@@ -103,6 +106,7 @@ export class RoomRuntime {
             connected: sess?.connected ?? false,
             ready: lobbySeat?.ready ?? sess?.ready ?? false,
             isHost: s.seatId === this.hostSeatId,
+            isBot: this.bots.has(s.seatId),
           };
         })
       : this.lobby.map((l) => {
@@ -113,6 +117,7 @@ export class RoomRuntime {
             connected: sess?.connected ?? false,
             ready: l.ready,
             isHost: l.isHost,
+            isBot: this.bots.has(l.seatId),
           };
         });
     return {
@@ -157,6 +162,14 @@ export class RoomRuntime {
 
   clearTimer(): void {
     /* window timers live in index.ts; kept for API completeness */
+  }
+
+  clearBotTimers(): void {
+    for (const timer of this.botTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.botTimers.clear();
+    this.botScheduledKeys.clear();
   }
 
   isIdleExpired(now: number, emptyTtl: number, endedTtl: number): boolean {

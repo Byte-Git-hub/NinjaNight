@@ -30,6 +30,7 @@ import {
 import { RoomRuntime, generateRoomCode, newSeatToken, type SessionInfo } from './room';
 import { logger } from './logger';
 import { DISCONNECT_RETAIN_MS } from '../shared/timeouts';
+import { scheduleBots } from './bot-scheduler';
 
 const VALID_TYPES = new Set<CommandType>([
   'draft.pick',
@@ -110,10 +111,30 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         room.broadcastPublicEvents(newEvents.filter((e) => e.visibility === 'public'));
         room.broadcastPrivateEvents(newEvents);
         room.broadcastView();
-        if (room.state.pending.length > 0) scheduleWindowTimeout(room, ms);
+        if (room.state.pending.length > 0) {
+          scheduleWindowTimeout(room, ms);
+          scheduleBots(room, handleBotCommand);
+        }
       }
     }, ms);
     t.unref?.();
+  }
+
+  function handleBotCommand(room: RoomRuntime, cmd: Command): void {
+    if (!room.state) return;
+    const res = room.applyGameCommand(cmd);
+    if (!res.ok) {
+      const botSeat = room.state.seats.find((s) => s.seatToken === cmd.seatToken);
+      logger.warn('bot.command_reject', {
+        roomCode: room.code,
+        seatId: botSeat?.seatId ?? 'unknown',
+        reason: res.reason,
+      });
+      return;
+    }
+    room.broadcastPublicEvents(res.newEvents.filter((e) => e.visibility === 'public'));
+    room.broadcastPrivateEvents(res.newEvents);
+    afterStateChange(room);
   }
 
   function afterStateChange(room: RoomRuntime): void {
@@ -121,7 +142,10 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     if (room.state.gameOver && !room.endedAt) room.endedAt = Date.now();
     room.broadcastView();
     room.broadcastPresence();
-    if (room.state.pending.length > 0) scheduleWindowTimeout(room);
+    if (room.state.pending.length > 0) {
+      scheduleWindowTimeout(room);
+      scheduleBots(room, handleBotCommand);
+    }
   }
 
   function emitError(socket: Socket, reason: ReasonCode, message?: string): void {
@@ -365,6 +389,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         emitError(socket, 'INVALID_PAYLOAD', '仍有玩家未准备');
         return;
       }
+      // 排序确保 s0..sn-1 顺序与 createGame 一一对应
+      room.lobby.sort((a, b) => Number(a.seatId.slice(1)) - Number(b.seatId.slice(1)));
       const nicknames = room.lobby.map((l) => l.nickname);
       const state = createGame({
         seed: Date.now() % 1_000_000,
@@ -380,6 +406,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
           seat.seatToken = lobbySeat.seatToken;
           seat.nickname = lobbySeat.nickname;
           seat.isHost = lobbySeat.isHost;
+          seat.isBot = room.bots.has(lobbySeat.seatId);
         }
       }
       room.setState(state);
@@ -491,6 +518,122 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       }
       resetRoomToLobby(room);
       logger.info('room.end', { roomCode: room.code });
+    });
+
+    // 房主添加人机对手
+    socket.on(EV.roomAddBot, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown };
+      const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      const room = rooms.get(sess.roomCode);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      if (sess.seatId !== room.hostSeatId) {
+        emitError(socket, 'NOT_HOST');
+        return;
+      }
+      if (room.started) {
+        emitError(socket, 'GAME_IN_PROGRESS');
+        return;
+      }
+      if (room.lobby.length >= MAX_PLAYERS) {
+        emitError(socket, 'ROOM_FULL', `房间最多容纳 ${MAX_PLAYERS} 人`);
+        return;
+      }
+
+      // 分配未被占用的最小 seatId
+      const usedIds = new Set(room.lobby.map((l) => l.seatId));
+      let newSeatId = '';
+      for (let i = 0; i < MAX_PLAYERS; i += 1) {
+        const sid = `s${i}`;
+        if (!usedIds.has(sid)) {
+          newSeatId = sid;
+          break;
+        }
+      }
+      if (!newSeatId) {
+        emitError(socket, 'ROOM_FULL');
+        return;
+      }
+
+      const botCount = room.bots.size;
+      const botNick = `AI-${botCount + 1}`;
+      const botToken = newSeatToken();
+      room.lobby.push({
+        seatId: newSeatId,
+        nickname: botNick,
+        seatToken: botToken,
+        ready: true,
+        isHost: false,
+      });
+      room.bots.add(newSeatId);
+
+      const botSess: SessionInfo = {
+        roomCode: room.code,
+        seatId: newSeatId,
+        seatToken: botToken,
+        socketId: `bot-sock-${newSeatId}`,
+        ready: true,
+        connected: true,
+        disconnectedAt: null,
+        rateWindowStart: Date.now(),
+        rateCount: 0,
+        recentCommandIds: [],
+      };
+      room.sessions.set(botToken, botSess);
+      sessionsByToken.set(botToken, botSess);
+
+      room.broadcastPresence();
+      logger.info('room.bot_add', { roomCode: room.code, seatId: newSeatId });
+    });
+
+    // 房主移除人机对手
+    socket.on(EV.roomRemoveBot, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; botSeatId?: unknown };
+      const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      const room = rooms.get(sess.roomCode);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      if (sess.seatId !== room.hostSeatId) {
+        emitError(socket, 'NOT_HOST');
+        return;
+      }
+      if (room.started) {
+        emitError(socket, 'GAME_IN_PROGRESS');
+        return;
+      }
+      if (room.bots.size === 0) {
+        return;
+      }
+
+      // 若未指定具体 botSeatId，则默认移除最后一个 bot
+      const targetSeatId =
+        typeof body.botSeatId === 'string' && room.bots.has(body.botSeatId)
+          ? body.botSeatId
+          : [...room.bots].pop();
+
+      if (!targetSeatId) return;
+
+      room.bots.delete(targetSeatId);
+      const lobbySeat = room.lobby.find((l) => l.seatId === targetSeatId);
+      if (lobbySeat) {
+        room.sessions.delete(lobbySeat.seatToken);
+        sessionsByToken.delete(lobbySeat.seatToken);
+      }
+      room.lobby = room.lobby.filter((l) => l.seatId !== targetSeatId);
+      room.broadcastPresence();
+      logger.info('room.bot_remove', { roomCode: room.code, seatId: targetSeatId });
     });
 
     socket.on(EV.commandSend, (payload: unknown) => {
@@ -666,6 +809,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
 
   function resetRoomToLobby(room: RoomRuntime): void {
     room.clearTimer?.();
+    room.clearBotTimers?.();
     room.state = null;
     room.started = false;
     room.endedAt = null;
@@ -674,14 +818,15 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     for (const sess of room.sessions.values()) {
       if (!sess.connected) continue;
       const prev = room.lobby.find((l) => l.seatId === sess.seatId);
+      const isBot = room.bots.has(sess.seatId);
       still.push({
         seatId: sess.seatId,
         nickname: prev?.nickname ?? sess.seatId,
         seatToken: sess.seatToken,
-        ready: false,
+        ready: isBot,
         isHost: sess.seatId === room.hostSeatId,
       });
-      sess.ready = false;
+      sess.ready = isBot;
     }
     if (still.length === 0) {
       // 至少保留房主若仍在线；否则房间将被清理

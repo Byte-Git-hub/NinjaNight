@@ -144,11 +144,12 @@ export class AppUI {
         const alive = 'alive' in s ? (s as { alive?: boolean }).alive : undefined;
         const tokens = 'honorTokenCount' in s ? (s as { honorTokenCount?: number }).honorTokenCount : undefined;
         const house = 'publicHouseId' in s ? (s as { publicHouseId?: string }).publicHouseId : undefined;
-        return `<li class="${s.isHost ? 'host' : ''} ${alive === false ? 'dead' : ''}">
-          <b>${escapeHtml(s.nickname)}</b> ${s.seatId}
+        const isBot = Boolean(s.isBot);
+        return `<li class="${s.isHost ? 'host' : ''} ${isBot ? 'bot' : ''} ${alive === false ? 'dead' : ''}">
+          <b>${isBot ? '🤖 ' : ''}${escapeHtml(s.nickname)}</b> ${s.seatId}
           ${s.isHost ? '👑' : ''}
           ${s.connected ? '●' : '○'}
-          ${ready ? '准备' : ''}
+          ${!isBot && ready ? '准备' : ''}
           ${alive === false ? '死亡' : ''}
           ${tokens !== undefined ? `令牌${tokens}` : ''}
           ${house ? `身份:${escapeHtml(house)}` : ''}
@@ -188,12 +189,15 @@ export class AppUI {
     const p = this.presence;
     const isHost = this.net.isHost;
     const n = p?.seats.length ?? 0;
+    const botCount = p?.seats.filter((s) => s.isBot).length ?? 0;
     const allReady =
-      n >= 4 && (p?.seats ?? []).every((s) => s.isHost || (s as { ready?: boolean }).ready);
+      n >= 4 && (p?.seats ?? []).every((s) => s.isHost || s.isBot || (s as { ready?: boolean }).ready);
     return `
       <div class="row">
         <button id="btn-ready" type="button">切换准备</button>
         ${isHost ? `<button id="btn-start" type="button" ${n < 4 ? 'disabled' : ''}>开始 (${n})</button>` : ''}
+        ${isHost ? `<button id="btn-add-bot" type="button" ${n >= 11 ? 'disabled' : ''}>添加人机</button>` : ''}
+        ${isHost && botCount > 0 ? `<button id="btn-remove-bot" type="button">移除人机</button>` : ''}
         ${isHost ? `<button id="btn-end" type="button" class="danger">终止本局</button>` : ''}
       </div>
       ${isHost ? this.kickButtons() : ''}
@@ -294,6 +298,8 @@ export class AppUI {
     });
     $('#btn-ready')?.addEventListener('click', () => this.net.setReady(true));
     $('#btn-start')?.addEventListener('click', () => this.net.startRoom());
+    $('#btn-add-bot')?.addEventListener('click', () => this.net.addBot());
+    $('#btn-remove-bot')?.addEventListener('click', () => this.net.removeBot());
     $('#btn-fa')?.addEventListener('click', () => this.net.forceAdvance());
     $('#btn-chat')?.addEventListener('click', () => {
       const input = this.root.querySelector('#chat-input') as HTMLInputElement | null;

@@ -8,9 +8,7 @@ test('16 种卡面立绘全部成功加载且无占位色块', async ({ page }) 
   const cardsHtml = cardKeys.map((k) => renderCardHtml(k, `test-${k}`, false)).join('\n');
 
   await page.goto('/');
-  await page.evaluate((html) => {
-    document.body.innerHTML = `<div class="gallery" style="display:flex;flex-wrap:wrap;gap:12px;padding:20px;">${html}</div>`;
-  }, cardsHtml);
+  await page.setContent(`<div class="gallery" style="display:flex;flex-wrap:wrap;gap:12px;padding:20px;">${cardsHtml}</div>`);
 
   // 等待图片全部加载
   const cardImgs = page.locator('.card-art');
@@ -21,7 +19,7 @@ test('16 种卡面立绘全部成功加载且无占位色块', async ({ page }) 
   for (let i = 0; i < count; i++) {
     const img = cardImgs.nth(i);
     await expect(img).toBeVisible();
-    const isLoaded = await img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0);
+    const isLoaded = await img.evaluate((el: any) => el.complete && el.naturalWidth > 0);
     expect(isLoaded).toBe(true);
   }
 

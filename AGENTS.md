@@ -54,6 +54,10 @@ npm run build
 7. 未确认规则必须标记「待确认」，不得当成官方规则实现  
 8. **日志脱敏（硬约定）**：服务端日志禁止包含 HONOR 面值、玩家 HOUSE、手牌内容、`seatToken`；仅允许 roomCode / seatId / command.type / reasonCode 等。统一走 `src/server/logger.ts`。  
 9. **断线不重同步**：断线仅保留 seat 映射一段时间；客户端需刷新重建连接，不恢复对局状态。  
+10. **Bot 约束（硬约定）**：
+    - `src/core/bot.ts` 必须保持纯函数特性，不调用时间或全局随机，输入为单人 `PlayerView` 与待决策窗口。
+    - Bot 严禁接触完整 `GameState`，仅能接收其自身视角的 `PlayerView`。
+    - Bot 严禁在服务端发起本地 Socket.IO 连接自己，必须在服务端以内部定时器/循环调度驱动。
 
 ## 技术选型（已冻结）
 

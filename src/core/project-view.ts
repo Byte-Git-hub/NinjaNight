@@ -39,6 +39,7 @@ export function projectView(state: GameState, seatId: SeatId): PlayerView | null
     isHost: s.isHost,
     honorTokenCount: s.tokens.length,
     publicHouseId: revealedPublicHouse(s),
+    isBot: s.isBot ?? false,
   }));
 
   const selfView: SelfView = {

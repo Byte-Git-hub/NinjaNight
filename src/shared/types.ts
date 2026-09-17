@@ -198,6 +198,7 @@ export interface PlayerSeatView {
   isHost: boolean;
   honorTokenCount: number;
   publicHouseId?: HouseId;
+  isBot?: boolean;
 }
 
 export interface SelfView {

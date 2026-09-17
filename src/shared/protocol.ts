@@ -57,6 +57,8 @@ export const EV = {
   roomForceAdvance: 'room.forceAdvance',
   roomKick: 'room.kick',
   roomEnd: 'room.end',
+  roomAddBot: 'room.addBot',
+  roomRemoveBot: 'room.removeBot',
   commandSend: 'command.send',
   chatSend: 'chat.send',
 } as const;
@@ -87,6 +89,7 @@ export interface PresenceSeat {
   connected: boolean;
   ready: boolean;
   isHost: boolean;
+  isBot?: boolean;
 }
 
 export interface PresencePayload {

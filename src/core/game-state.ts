@@ -42,6 +42,7 @@ export interface SeatState {
   draftHand: CardInstance[];
   declared: CardInstance[];
   declaredResponded: boolean;
+  isBot?: boolean;
 }
 
 export interface QueuedCard {
