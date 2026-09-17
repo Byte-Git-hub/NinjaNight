@@ -393,7 +393,9 @@ export class AppUI {
   private gameBody(): string {
     const p = this.presence;
     const v = this.view;
-    const allSeats = p?.seats ?? v?.seats ?? [];
+    // 对局中以 view.seats 为准（含 handCount/alive/house 等对局字段）；
+    // 大厅才用 presence（含 ready）。反向会把对局字段遮掉（6F-4 目检发现）。
+    const allSeats = v?.seats ?? p?.seats ?? [];
     const selfId = v?.self.seatId ?? this.net.seatId ?? '';
     // 保持服务端座位顺序（e2e 靠 nth() 定位）；自己视觉置底由 CSS order + grid-column 实现
     const seats = allSeats.map((s) => this.seatCard(s, v ?? null, s.seatId === selfId)).join('');
@@ -581,19 +583,26 @@ export class AppUI {
       const i = CENTRAL_PHASE_ORDER.indexOf(ph);
       return i >= 0 ? i : 99;
     };
-    const phases = [...groups.keys()].sort((a, b) => orderOf(a) - orderOf(b));
+    // 过往空组（无人打出的阶段）不占位；当前阶段即使为空也保留并给空提示
+    const phases = [...groups.keys()]
+      .filter((ph) => ph === v.phase || (groups.get(ph) ?? []).length > 0)
+      .sort((a, b) => orderOf(a) - orderOf(b));
     if (phases.length === 0) {
       return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3><div class="central-empty">本轮暂无打出</div></section>`;
     }
     const body = phases
       .map((ph) => {
         const isNow = ph === v.phase;
-        const items = (groups.get(ph) ?? [])
-          .map(
-            (c) =>
-              `<span class="played-item"><span class="played-who">${escapeHtml(seatName(v, c.actorSeatId))} 打出了 ${escapeHtml(getCardDisplayName(c.cardId))}</span>${renderCardHtml(c.cardId, c.instanceId, false, 'mini')}</span>`,
-          )
-          .join('');
+        const cards = groups.get(ph) ?? [];
+        const items =
+          cards.length > 0
+            ? cards
+                .map(
+                  (c) =>
+                    `<span class="played-item"><span class="played-who">${escapeHtml(seatName(v, c.actorSeatId))} 打出了 ${escapeHtml(getCardDisplayName(c.cardId))}</span>${renderCardHtml(c.cardId, c.instanceId, false, 'mini')}</span>`,
+                )
+                .join('')
+            : '<div class="central-empty">本阶段暂无打出</div>';
         return `<div class="phase-group${isNow ? ' now' : ' past'}" data-phase="${escapeHtml(ph)}"><h4>${escapeHtml(phaseLabel(ph))}${isNow ? ' <span class="phase-now">进行中</span>' : ''}</h4><div class="cards-row">${items}</div></div>`;
       })
       .join('');
