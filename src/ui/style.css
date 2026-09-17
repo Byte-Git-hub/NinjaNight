@@ -882,6 +882,82 @@ button.card.sel {
   margin-left: 6px;
 }
 
+/* —— 6F-4 身份弹窗 + 卡背翻转（纯 CSS transition 250ms） —— */
+.identity-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(10, 15, 30, 0.45);
+}
+.identity-modal {
+  pointer-events: auto;
+  cursor: pointer;
+  text-align: center;
+  padding: 22px 26px;
+  border-radius: 12px;
+  border: 1px solid var(--gold-foil);
+  background-color: rgba(15, 23, 42, 0.96);
+  background-image: url('/assets/ui/identity-modal-bg.webp');
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 0 28px rgba(212, 175, 55, 0.5), 0 8px 32px rgba(0, 0, 0, 0.6);
+  animation: identityPop 0.25s ease-out;
+}
+@keyframes identityPop {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.identity-front {
+  width: 150px;
+  height: 225px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--gold-foil);
+}
+.identity-name {
+  margin: 10px 0 2px;
+  font-size: 17px;
+}
+.identity-name b {
+  color: var(--gold-foil);
+}
+.flip-wrap {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 66px;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: transform 0.25s ease;
+  perspective: 300px;
+}
+.flip-wrap.show-front {
+  transform: rotateY(180deg);
+}
+.flip-wrap .face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--gold-foil);
+  background: #1e293b;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.flip-wrap .face.front {
+  transform: rotateY(180deg);
+}
+.peek-hint {
+  color: var(--neon-cyan);
+  font-size: 12px;
+}
+
 /* —— 移动端适配 <1024px —— */
 @media (max-width: 1023px) {
   .app {

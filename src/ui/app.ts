@@ -104,6 +104,11 @@ export class AppUI {
   private bannerPhase: string | null = null;
   private bannerAt = 0;
   public lastViewTimestamp = 0;
+  /** 6F-4 身份弹窗：每会话每轮一次（sessionStorage 标记），2.5s 自动关 */
+  private identityModalOpen = false;
+  private identityModalTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 6F-4 身份窥视：点击自家卡背翻转查看（纯本地），再点/点外部盖回 */
+  private housePeek = false;
 
   public get currentView(): PlayerView | null {
     return this.view;
@@ -135,6 +140,7 @@ export class AppUI {
       onTerminated: () => {
         this.view = null;
         this.selected.clear();
+        this.resetIdentityUi();
         this.lastReject = '';
         this.showToast('对局已终止，回到大厅');
         this.render();
@@ -148,7 +154,15 @@ export class AppUI {
         if (this.view?.phase !== v.phase) {
           this.selected.clear();
         }
+        if (this.view && this.view.round !== v.round) {
+          this.housePeek = false;
+        }
         this.view = v;
+        // 6F-4：本会话首次见到该轮即弹身份（正常开局首个快照为 draft 系；新标签重连中途也提醒一次）
+        if (!this.hasSeenHouse(v.roomCode, v.round)) {
+          this.markHouseSeen(v.roomCode, v.round);
+          this.openIdentityModal();
+        }
         this.render();
       },
       onChat: (c) => {
@@ -243,6 +257,69 @@ export class AppUI {
     `;
   }
 
+  /** 6F-4：本会话是否已弹过该轮身份（sessionStorage，纯本地） */
+  private houseSeenKey(roomCode: string, round: number): string {
+    return `ninja-night:houseSeen:${roomCode}:${round}`;
+  }
+
+  private hasSeenHouse(roomCode: string, round: number): boolean {
+    try {
+      return window.sessionStorage.getItem(this.houseSeenKey(roomCode, round)) !== null;
+    } catch {
+      return this.identityModalOpen;
+    }
+  }
+
+  private markHouseSeen(roomCode: string, round: number): void {
+    try {
+      window.sessionStorage.setItem(this.houseSeenKey(roomCode, round), '1');
+    } catch {
+      /* 无痕模式等写入失败时退化为内存标记（本轮不再弹） */
+    }
+  }
+
+  private openIdentityModal(): void {
+    this.identityModalOpen = true;
+    if (this.identityModalTimer !== null) clearTimeout(this.identityModalTimer);
+    this.identityModalTimer = setTimeout(() => {
+      this.identityModalOpen = false;
+      this.identityModalTimer = null;
+      this.render();
+    }, 2500);
+  }
+
+  private closeIdentityModal(): void {
+    this.identityModalOpen = false;
+    if (this.identityModalTimer !== null) {
+      clearTimeout(this.identityModalTimer);
+      this.identityModalTimer = null;
+    }
+    this.render();
+  }
+
+  private resetIdentityUi(): void {
+    this.identityModalOpen = false;
+    this.housePeek = false;
+    if (this.identityModalTimer !== null) {
+      clearTimeout(this.identityModalTimer);
+      this.identityModalTimer = null;
+    }
+  }
+
+  /** 6F-4 开局身份弹窗（背景 identity-modal-bg，正面大卡 + 身份名） */
+  private identityModalHtml(v: PlayerView): string {
+    if (!this.identityModalOpen) return '';
+    const front = getVisualPath(getVisualId(v.self.houseId));
+    const name = getHouseDisplayName(v.self.houseId);
+    return `<div class="identity-modal-backdrop" id="identity-modal">
+      <div class="identity-modal" role="dialog" aria-label="你的身份">
+        <img class="identity-front" src="${front}" alt="${escapeHtml(name)}" />
+        <p class="identity-name">你的身份：<b>${escapeHtml(name)}</b></p>
+        <p class="hint">2.5 秒后自动关闭，点击卡片关闭</p>
+      </div>
+    </div>`;
+  }
+
   /**
    * 6F-2 座位卡片：ul.seats > li 结构保留（e2e 靠 .seats li 计数/文本），
    * li 升级为 .seat-card（身份缩略 + 手牌背堆叠 + 令牌），自己置末全宽。
@@ -261,15 +338,21 @@ export class AppUI {
     const dead = alive === false;
     const inGame = Boolean(v);
 
-    // 身份缩略：死者强制卡背；他人按 publicHouseId 切正/背；自己暂显示卡背+文字（6F-4 接弹窗翻转）
+    // 身份缩略：死者强制卡背；他人按 publicHouseId 切正/背；
+    // 自己：卡背覆盖 + 点击翻转（6F-4 纯本地，窥视时才显示身份名）
     let houseImg = '';
     if (inGame) {
-      if (isSelf) {
-        houseImg = `<img class="house-mini back" src="${getHouseCardBackPath()}" alt="你的身份牌（未公开）" title="你的身份牌" />`;
-      } else if (!dead && house) {
+      if (isSelf && v) {
+        const front = getVisualPath(getVisualId(v.self.houseId));
+        const name = getHouseDisplayName(v.self.houseId);
+        houseImg = `<span class="flip-wrap${this.housePeek ? ' show-front' : ''}" data-peek="1" title="${this.housePeek ? '点击盖回' : '点击查看身份'}">` +
+          `<img class="face back" src="${getHouseCardBackPath()}" alt="你的身份牌（已覆盖，点击查看）" />` +
+          `<img class="face front" src="${front}" alt="${escapeHtml(name)}" />` +
+          `</span>`;
+      } else if (!isSelf && !dead && house) {
         const front = getVisualPath(getVisualId(house));
         houseImg = `<img class="house-mini front" src="${front}" alt="${escapeHtml(getHouseDisplayName(house))}" title="${escapeHtml(getHouseDisplayName(house))}" />`;
-      } else {
+      } else if (!isSelf) {
         houseImg = `<img class="house-mini back" src="${getHouseCardBackPath()}" alt="未公开身份" title="未公开身份" />`;
       }
     }
@@ -283,11 +366,14 @@ export class AppUI {
         ? `<span class="token-stack" title="令牌 ${tokens} 枚"><img src="${getHonorTokenPath()}" alt="令牌" /><i>×${tokens}</i></span>`
         : '';
 
-    // 自己的身份/令牌面值（原 private-info 内容搬入自己卡片，6F-4 再覆盖为卡背+弹窗）
+    // 自己的身份/令牌面值：覆盖态只露令牌 + 点击查看提示；窥视态才显示身份名（6F-4）
     let selfMeta = '';
     if (inGame && isSelf && v) {
       const vals = v.self.honorTokens.map((t) => t.value).join(', ');
-      selfMeta = `<div class="seat-meta self-meta">你的身份：<b class="house-badge">${escapeHtml(getHouseDisplayName(v.self.houseId))}</b> · 令牌面值：[<span class="token-val">${escapeHtml(vals || '无')}</span>]</div>`;
+      const tokenPart = `令牌面值：[<span class="token-val">${escapeHtml(vals || '无')}</span>]`;
+      selfMeta = this.housePeek
+        ? `<div class="seat-meta self-meta">你的身份：<b class="house-badge">${escapeHtml(getHouseDisplayName(v.self.houseId))}</b> · ${tokenPart}</div>`
+        : `<div class="seat-meta self-meta">${tokenPart} · <span class="peek-hint">点击卡背查看身份</span></div>`;
     }
     const metaBits = [
       tokens !== undefined ? `令牌:${tokens}` : '',
@@ -325,6 +411,7 @@ export class AppUI {
           ${!v ? this.lobbyControls() : ''}
         </section>
         ${v ? this.gamePanels(v, pending ?? null) : ''}
+        ${v ? this.identityModalHtml(v) : ''}
         <section class="panel chat">
           <h2>聊天</h2>
           <div class="chat-log" id="chat-log">${this.chat
@@ -628,6 +715,26 @@ export class AppUI {
       this.net.leaveRoom();
       this.view = null;
       this.presence = null;
+      this.resetIdentityUi();
+      this.render();
+    });
+    // 6F-4：身份弹窗点击关闭（backdrop 穿透不挡 e2e/游戏点击）
+    $('#identity-modal')?.addEventListener('click', () => this.closeIdentityModal());
+    // 6F-4：自家卡背翻转（先播 250ms 动画再同步重渲染，更新身份名显隐）
+    this.root.querySelectorAll<HTMLElement>('.flip-wrap[data-peek]').forEach((el) => {
+      el.addEventListener('click', () => {
+        el.classList.toggle('show-front');
+        this.housePeek = el.classList.contains('show-front');
+        el.setAttribute('title', this.housePeek ? '点击盖回' : '点击查看身份');
+        window.setTimeout(() => this.render(), 300);
+      });
+    });
+    // 6F-4：点座位区外部盖回身份
+    this.root.querySelector('.table')?.addEventListener('click', (ev) => {
+      if (!this.housePeek) return;
+      const t = ev.target as HTMLElement | null;
+      if (t?.closest?.('.flip-wrap')) return;
+      this.housePeek = false;
       this.render();
     });
     $('#btn-game-over-lobby')?.addEventListener('click', () => {
