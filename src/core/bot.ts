@@ -59,6 +59,7 @@ export function botDecide(
       };
     }
 
+    // 6F-8 起不再生成 draftDiscard pending（pick2 后自动弃置），本分支保留为无调用兼容
     case 'draftDiscard': {
       if (pending.options.length === 0) return null;
       // 反向加权：优先弃掉被动牌或多余牌

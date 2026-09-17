@@ -115,12 +115,38 @@ function rebuildDraftPending(state: GameState): void {
     }));
 }
 
+/**
+ * 6F-8 已不再进入：draftPick2 完成后剩余牌自动弃置（见 autoDiscardRemainder）。
+ * 保留导出以兼容旧客户端发来的 draft.discard 指令（engine 侧以 phaseMismatch 拒绝）
+ * 与 dev/测试辅助中的历史分支；phase 枚举与 zones.draftDiscard 保持不变。
+ */
 export function enterDraftDiscard(state: GameState): void {
   state.phase = 'draftDiscard';
   state.step = 'draftSelect';
   state.windowId = `w-draftd-${state.round}-${state.eventSeq}`;
   for (const seat of state.seats) seat.declaredResponded = false;
   rebuildDraftPending(state);
+}
+
+/**
+ * 6F-8（官方规则）：发 3 → 选 1 → 左传 2 → 再选 1，剩下 1 张必然弃掉。
+ * draftPick2 完成后把各座位 draftHand 剩余牌直接推入 draftDiscard 区
+ * （附与原来 handleDraftDiscard 相同的 draft.cardDiscarded 事件），
+ * 不生成 pending，直接经 afterDraftComplete 进入夜晚。
+ */
+export function autoDiscardRemainder(state: GameState): void {
+  for (const seat of state.seats) {
+    for (const left of seat.draftHand) {
+      state.zones.draftDiscard.push({ ...left });
+      pushEvent(state, 'draft.cardDiscarded', 'public', {
+        seatId: seat.seatId,
+        instanceId: left.instanceId,
+      });
+    }
+    seat.draftHand = [];
+    seat.declaredResponded = true;
+  }
+  afterDraftComplete(state);
 }
 export function afterDraftComplete(state: GameState): void {
   for (const seat of state.seats) {

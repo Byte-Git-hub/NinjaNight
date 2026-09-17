@@ -43,11 +43,11 @@ test('单玩家与 3 个 Bot 完整对局流程', async ({ page }) => {
   // 由于 Bot 有 500-1500ms 随机延迟，等待几秒后即可推进
   await expect(async () => {
     const text = await page.locator('.pending, .phase').allInnerTexts();
-    // 应当推进到选牌 2 或弃牌或夜间阶段
+    // 6F-8 起 draftPick2 完成后自动弃牌直进夜间，不再有弃牌阶段
+    // 应当推进到选牌 2 或夜间阶段
     const combined = text.join(' ');
     expect(
       combined.includes('选牌 2') ||
-      combined.includes('弃牌') ||
       combined.includes('夜间') ||
       combined.includes('密探') ||
       combined.includes('隐士') ||

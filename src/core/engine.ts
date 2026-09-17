@@ -2,11 +2,11 @@ import type { Command, RejectReason, SeatId } from '../shared/types';
 import type { GameState, SeatState } from './game-state';
 import {
   afterDraftComplete,
+  autoDiscardRemainder,
   beginDraftPick,
   bindMastermind,
   bindScoreRound,
   createGame,
-  enterDraftDiscard,
   enterHouseReveal,
   enterMastermindReveal,
   enterPassPhaseDraft,
@@ -276,7 +276,8 @@ function handleDraftPick(next: GameState, seat: SeatState, cmd: Command): Engine
       enterPassPhaseDraft(next);
       beginDraftPick(next, 2);
     } else if (next.phase === 'draftPick2') {
-      enterDraftDiscard(next);
+      // 6F-8：第二次选完剩 1 张必弃，自动弃置后直接进夜晚，不生成 draftDiscard pending
+      autoDiscardRemainder(next);
     }
   }
   return { ok: true, state: next };
