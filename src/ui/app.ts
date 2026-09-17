@@ -201,7 +201,8 @@ export class AppUI {
         }
         this.view = v;
         // 6F-4：本会话首次见到该轮即弹身份（正常开局首个快照为 draft 系；新标签重连中途也提醒一次）
-        if (!this.hasSeenHouse(v.roomCode, v.round)) {
+        // 6G-4b(C2)：终局快照不弹身份，避免结算排名被新轮弹窗覆盖
+        if (!v.gameOver && !this.hasSeenHouse(v.roomCode, v.round)) {
           this.markHouseSeen(v.roomCode, v.round);
           this.openIdentityModal();
         }
@@ -798,9 +799,12 @@ export class AppUI {
 
   /** 6F-5 聊天/日志折叠面板（默认折叠；DOM 常驻，关闭态由 details 原生折叠） */
   private chatLogPanel(v: PlayerView | null): string {
-    const chatHtml = this.chat
-      .map((c) => `<div><b>${escapeHtml(c.nickname)}</b>: ${escapeHtml(c.text)}</div>`)
-      .join('');
+    // 6G-4b(M4)：空态提示，避免大面积空白
+    const chatHtml = this.chat.length > 0
+      ? this.chat
+          .map((c) => `<div><b>${escapeHtml(c.nickname)}</b>: ${escapeHtml(c.text)}</div>`)
+          .join('')
+      : '<div class="chat-empty">暂无消息，来说第一句话吧</div>';
     const logHtml = v
       ? v.events
           .slice(-40)
@@ -936,6 +940,10 @@ export class AppUI {
           </button>`;
         })
         .join('');
+    } else if (pending.kind === 'reactDecide') {
+      // 6G-4b(R1)：服务端 options 为 ['react','decline']，直出会裸显英文且点"react"误发 decline；
+      // 此处压住通用渲染，只用下方专用的发动/放弃对（data-opt 保持 __true/__false 不动）。
+      opts = '';
     } else {
       opts = pending.options
         .map((o: string) => `<button class="opt" data-opt="${escapeHtml(o)}" type="button">${escapeHtml(optLabel(o, v))}</button>`)

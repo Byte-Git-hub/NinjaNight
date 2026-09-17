@@ -194,8 +194,9 @@ button:not(.card):active:not(:disabled) {
 }
 button:disabled {
   filter: grayscale(60%);
-  opacity: 0.5;
+  opacity: 0.68;
   cursor: not-allowed;
+  color: #f0e6c8;
 }
 
 button.danger {
@@ -554,6 +555,14 @@ button.card.sel {
 .chat-log {
   max-height: 240px;
 }
+/* 6G-4b(M4)：聊天空态提示 */
+.chat-empty {
+  color: #7d8aa0;
+  font-size: 12px;
+  text-align: center;
+  padding: 18px 8px;
+  letter-spacing: 1px;
+}
 .ev {
   padding: 3px 0;
   border-bottom: 1px solid rgba(51, 65, 85, 0.5);
@@ -565,9 +574,10 @@ button.card.sel {
   border: 1px solid rgba(212, 175, 55, 0.6);
   background: rgba(212, 175, 55, 0.08);
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   margin: 8px 0;
   font-size: 14px;
+  line-height: 1.7;
 }
 
 /* —— 阶段横幅（非阻塞浮层，3s 淡出，不拦截点击） —— */
@@ -788,8 +798,10 @@ button.card.sel {
   color: var(--text-muted);
 }
 .seat-card .self-meta {
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.55;
   color: var(--text-main);
+  overflow-wrap: anywhere;
 }
 .seat-card.self {
   grid-column: 1 / -1;
@@ -822,6 +834,18 @@ button.card.sel {
     min-width: 168px;
     scroll-snap-align: start;
   }
+  /* 6G-4b(M6)：移动端座位卡堆叠徽章收紧，避免与卡背重叠拥挤 */
+  .seat-card .seat-body {
+    gap: 6px;
+  }
+  .house-mini {
+    width: 38px;
+    height: 57px;
+  }
+  .hand-stack img {
+    width: 30px;
+    height: 45px;
+  }
   .seat-card.self {
     margin: 2px 0 0;
   }
@@ -844,13 +868,15 @@ button.card.sel {
 }
 
 /* —— 6F-3 中央公共出牌区（washi 和纸底，当前高亮/过往半透明） —— */
+/* 6G-4b(C1)：washi 过亮致白字不可读，加暗叠加收敛，对局卡组自带深底不受影响 */
 .central {
   margin: 10px 0;
   padding: 12px;
   border-radius: 8px;
   border: 1px solid rgba(212, 175, 55, 0.55);
-  background-color: rgba(245, 240, 224, 0.06);
-  background-image: url('/assets/ui/washi-central-bg.webp');
+  background-color: rgba(20, 16, 8, 0.6);
+  background-image: linear-gradient(rgba(12, 10, 6, 0.52), rgba(12, 10, 6, 0.52)),
+    url('/assets/ui/washi-central-bg.webp');
   background-size: cover;
   background-position: center;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 40px rgba(212, 175, 55, 0.08);
@@ -858,13 +884,15 @@ button.card.sel {
 .central > h3 {
   margin: 0 0 8px;
   font-size: 14px;
-  color: var(--gold-foil);
+  color: #f3d98b;
   letter-spacing: 1px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 .central-empty {
   font-size: 13px;
-  color: var(--text-muted);
+  color: #e8dcc0;
   padding: 6px 2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 .phase-group {
   margin: 8px 0;
