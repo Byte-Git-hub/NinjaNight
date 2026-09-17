@@ -107,6 +107,10 @@ body.in-game {
   grid-template-columns: 240px 1fr 260px;
   gap: 14px;
 }
+/* 6F.5-fix1：grid 子项 min-width:auto 会被长行 min-content 撑大，强制可收缩 */
+.grid > * {
+  min-width: 0;
+}
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;

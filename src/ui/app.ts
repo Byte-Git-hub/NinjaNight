@@ -758,6 +758,14 @@ function eventLabel(e: GameEvent, v: PlayerView): string {
       return `👁 你查看了身份`;
     case 'night.ninjaViewed':
       return `👁 你查看了忍者牌`;
+    case 'night.cardsDeclared': {
+      const cards =
+        (p['cards'] as Array<{ actorSeatId: string; cardId: string }> | undefined) ?? [];
+      if (cards.length === 0) return '本阶段无人打出';
+      return cards
+        .map((c) => `${seatName(v, c.actorSeatId)} 打出了 ${getCardDisplayName(c.cardId)}`)
+        .join('、');
+    }
     case 'house.revealed': {
       const h = typeof p['houseId'] === 'string' ? getHouseDisplayName(p['houseId']) : '';
       return `👁 ${sid('seatId')} 亮出身份${h ? `：${h}` : ''}`;
