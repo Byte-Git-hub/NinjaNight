@@ -14,6 +14,12 @@ if (app) {
   const savedToken = roomCode && typeof localStorage !== 'undefined' ? localStorage.getItem(`ninja-night:seatToken:${roomCode}`) : null;
   net.connect(url, savedToken ?? undefined);
   ui.render();
+
+  if (import.meta.env.DEV) {
+    import('./dev/inspect').then(({ attachInspect }) => {
+      attachInspect(ui);
+    });
+  }
 }
 
 export {};
