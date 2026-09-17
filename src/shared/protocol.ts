@@ -169,6 +169,7 @@ export const EFFECT_ITEM_IDS = [
   'secret_letter',
   'tea',
   'snowball',
+  'shuriken',
 ] as const;
 
 export type EffectItemId = (typeof EFFECT_ITEM_IDS)[number];

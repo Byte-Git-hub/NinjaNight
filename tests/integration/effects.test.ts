@@ -34,7 +34,7 @@ describe('effect relay', () => {
     ).toBeNull();
   });
 
-  it('定稿 8 串全部通过；旧占位 id 不通过', () => {
+  it('定稿 9 串全部通过；旧占位 id 不通过', () => {
     for (const id of [
       'egg',
       'sakura',
@@ -44,6 +44,7 @@ describe('effect relay', () => {
       'secret_letter',
       'tea',
       'snowball',
+      'shuriken',
     ]) {
       expect(
         validateEffectItems({ items: [{ targetSeatId: 's1', itemId: id, comboId: 'c1' }] }, inRoom),
