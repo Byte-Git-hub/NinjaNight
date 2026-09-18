@@ -1613,8 +1613,19 @@ button.card.sel,
 @keyframes deathFlip { from { filter: none; opacity: 1; } to { filter: grayscale(1); opacity: .5; transform: rotate(0deg); } }
 .animate-token-fly { animation: tokenFly 600ms ease-out; }
 @keyframes tokenFly { 0% { transform: scale(1); } 55% { transform: scale(1.1) translateY(-8px); } 100% { transform: scale(1); box-shadow: 0 0 22px rgba(212, 175, 55, .8); } }
-.animate-victory { animation: victoryGlow 3s ease-out; }
+.animate-victory { animation: victoryGlow 3s ease-out; position: relative; }
+.animate-victory::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1300;
+  background-image: radial-gradient(circle, rgba(212,175,55,.95) 0 2px, transparent 3px);
+  background-size: 37px 37px;
+  animation: foilRain 3s linear forwards;
+}
 @keyframes victoryGlow { 0% { filter: drop-shadow(0 0 0 rgba(212, 175, 55, 0)); } 35% { filter: drop-shadow(0 0 34px rgba(212, 175, 55, .9)); } 100% { filter: none; } }
+@keyframes foilRain { from { opacity: 0; transform: translateY(-20px); } 15% { opacity: .85; } to { opacity: 0; transform: translateY(100vh); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
