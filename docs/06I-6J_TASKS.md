@@ -72,7 +72,7 @@ bot 各分支齐全，根因不在 bot 缺分支，而在两处：
 - [x] 6I-3：DEFERRED（本地模拟验证跳过，见下）
 - [x] 6I-4：docs/DEPLOY.md 完整步骤 + README 部署章节 + 本地局域网部署说明
 - [x] commit：6I: GitHub Pages + Railway 部署配置
-- commit hash：
+- commit hash：3c7ff2f
 
 ### 6I-3 DEFERRED 记录
 
