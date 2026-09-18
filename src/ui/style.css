@@ -196,6 +196,55 @@ body.in-game {
   color: var(--text-muted);
 }
 
+/* 6H-4 高光横幅（轮结束 5s 顶部浮层，点击展开完整日志，不阻塞） */
+#highlight-pop {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  max-width: min(560px, 92vw);
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid var(--gold-foil);
+  border-radius: 10px;
+  padding: 12px 18px;
+  box-shadow: 0 0 24px rgba(212, 175, 55, 0.5);
+  cursor: pointer;
+  animation: hlIn 0.3s ease;
+}
+#highlight-pop[hidden] {
+  display: none;
+}
+@keyframes hlIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.hl-title {
+  color: var(--gold-foil);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.hl-body {
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hl-full {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(212, 175, 55, 0.3);
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 /* —— 警告与状态条 —— */
 .banner {
   background: rgba(30, 41, 59, 0.85);

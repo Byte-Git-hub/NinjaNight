@@ -15,6 +15,8 @@ import { micBadge } from './voice/icons';
 import { AudioManager, SFX_NAMES, effectTimbre, type SfxName } from './audio';
 import { AchievementTracker } from './achievements/tracker';
 import { ACHIEVEMENTS, achievementDef } from './achievements/definitions';
+import { buildHighlight, type RoundHighlight } from './highlights/summary';
+import { highlightBannerHtml } from './highlights/banner';
 import { voiceBannerHtml, voiceBarHtml } from './voice/controls';
 import { EFFECT_ITEMS, QUICK_EMOJIS, getEffectItem, isQuickEmoji } from './effects/items';
 import { EffectLayer } from './effects/particles';
@@ -148,6 +150,10 @@ export class AppUI {
   /** 6H-3 成就（纯本地 localStorage） */
   private achieve = new AchievementTracker();
   private achievePanelOpen = false;
+  /** 6H-4 高光横幅（轮结束 5s，不阻塞） */
+  private highlight: RoundHighlight | null = null;
+  private highlightTimer: ReturnType<typeof setTimeout> | null = null;
+  private highlightExpanded = false;
   /** 6G-2 互动特效 + 怀疑标记（纯社交层；状态以服务端广播为准，本地只存快照） */
   private effectNet: EffectNet | null = null;
   private socialNet: SocialNet | null = null;
@@ -171,6 +177,12 @@ export class AppUI {
     // 6H-1：首次交互后初始化 AudioContext（浏览器自动播放策略）
     this.audio.attachGesture(window);
     this.renderShell();
+    // 6H-4：高光横幅常驻节点只绑一次（render 不重建该节点，避免重复监听）
+    this.root.querySelector('#highlight-pop')?.addEventListener('click', () => {
+      if (!this.highlight) return;
+      this.highlightExpanded = !this.highlightExpanded;
+      this.renderHighlight();
+    });
     this.net.setHandlers({
       onAck: () => {
         this.socialNet?.sync();
@@ -197,6 +209,7 @@ export class AppUI {
         this.resetIdentityUi();
         this.soundPrimed = false;
         this.achieve.resetGame();
+        this.hideHighlight();
         this.audio.stopBgm();
         this.voiceClient?.leave();
         this.voiceSeats = [];
@@ -412,7 +425,7 @@ export class AppUI {
   }
 
   private renderShell(): void {
-    this.root.innerHTML = `<div class="app" id="ui"></div><div id="toast" class="toast" hidden></div><div id="achieve-pop" aria-live="polite"></div>`;
+    this.root.innerHTML = `<div class="app" id="ui"></div><div id="toast" class="toast" hidden></div><div id="achieve-pop" aria-live="polite"></div><div id="highlight-pop" hidden></div>`;
   }
 
   private showToast(msg: string, ms = 2500): void {
@@ -571,8 +584,40 @@ export class AppUI {
         selfAlive,
       );
       for (const id of fresh) this.showAchievementCard(id);
+      // 6H-4：轮结束事件 → 高光横幅（本轮事件聚合，5s 淡出）
+      if (e.type === 'score.roundWinner') this.showHighlight(v);
     }
     this.lastSoundSeq = Math.max(this.lastSoundSeq, maxSeq);
+  }
+
+  /** 6H-4：展示本轮高光（点击展开完整日志，5s 自动淡出，不阻塞下一轮） */
+  private showHighlight(v: PlayerView): void {
+    const roundEvents = v.events
+      .filter((e) => (e as { round?: unknown }).round === v.round)
+      .map((e) => ({ type: e.type, payload: (e.payload ?? {}) as Record<string, unknown> }));
+    this.highlight = buildHighlight(roundEvents, (id) => seatName(v, id));
+    this.highlightExpanded = false;
+    this.renderHighlight();
+    if (this.highlightTimer) clearTimeout(this.highlightTimer);
+    this.highlightTimer = setTimeout(() => this.hideHighlight(), 5000);
+  }
+
+  private renderHighlight(): void {
+    const host = this.root.querySelector('#highlight-pop');
+    if (!host || !this.highlight) return;
+    host.innerHTML = highlightBannerHtml(this.highlight, this.highlightExpanded);
+    host.toggleAttribute('hidden', false);
+  }
+
+  private hideHighlight(): void {
+    this.highlightTimer = null;
+    this.highlight = null;
+    this.highlightExpanded = false;
+    const host = this.root.querySelector('#highlight-pop');
+    if (host) {
+      host.toggleAttribute('hidden', true);
+      host.innerHTML = '';
+    }
   }
 
   /** 6H-3：成就解锁卡片（右上角滑入，3s 淡出，不阻塞） */
@@ -1095,6 +1140,7 @@ export class AppUI {
       this.resetIdentityUi();
       this.soundPrimed = false;
       this.achieve.resetGame();
+      this.hideHighlight();
       this.audio.stopBgm();
       this.render();
     });
