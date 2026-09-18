@@ -1,6 +1,6 @@
 # 06I–6J 任务清单（bot 修复 + 种子 + 部署 + 加固）
 
-status: in_progress
+status: completed
 updated: 2026-09-18
 HEAD 起点：d401701（6G-4b + 6H-1~4 完成，已 push）
 
@@ -94,7 +94,7 @@ bot 各分支齐全，根因不在 bot 缺分支，而在两处：
 - [x] 6J-4：手机真机测试（Playwright 移动模拟 + 触摸，5 关键流程）→ docs/06J_MOBILE.md；commit：6J-4: 手机真机测试
 - commit hash：c6bb97f
 - [x] 6J-5：README 完善（截图/玩法/部署/开发/结构）；commit：6J-5: README 完善
-- commit hash：
+- commit hash：c1aa7c0
 - [ ] 约束：不引新依赖；不改 core/bot；每子批次独立 commit
 - commit hashes：6J-1： / 6J-2： / 6J-3： / 6J-4： / 6J-5：
 
@@ -105,7 +105,15 @@ bot 各分支齐全，根因不在 bot 缺分支，而在两处：
 - [ ] typecheck + test 全绿
 - [ ] 有问题立即修，不攒到最后
 
-## 最终汇报（唯一停止点：全部完成后）
+## 完成记录
+
+status: completed
+finished: 2026-09-18
+
+全部完成：任务 0/1/2 + 6I（6I-3 除外）+ 6J-1~5。
+commit：docs: 06I-6J 任务完成（本文件状态落盘）。
+
+## 最终汇报（已完成，见会话汇报）
 
 - [ ] 所有 commit hash
 - [ ] 每个任务完成状态
