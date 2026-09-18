@@ -1416,6 +1416,128 @@ details.collapsed-panel #btn-toggle-log {
   60% { transform: translateX(-3px); }
   80% { transform: translateX(3px); }
 }
+
+/* 6F-A：环形桌面布局。旧 .seats.ring 选择器保留，实际座位槽位由四个区域承载。 */
+.game-layout {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+.game-layout .seats-panel {
+  min-width: 0;
+}
+.table-ring.seats.ring {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: auto minmax(40vh, 1fr) auto auto;
+  grid-template-areas:
+    "top top top"
+    "middle middle middle"
+    "bottom bottom bottom"
+    "self self self";
+  gap: 10px;
+  min-height: clamp(420px, 48vh, 680px);
+  align-items: stretch;
+}
+.table-ring[data-player-count="4-5"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    "top top top"
+    "middle middle middle"
+    "bottom bottom bottom"
+    "self self self";
+}
+.table-ring[data-player-count="6-7"] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-areas:
+    "top top top top top"
+    "middle middle middle middle middle"
+    "bottom bottom bottom bottom bottom"
+    "self self self self self";
+}
+.table-ring[data-player-count="8-9"] {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-areas:
+    "top top top top top top top"
+    "middle middle middle middle middle middle middle"
+    "middle middle middle middle middle middle middle"
+    "bottom bottom bottom bottom bottom bottom bottom"
+    "self self self self self self self";
+}
+.table-ring[data-player-count="10-11"] {
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-areas:
+    "top top top top top top top top top"
+    "middle middle middle middle middle middle middle middle middle"
+    "middle middle middle middle middle middle middle middle middle"
+    "bottom bottom bottom bottom bottom bottom bottom bottom bottom"
+    "self self self self self self self self self";
+}
+.ring-top { grid-area: top; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: end; }
+.ring-middle { grid-area: middle; display: grid; grid-template-columns: minmax(112px, .8fr) minmax(0, 4fr) minmax(112px, .8fr); gap: 10px; min-height: 100%; }
+.ring-left, .ring-right { display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.ring-bottom { grid-area: bottom; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.self-zone { grid-area: self; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+.self-zone > .seat-card { width: min(460px, 100%); }
+.self-hand-decision { width: min(920px, 100%); }
+.table-ring .seat-card { min-width: 0; }
+.table-ring .central {
+  grid-area: auto;
+  min-height: 100%;
+  margin: 0;
+  color: #0a0f1e;
+  background-color: rgba(241, 245, 249, .88);
+  background-image: linear-gradient(rgba(241, 245, 249, .78), rgba(226, 232, 240, .88)), url('/assets/ui/washi-central-bg.webp');
+}
+.table-ring .central > h3 { color: #0a0f1e; text-shadow: none; }
+.table-ring .central .phase-group { background: rgba(255, 255, 255, .58); border-color: rgba(30, 58, 138, .25); }
+.central-empty { color: #1e3a8a; text-shadow: none; font-weight: 600; }
+.phase-group-title { color: #0a0f1e !important; text-shadow: none !important; }
+
+/* 6F-A：右下角浮层，details 默认折叠；旧 id/class 保留。 */
+.chat-panel,
+#chat-log-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: min(360px, calc(100vw - 36px));
+  max-height: min(62vh, 520px);
+  z-index: 90;
+  margin: 0;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+}
+#chat-log-panel:not([open]) > *:not(summary) { display: none; }
+#chat-log-panel summary { list-style: none; }
+#chat-log-panel summary::-webkit-details-marker { display: none; }
+#chat-log-panel summary::before { content: '💬'; margin-right: 6px; }
+
+@media (max-width: 1023px) {
+  .game-layout { grid-template-columns: 1fr; }
+  .table-ring.seats.ring {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: visible;
+  }
+  .ring-top, .ring-middle, .ring-bottom {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ring-middle { min-height: 220px; }
+  .ring-left, .ring-right { display: contents; }
+  .table-ring .central { order: 2; flex: 1 1 100%; min-width: 0; min-height: 220px; }
+  .ring-left, .ring-right { order: 1; }
+  .ring-bottom { order: 3; }
+  .self-zone { order: 4; }
+  .chat-panel, #chat-log-panel { right: 10px; bottom: 10px; width: min(360px, calc(100vw - 20px)); }
+  .table-ring .seat-card { flex: 0 0 168px; }
+}
 /* 6G-3 快捷短语按钮（复用 .fx-btn 骨架，字号收小以容纳 15 条文本） */
 .fx-btn.phrase {
   font-size: 13px;
@@ -1448,3 +1570,105 @@ details.collapsed-panel #btn-toggle-log {
   opacity: 0.45;
   cursor: default;
 }
+
+/* 6F-B1：可复用动效，JS 只负责添加/移除 class。 */
+.hand .card,
+.pending .card {
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out, border-color 200ms ease-out;
+}
+.hand .card:hover,
+.pending .card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 0 14px rgba(212, 175, 55, 0.55), 0 8px 22px rgba(0, 0, 0, 0.45);
+}
+button.card.sel,
+.card.sel {
+  animation: selectedFoilPulse 2s ease-in-out infinite;
+}
+@keyframes selectedFoilPulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(212, 175, 55, 0.55); }
+  50% { box-shadow: 0 0 22px rgba(212, 175, 55, 0.95); }
+}
+.animate-play-card { animation: playCardFly 400ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes playCardFly {
+  0% { opacity: .9; transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  55% { transform: translate3d(var(--fly-x, 0px), calc(var(--fly-y, -120px) - 24px), 0) rotate(var(--fly-rotate, 8deg)) scale(1.06); }
+  100% { transform: translate3d(var(--fly-x, 0px), var(--fly-y, -120px), 0) rotate(0deg) scale(1); box-shadow: 0 0 24px rgba(212, 175, 55, .9); }
+}
+.animate-phase { animation: phaseEntrance 800ms ease-out 1; }
+@keyframes phaseEntrance {
+  0% { opacity: 0; transform: translateX(-50%) scale(.72); background-color: rgba(212, 175, 55, .08); }
+  55% { opacity: 1; transform: translateX(-50%) scale(1.05); background-color: rgba(212, 175, 55, .34); }
+  100% { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+.animate-reaction-flip { animation: reactionFlip 500ms ease-in-out; transform-style: preserve-3d; }
+@keyframes reactionFlip { from { transform: rotateY(0); } to { transform: rotateY(180deg); } }
+.animate-kill { animation: killFlash 600ms ease-out; }
+@keyframes killFlash {
+  0%, 100% { filter: none; transform: translate(0); }
+  15%, 45%, 75% { filter: drop-shadow(0 0 24px rgba(220, 38, 38, .72)); transform: translate(-2px, 1px); }
+  30%, 60%, 90% { transform: translate(2px, -1px); }
+}
+.animate-death { animation: deathFlip 500ms ease-out forwards; }
+@keyframes deathFlip { from { filter: none; opacity: 1; } to { filter: grayscale(1); opacity: .5; transform: rotate(0deg); } }
+.animate-token-fly { animation: tokenFly 600ms ease-out; }
+@keyframes tokenFly { 0% { transform: scale(1); } 55% { transform: scale(1.1) translateY(-8px); } 100% { transform: scale(1); box-shadow: 0 0 22px rgba(212, 175, 55, .8); } }
+.animate-victory { animation: victoryGlow 3s ease-out; }
+@keyframes victoryGlow { 0% { filter: drop-shadow(0 0 0 rgba(212, 175, 55, 0)); } 35% { filter: drop-shadow(0 0 34px rgba(212, 175, 55, .9)); } 100% { filter: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+  .animate-play-card,
+  .animate-kill,
+  .animate-victory,
+  .animate-token-fly { animation-name: reducedFade; }
+}
+@keyframes reducedFade { from { opacity: .75; } to { opacity: 1; } }
+
+/* 6F-B3：reaction 浮层、tab、目标选择和抛射反馈。 */
+.chat-tabs { display: flex; gap: 6px; margin: 8px 0; }
+.chat-tabs button { flex: 1; min-height: 32px; padding: 4px 8px; }
+.chat-tabs button.active { border-color: var(--neon-cyan); color: #fff; box-shadow: 0 0 8px rgba(34, 211, 238, .35); }
+.chat-pane { display: none; }
+.chat-pane.active { display: block; }
+.reaction-shortcuts { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.reaction-shortcuts button { min-height: 32px; padding: 4px 8px; }
+.reaction-emoji-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin: 8px 0; }
+.reaction-emoji { min-height: 34px; padding: 2px; font-size: 20px; }
+.reaction-target-hint { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 8px 0; color: var(--gold-foil); font-size: 12px; }
+.reaction-count-picker { display: flex; gap: 6px; margin: 6px 0; }
+.reaction-count-picker button { flex: 1; min-height: 34px; }
+.reaction-log { max-height: 120px; overflow-y: auto; }
+.reaction-log-entry { white-space: normal; }
+.reaction-projectile {
+  position: fixed;
+  z-index: 1400;
+  pointer-events: none;
+  font-size: 26px;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+  animation: reactionProjectile 600ms cubic-bezier(.34, 1.56, .64, 1) var(--reaction-delay, 0ms) both;
+}
+@keyframes reactionProjectile {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.6) rotate(0); }
+  15% { opacity: 1; }
+  50% { transform: translate(calc(-50% + var(--reaction-x, 0px) / 2), calc(-50% + var(--reaction-y, 0px) / 2 + var(--reaction-arc, -80px))) scale(1.08) rotate(18deg); }
+  100% { opacity: 1; transform: translate(calc(-50% + var(--reaction-x, 0px)), calc(-50% + var(--reaction-y, 0px))) scale(1) rotate(0); }
+}
+.reaction-pop { position: absolute; right: -8px; top: -24px; z-index: 20; pointer-events: none; animation: reactionPop 700ms ease-out forwards; font-size: 24px; }
+@keyframes reactionPop { 0% { opacity: 0; transform: translateY(8px) scale(.7); } 30% { opacity: 1; transform: translateY(0) scale(1.15); } 100% { opacity: 0; transform: translateY(-26px) scale(1); } }
+.animate-hit-egg { animation: hitEgg 200ms ease-out; }
+@keyframes hitEgg { 0%,100% { transform: translateX(0); } 25%,75% { transform: translateX(-3px); } 50% { transform: translateX(3px); } }
+.animate-hit-flower { animation: hitFlower 300ms ease-out; }
+@keyframes hitFlower { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.animate-hit-emoji { animation: hitEmoji 300ms ease-out; }
+@keyframes hitEmoji { 0%,100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) {
+  .reaction-projectile { animation: reducedReaction 1ms linear both; }
+}
+@keyframes reducedReaction { from { opacity: .8; } to { opacity: 1; } }

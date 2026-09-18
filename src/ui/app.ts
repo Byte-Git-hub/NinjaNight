@@ -4,6 +4,8 @@ import type {
   VoiceSeatState,
   EffectBatchItem,
   MarkPair,
+  ReactionEventPayload,
+  ReactionKind,
 } from '../shared/protocol';
 import { MARK_PER_SEAT_MAX, parseGameSeed } from '../shared/timeouts';
 import { ErrToastGate, shouldHandleImg } from './error-guard';
@@ -95,6 +97,8 @@ const PRELOAD_VISUALS = [
   'ronin',
 ];
 
+const REACTION_EMOJIS = ['😂', '👍', '😮', '🎉', '💀', '🎴', '🥷', '⚔️', '🔥', '👏', '❤️', '❓', '😎', '🤝', '😭', '🤔', '💢', '✨', '🙈', '🍵', '🌙', '🐉', '🎯', '💯'];
+
 function preloadAssets(): void {
   if (typeof window === 'undefined') return;
   for (const v of PRELOAD_VISUALS) {
@@ -145,6 +149,7 @@ export class AppUI {
   /** 6H-1 音效（本地合成，不经 server） */
   private audio = new AudioManager();
   private lastSoundSeq = 0;
+  private lastAnimationSeq = 0;
   private lastSoundPhase = '';
   private soundPrimed = false;
   /** 6H-1：音效面板显隐（字段保持，避免重渲染丢失） */
@@ -162,6 +167,11 @@ export class AppUI {
   private fxLayer: EffectLayer | null = null;
   private marks: MarkPair[] = [];
   private fxTarget = '';
+  private reactionDraft: { kind: ReactionKind; emoji?: string } | null = null;
+  private reactionTargetSeatId = '';
+  private reactionLogs: string[] = [];
+  private chatPanelOpen = false;
+  private chatTab: 'chat' | 'log' | 'reaction' = 'chat';
   /** 座位卡抖动：seatId → 命中时间戳（render 时超 350ms 的修剪，避免重渲染复播） */
   private fxHit = new Map<string, number>();
   /** 6J-2 全局错误 toast 节流 */
@@ -266,6 +276,7 @@ export class AppUI {
         if (this.view && this.view.round !== v.round) {
           this.housePeek = false;
         }
+        const hadView = this.view !== null;
         this.view = v;
         // 6F-4：本会话首次见到该轮即弹身份（正常开局首个快照为 draft 系；新标签重连中途也提醒一次）
         // 6G-4b(C2)：终局快照不弹身份，避免结算排名被新轮弹窗覆盖
@@ -276,12 +287,14 @@ export class AppUI {
         // 6H-1：新事件 → 音效（首个快照只记 seq，不补播）
         this.playViewSounds(v);
         this.render();
+        if (hadView) this.animateViewEvents(v);
       },
       onChat: (c) => {
         this.chat.push(c);
         if (this.chat.length > 80) this.chat.shift();
         this.render();
       },
+      onReaction: (r) => this.onReaction(r),
       onStatus: (s) => {
         this.status = s;
         this.render();
@@ -342,6 +355,13 @@ export class AppUI {
     // 6G-2：根点击委托（mount 时一次）。render 会重建 #ui 内所有节点，
     // 逐个绑定会被重渲染竞态吞点击；委托挂在常驻 root 上，天然免疫。
     this.root.addEventListener('click', (ev) => this.onRootClick(ev));
+    window.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && (this.reactionDraft || this.reactionTargetSeatId)) {
+        this.reactionDraft = null;
+        this.reactionTargetSeatId = '';
+        this.render();
+      }
+    });
   }
 
   /**
@@ -391,6 +411,46 @@ export class AppUI {
       this.socialNet.sendPhrase(id);
       return;
     }
+    const reactionBtn = t.closest('[data-reaction-kind], [data-reaction-emoji]');
+    if (reactionBtn) {
+      const el = reactionBtn as HTMLElement;
+      const kind = el.dataset['reactionKind'] as ReactionKind | undefined;
+      const emoji = el.dataset['reactionEmoji'];
+      if (kind === 'emoji' && !emoji) {
+        this.chatPanelOpen = true;
+        this.chatTab = 'reaction';
+        this.render();
+        return;
+      }
+      if (kind === 'egg' || kind === 'flower' || (kind === 'emoji' && emoji)) {
+        this.reactionDraft = kind === 'emoji' ? { kind, emoji } : { kind };
+        this.reactionTargetSeatId = '';
+        this.chatPanelOpen = true;
+        this.chatTab = 'reaction';
+        this.render();
+      }
+      return;
+    }
+    const reactionCount = t.closest('[data-reaction-count]');
+    if (reactionCount && this.reactionDraft && this.reactionTargetSeatId) {
+      const count = Number((reactionCount as HTMLElement).dataset['reactionCount']);
+      if (Number.isInteger(count) && count >= 1 && count <= 10) {
+        const target = this.reactionTargetSeatId;
+        const draft = this.reactionDraft;
+        this.net.sendReaction(target, draft.kind, count, draft.emoji);
+        this.reactionDraft = null;
+        this.reactionTargetSeatId = '';
+        this.render();
+      }
+      return;
+    }
+    const reactionCancel = t.closest('[data-reaction-cancel]');
+    if (reactionCancel) {
+      this.reactionDraft = null;
+      this.reactionTargetSeatId = '';
+      this.render();
+      return;
+    }
     const emojiBtn = t.closest('[data-emoji]');
     if (emojiBtn) {
       const emojiId = (emojiBtn as HTMLElement).dataset['emoji'] ?? '';
@@ -408,6 +468,14 @@ export class AppUI {
       if (t.closest('button, .flip-wrap, a, input, summary')) return;
       const sid = (card as HTMLElement).dataset['seat'] ?? '';
       if (!sid) return;
+      if (this.reactionDraft) {
+        if (sid === this.view?.self.seatId) return;
+        this.reactionTargetSeatId = sid;
+        this.chatPanelOpen = true;
+        this.chatTab = 'reaction';
+        this.render();
+        return;
+      }
       // 再点同一张取消选中
       this.fxTarget = this.fxTarget === sid ? '' : sid;
       this.render();
@@ -435,6 +503,58 @@ export class AppUI {
       if (combo >= 2) layer.textAt(el, `${combo} 连击`);
     }
     this.render();
+  }
+
+  private onReaction(event: ReactionEventPayload): void {
+    const v = this.view;
+    if (v) {
+      const from = v.seats.find((s) => s.seatId === event.fromSeatId)?.nickname ?? event.fromSeatId;
+      const to = v.seats.find((s) => s.seatId === event.targetSeatId)?.nickname ?? event.targetSeatId;
+      const label = event.kind === 'egg' ? '砸了' : event.kind === 'flower' ? '送了' : '发送了';
+      const item = event.kind === 'egg' ? `${event.count} 个蛋` : event.kind === 'flower' ? `${event.count} 朵花` : `${event.emoji ?? ''}`;
+      this.reactionLogs.push(`${from} 向 ${to} ${label} ${item}`);
+      if (this.reactionLogs.length > 80) this.reactionLogs.shift();
+    }
+    this.render();
+    window.setTimeout(() => this.animateReaction(event), 0);
+  }
+
+  private animateReaction(event: ReactionEventPayload): void {
+    const source = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(event.fromSeatId)}"]`);
+    const target = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(event.targetSeatId)}"]`);
+    if (!source || !target || typeof document === 'undefined') return;
+    const a = source.getBoundingClientRect();
+    const b = target.getBoundingClientRect();
+    const icon = event.kind === 'egg' ? '🥚' : event.kind === 'flower' ? '🌸' : (event.emoji ?? '✨');
+    const total = Math.max(1, Math.min(10, event.count));
+    for (let i = 0; i < total; i += 1) {
+      const projectile = document.createElement('span');
+      projectile.className = 'reaction-projectile';
+      projectile.textContent = icon;
+      const ox = Math.round((Math.random() * 30) - 15);
+      const oy = Math.round((Math.random() * 30) - 15);
+      projectile.style.setProperty('--reaction-x', `${b.left - a.left + ox}px`);
+      projectile.style.setProperty('--reaction-y', `${b.top - a.top + oy}px`);
+      projectile.style.setProperty('--reaction-arc', `${Math.min(-70, -(Math.abs(b.top - a.top) * 0.35 + 70))}px`);
+      projectile.style.setProperty('--reaction-delay', `${i * 80}ms`);
+      projectile.style.left = `${a.left + a.width / 2}px`;
+      projectile.style.top = `${a.top + a.height / 2}px`;
+      document.body.appendChild(projectile);
+      projectile.addEventListener('animationend', () => {
+        projectile.remove();
+        this.addReactionFeedback(target, event.kind, event.emoji);
+      }, { once: true });
+    }
+  }
+
+  private addReactionFeedback(target: HTMLElement, kind: ReactionKind, emoji?: string): void {
+    const cls = kind === 'egg' ? 'animate-hit-egg' : kind === 'flower' ? 'animate-hit-flower' : 'animate-hit-emoji';
+    this.addAnimationElement(target, cls);
+    const pop = document.createElement('span');
+    pop.className = 'reaction-pop';
+    pop.textContent = kind === 'egg' ? '🥚' : kind === 'flower' ? '🌸' : (emoji ?? '✨');
+    target.appendChild(pop);
+    window.setTimeout(() => pop.remove(), 700);
   }
 
   /** 6G-2：本地回退渲染（镜像限频/离线时只画本地，不发网） */
@@ -598,6 +718,7 @@ export class AppUI {
     if (!this.soundPrimed) {
       this.soundPrimed = true;
       this.lastSoundSeq = maxSeq;
+      this.lastAnimationSeq = maxSeq;
       this.lastSoundPhase = v.phase;
       // 6H-2：首快照即同步 BGM 轨道
       this.audio.syncBgmToPhase(v.phase, Boolean(v.gameOver));
@@ -625,6 +746,37 @@ export class AppUI {
       if (e.type === 'score.roundWinner') this.showHighlight(v);
     }
     this.lastSoundSeq = Math.max(this.lastSoundSeq, maxSeq);
+  }
+
+  private animateViewEvents(v: PlayerView): void {
+    const fresh = v.events.filter((e) => (e.seq ?? 0) > this.lastAnimationSeq);
+    if (fresh.length === 0) return;
+    for (const e of fresh) {
+      const payload = (e.payload ?? {}) as Record<string, unknown>;
+      if (e.type === 'night.phaseStarted') this.addAnimation('.phase-banner', 'animate-phase');
+      if (e.type === 'night.playerDied' && typeof payload['seatId'] === 'string') {
+        this.addAnimation(`.seat-card[data-seat="${cssEscape(String(payload['seatId']))}"]`, 'animate-death');
+        this.addAnimation('#ui', 'animate-kill');
+      }
+      if (e.type === 'score.roundWinner') this.addAnimation('.central', 'animate-token-fly');
+      if (e.type === 'score.victory') this.addAnimation('#ui', 'animate-victory');
+      if (e.type === 'night.cardsDeclared') {
+        this.root.querySelectorAll<HTMLElement>('.hand .card.sel').forEach((el) => this.addAnimationElement(el, 'animate-play-card'));
+      }
+    }
+    this.lastAnimationSeq = Math.max(this.lastAnimationSeq, ...fresh.map((e) => e.seq ?? 0));
+  }
+
+  private addAnimation(selector: string, className: string): void {
+    const el = this.root.querySelector<HTMLElement>(selector);
+    if (el) this.addAnimationElement(el, className);
+  }
+
+  private addAnimationElement(el: HTMLElement, className: string): void {
+    el.classList.remove(className);
+    void el.offsetWidth;
+    el.classList.add(className);
+    el.addEventListener('animationend', () => el.classList.remove(className), { once: true });
   }
 
   /** 6H-4：展示本轮高光（点击展开完整日志，5s 自动淡出，不阻塞下一轮） */
@@ -701,6 +853,7 @@ export class AppUI {
     s: { seatId: string; nickname: string; connected: boolean; isHost: boolean; isBot?: boolean },
     v: PlayerView | null,
     isSelf: boolean,
+    seatPosition = isSelf ? 'self' : 'top-1',
   ): string {
     const alive = 'alive' in s ? (s as { alive?: boolean }).alive : undefined;
     const tokens = 'honorTokenCount' in s ? (s as { honorTokenCount?: number }).honorTokenCount : undefined;
@@ -736,7 +889,7 @@ export class AppUI {
         : '';
     const tokenStack =
       inGame && tokens !== undefined
-        ? `<span class="token-stack" title="令牌 ${tokens} 枚"><img src="${getHonorTokenPath()}" alt="令牌" /><i>×${tokens}</i></span>`
+        ? `<span class="token-stack" title="令牌 ${tokens} 枚"><img src="${getHonorTokenPath()}" alt="令牌" onerror="this.style.visibility='hidden'" /><i>×${tokens}</i></span>`
         : '';
 
     // 自己的身份/令牌面值：覆盖态只露令牌 + 点击查看提示；窥视态才显示身份名（6F-4）
@@ -773,7 +926,7 @@ export class AppUI {
     const markB = inGame ? markBadge(this.marks, s.seatId) : '';
     const markB2 = inGame && !isSelf ? markButton(this.marks, selfId, s.seatId, MARK_PER_SEAT_MAX) : '';
 
-    return `<li class="seat-card${s.isHost ? ' host' : ''}${isBot ? ' bot' : ''}${dead ? ' dead' : ''}${isSelf ? ' self' : ''}${speakingCls}${hitCls}${targetCls}" data-seat="${escapeHtml(s.seatId)}">
+    return `<li class="seat-card${s.isHost ? ' host' : ''}${isBot ? ' bot' : ''}${dead ? ' dead' : ''}${isSelf ? ' self' : ''}${speakingCls}${hitCls}${targetCls}" data-seat="${escapeHtml(s.seatId)}" data-seat-position="${escapeHtml(seatPosition)}">
       <div class="seat-head"><b>${isBot ? '🤖 ' : ''}${escapeHtml(s.nickname)}</b> <span class="seat-id">${escapeHtml(s.seatId)}</span>${s.isHost ? '👑' : ''} ${s.connected ? '●' : '○'}${mic}${markB}${isSelf ? '<em class="you">你</em>' : ''}</div>
       ${inGame ? `<div class="seat-body">${houseImg}${handStack}${tokenStack}</div>` : ''}
       ${selfMeta}
@@ -794,18 +947,38 @@ export class AppUI {
     // 大厅才用 presence（含 ready）。反向会把对局字段遮掉（6F-4 目检发现）。
     const allSeats = v?.seats ?? p?.seats ?? [];
     const selfId = v?.self.seatId ?? this.net.seatId ?? '';
-    // 保持服务端座位顺序（e2e 靠 nth() 定位）；自己视觉置底由 CSS order + grid-column 实现
-    const seats = allSeats.map((s) => this.seatCard(s, v ?? null, s.seatId === selfId)).join('');
+    const others = allSeats.filter((s) => s.seatId !== selfId);
+    const bucket = playerCountBucket(allSeats.length);
+    const positions = ringPositions(bucket, others.length);
+    const seatByPosition = new Map<string, string>();
+    others.forEach((s, i) => seatByPosition.set(positions[i] ?? `top-${i + 1}`, this.seatCard(s, v ?? null, false, positions[i] ?? `top-${i + 1}`)));
+    const ring = (prefix: string) => [...seatByPosition.entries()]
+      .filter(([p]) => p.startsWith(`${prefix}-`))
+      .map(([, html]) => html)
+      .join('');
+    const selfSeat = allSeats.find((s) => s.seatId === selfId);
+    const selfHtml = selfSeat ? this.seatCard(selfSeat, v ?? null, true, 'self') : '';
+    const central = v ? this.centralArea(v) : '';
+    const selfContent = v ? this.handDecisionHtml(v, v.pendingDecision ?? null) : '';
 
     const pending = v?.pendingDecision;
 
     return `
-      <div class="grid table-layout">
+      <div class="grid table-layout${v ? ' game-layout' : ''}">
         <section class="panel seats-panel">
           <h2>座位</h2>
           <div class="table">
             <img class="table-emblem" src="${getTableEmblemPath()}" alt="" aria-hidden="true" />
-            <ul class="seats ring">${seats}</ul>
+            <div class="table-ring seats ring" data-player-count="${bucket}">
+              <div class="self-zone" data-seat-position="self">${selfHtml}${selfContent}</div>
+              <div class="ring-top" data-ring="top">${ring('top')}</div>
+              <div class="ring-middle">
+                <div class="ring-left" data-ring="left">${ring('left')}</div>
+                ${central}
+                <div class="ring-right" data-ring="right">${ring('right')}</div>
+              </div>
+              <div class="ring-bottom" data-ring="bottom">${ring('bottom')}</div>
+            </div>
           </div>
           ${!v ? this.lobbyControls() : ''}
           ${this.voiceBar()}
@@ -898,23 +1071,10 @@ export class AppUI {
   }
 
   private gamePanels(v: PlayerView, pending: PendingDecision | null): string {
-    const self = v.self;
-    // 声明窗口：仅 pending.options 内的牌可打，其余置灰且不可勾选
-    const playableSet =
-      pending?.kind === 'declareCards' ? new Set<string>(pending.options) : null;
-    const hand = self.hand
-      .map((c) => {
-        const isSel = this.selected.has(c.instanceId);
-        const offPhase = playableSet !== null && !playableSet.has(c.instanceId);
-        const cls = `${isSel ? 'sel' : ''}${offPhase ? ' dim' : ''}`.trim();
-        return renderCardHtml(c.cardId, c.instanceId, true, cls);
-      })
-      .join('');
-    const reserved = self.reserved
+    const reserved = v.self.reserved
       .map((c) => renderCardHtml(c.cardId, c.instanceId, false))
       .join('');
-    const central = this.centralArea(v);
-    const known = self.knownHouseHistory
+    const known = v.self.knownHouseHistory
       .map((k) => {
         const targetSeat = v.seats.find((s) => s.seatId === k.targetSeatId);
         const targetName = targetSeat ? `${targetSeat.nickname} (${k.targetSeatId})` : k.targetSeatId;
@@ -960,15 +1120,7 @@ export class AppUI {
         ${gameOverBanner}
         ${roundBanner}
         ${nextRoundBtn}
-        ${central}
         ${this.fxBarHtml(v)}
-        <div class="bottom-bar">
-          <div class="hand-section">
-            <h3>手牌</h3>
-            <div class="hand">${hand || '<i>无手牌</i>'}</div>
-          </div>
-          <div id="decision-zone">${this.pendingPanel(pending)}</div>
-        </div>
         <div class="reserved"><b>预留：</b>${reserved || '无'}</div>
         <div class="known"><h3>已知身份</h3>${known || '无'}</div>
         <div class="row">
@@ -978,6 +1130,20 @@ export class AppUI {
         ${this.net.isHost ? this.kickButtons() : ''}
       </section>
     `;
+  }
+
+  private handDecisionHtml(v: PlayerView, pending: PendingDecision | null): string {
+    const playableSet = pending?.kind === 'declareCards' ? new Set<string>(pending.options) : null;
+    const hand = v.self.hand.map((c) => {
+      const isSel = this.selected.has(c.instanceId);
+      const offPhase = playableSet !== null && !playableSet.has(c.instanceId);
+      const cls = `${isSel ? 'sel' : ''}${offPhase ? ' dim' : ''}`.trim();
+      return renderCardHtml(c.cardId, c.instanceId, true, cls);
+    }).join('');
+    return `<div class="bottom-bar self-hand-decision">
+      <div class="hand-section"><h3>手牌</h3><div class="hand">${hand || '<i>无手牌</i>'}</div></div>
+      <div id="decision-zone">${this.pendingPanel(pending)}</div>
+    </div>`;
   }
 
   /**
@@ -1017,15 +1183,41 @@ export class AppUI {
           .map((e) => `<div class="ev" title="${escapeHtml(e.type)}">${escapeHtml(eventLabel(e, v))}</div>`)
           .join('')
       : '';
-    return `<details class="panel chat collapsed-panel" id="chat-log-panel">
+    const reactionEmojis = REACTION_EMOJIS.map((e) => `<button type="button" class="reaction-emoji" data-reaction-kind="emoji" data-reaction-emoji="${escapeHtml(e)}" aria-label="发送 ${escapeHtml(e)}">${e}</button>`).join('');
+    const reactionLogs = this.reactionLogs.length > 0
+      ? this.reactionLogs.map((x) => `<div class="ev reaction-log-entry">${escapeHtml(x)}</div>`).join('')
+      : '<div class="chat-empty">暂无互动记录</div>';
+    const targetName = this.reactionTargetSeatId && v
+      ? v.seats.find((s) => s.seatId === this.reactionTargetSeatId)?.nickname ?? this.reactionTargetSeatId
+      : '';
+    const picker = this.reactionDraft
+      ? `<div class="reaction-target-hint">${targetName ? `目标：${escapeHtml(targetName)}` : '请选择目标座位'}${this.reactionTargetSeatId ? ' · 选择数量' : ''}<button type="button" data-reaction-cancel>取消</button></div>
+         ${this.reactionTargetSeatId ? `<div class="reaction-count-picker">${[1, 3, 5, 10].map((n) => `<button type="button" data-reaction-count="${n}">${n}</button>`).join('')}</div>` : ''}`
+      : '';
+    return `<details class="panel chat chat-panel collapsed-panel" id="chat-log-panel"${this.chatPanelOpen ? ' open' : ''}>
       <summary>聊天/日志</summary>
       <button type="button" id="btn-toggle-log" class="muted">展开/收起</button>
-      <div class="chat-log" id="chat-log">${chatHtml}</div>
-      <div class="row">
-        <input id="chat-input" maxlength="200" placeholder="说点什么…" />
-        <button id="btn-chat" type="button">发送</button>
+      <nav class="chat-tabs" aria-label="聊天日志互动">
+        <button type="button" data-chat-tab="chat" class="${this.chatTab === 'chat' ? 'active' : ''}">聊天</button>
+        <button type="button" data-chat-tab="log" class="${this.chatTab === 'log' ? 'active' : ''}">日志</button>
+        <button type="button" data-chat-tab="reaction" class="${this.chatTab === 'reaction' ? 'active' : ''}">互动</button>
+      </nav>
+      <div class="chat-pane${this.chatTab === 'chat' ? ' active' : ''}" data-chat-pane="chat">
+        <div class="reaction-shortcuts">
+          <button type="button" data-reaction-kind="emoji">😀 表情</button>
+          <button type="button" data-reaction-kind="egg">🥚 砸蛋</button>
+          <button type="button" data-reaction-kind="flower">🌸 送花</button>
+        </div>
+        <div class="chat-log" id="chat-log">${chatHtml}</div>
+        <div class="row"><input id="chat-input" maxlength="200" placeholder="说点什么…" /><button id="btn-chat" type="button">发送</button></div>
       </div>
-      ${v ? `<h3 class="log-title">对局日志</h3><div class="log" id="game-log">${logHtml}</div>` : ''}
+      <div class="chat-pane${this.chatTab === 'log' ? ' active' : ''}" data-chat-pane="log">
+        ${v ? `<h3 class="log-title">对局日志</h3><div class="log" id="game-log">${logHtml}</div>` : ''}
+      </div>
+      <div class="chat-pane${this.chatTab === 'reaction' ? ' active' : ''}" data-chat-pane="reaction">
+        <div class="reaction-shortcuts"><button type="button" data-reaction-kind="egg">🥚 砸蛋</button><button type="button" data-reaction-kind="flower">🌸 送花</button></div>
+        <div class="reaction-emoji-grid">${reactionEmojis}</div>${picker}<div class="reaction-log">${reactionLogs}</div>
+      </div>
     </details>`;
   }
 
@@ -1077,7 +1269,7 @@ export class AppUI {
                 )
                 .join('')
             : '<div class="central-empty">本阶段暂无打出</div>';
-        return `<div class="phase-group${isNow ? ' now' : ' past'}" data-phase="${escapeHtml(ph)}"><h4>${escapeHtml(phaseLabel(ph))}${isNow ? ' <span class="phase-now">进行中</span>' : ''}</h4><div class="cards-row">${items}</div></div>`;
+        return `<div class="phase-group${isNow ? ' now' : ' past'}" data-phase="${escapeHtml(ph)}"><h4 class="phase-group-title">${escapeHtml(phaseLabel(ph))}${isNow ? ' <span class="phase-now">进行中</span>' : ''}</h4><div class="cards-row">${items}</div></div>`;
       })
       .join('');
     return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3>${body}</section>`;
@@ -1334,7 +1526,23 @@ export class AppUI {
     $('#btn-end')?.addEventListener('click', () => this.net.endGame());
     $('#btn-toggle-log')?.addEventListener('click', () => {
       const d = this.root.querySelector<HTMLDetailsElement>('#chat-log-panel');
-      if (d) d.open = !d.open;
+      if (d) {
+        d.open = !d.open;
+        this.chatPanelOpen = d.open;
+      }
+    });
+    this.root.querySelectorAll<HTMLButtonElement>('[data-chat-tab]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset['chatTab'];
+        if (tab === 'chat' || tab === 'log' || tab === 'reaction') {
+          this.chatTab = tab;
+          this.chatPanelOpen = true;
+          this.render();
+        }
+      });
+    });
+    this.root.querySelector<HTMLDetailsElement>('#chat-log-panel')?.addEventListener('toggle', (ev) => {
+      this.chatPanelOpen = (ev.currentTarget as HTMLDetailsElement).open;
     });
     this.root.querySelectorAll<HTMLButtonElement>('.kick[data-seat]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -1415,6 +1623,32 @@ function phaseLabel(phase: string): string {
   return PHASE_CN[phase] ?? phase;
 }
 
+type PlayerCountBucket = '4-5' | '6-7' | '8-9' | '10-11';
+
+function playerCountBucket(count: number): PlayerCountBucket {
+  if (count >= 10) return '10-11';
+  if (count >= 8) return '8-9';
+  if (count >= 6) return '6-7';
+  return '4-5';
+}
+
+function ringPositions(bucket: PlayerCountBucket, count: number): string[] {
+  const capacity: Record<PlayerCountBucket, string[]> = {
+    '4-5': ['top-1', 'top-2', 'left-1', 'right-1', 'bottom-1'],
+    '6-7': ['top-1', 'top-2', 'top-3', 'left-1', 'right-1', 'bottom-1', 'bottom-2'],
+    '8-9': [
+      'top-1', 'top-2', 'top-3', 'top-4',
+      'left-1', 'left-2', 'right-1', 'right-2',
+      'bottom-1', 'bottom-2', 'bottom-3',
+    ],
+    '10-11': [
+      'top-1', 'top-2', 'top-3', 'top-4', 'top-5',
+      'bottom-1', 'bottom-2', 'bottom-3', 'bottom-4', 'bottom-5',
+    ],
+  };
+  return capacity[bucket].slice(0, Math.max(0, count));
+}
+
 /** 6H-1：音效试听按钮中文名 */
 function sfxCn(n: string): string {
   const map: Record<string, string> = {
@@ -1478,6 +1712,11 @@ function escapeHtml(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function cssEscape(s: string): string {
+  const esc = (globalThis as { CSS?: { escape?: (value: string) => string } }).CSS?.escape;
+  return esc ? esc(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\$&');
 }
 
 function seatName(v: PlayerView, seatId: string): string {
