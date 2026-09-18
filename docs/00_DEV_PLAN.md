@@ -1,8 +1,8 @@
 # 00 — 开发计划与进度
 
-status: 6G 完成  
-updated: 2026-09-18  
-阶段: **6（6G 语音连麦 + 互动特效 + 快捷短语全部完成）**  
+status: 6G-4b + 6H-1~4 完成
+updated: 2026-09-18
+阶段: **6（6G 语音连麦 + 互动特效 + 快捷短语 + 视觉打磨 + 音效/BGM/成就/高光全部完成）**  
 资产口径: **22 项（16 视觉单元 + 2 卡背 + 3 UI 素材 + 1 令牌）+ 图集切割 21 件（9 物品 + 12 表情）**（历史记录中的 16/20 为旧口径，保留原样；当前总量以此处为准）
 
 ---
@@ -348,4 +348,41 @@ updated: 2026-09-18
 - [x] 测试：`tests/integration/phrases.test.ts`（15 条逐字锁定 + 越界拒收）+ `tests/ui/phrases.test.ts` + `tests/e2e/stage6g-phrases.spec.ts`（面板 + toast 回声 + 3s 消失）
 - [x] 收尾：`build:check` 无 dev 泄漏 + 全量 e2e + README 语音端口/防火墙段落 + 本文件更新至 6G 完成
 - [ ] 局域网 2 机手工验证（待用户环境）：语音 + 特效 + 短语跨机同步
+
+### 阶段 6G-4a — 物品/表情尺寸约束 — **完成**
+
+- [x] `EFFECT_ICON_SIZE` 集中定义（粒子 32/连击上限 48/预览 96/徽章 20）；`fx-btn img` 收敛 20px；Canvas 主粒子 32，连击 big 上限 48（`46d4a81`）
+
+### 阶段 6G-4b — 视觉审查与协调性打磨 — **完成**
+
+- [x] 截图基线：`tests/e2e/capture-6g4b.spec.ts`（桌面 1440×900 + 移动 390×844，共 20 状态，`docs/06G_screenshots/`）；兜底写 `-approx` 后缀，不覆盖真实态（`530658d`）
+- [x] 审查报告：`docs/06G_visual_review.md`（critical 3 / major 6 / minor 6，`b0e9c81`）
+- [x] 修复（`cafa399` + `4246133`）：中央 washi 加暗叠加 + 空态可读（C1）；终局抑制身份弹窗（C2，临时验证 spec 通过后删）；反应面板裸英文 + 点"发动"误发 decline（R1，压住通用渲染，只留发动/放弃，`__true/__false` 约定保持）；聊天空态提示（M4）；禁用态对比（M3）；自家令牌行收紧（M2）；移动端堆叠徽章（M6）；横幅行高（m4）；M5 toast 降级为 minor（标准瞬态行为）
+- [x] 补拍：night-known / react-window 为真实态；merchant/assassin 4 次自动尝试未命中（随机发牌），标"需手动截图"；mobile-night/mobile-gameover 为 approx
+- [x] 全量 e2e 37/37 + vitest 174 + build:check 无泄漏
+- [ ] 局域网 2 机手工验证（待用户环境）：merchant/assassin 手动截图 + 跨机视觉确认
+
+### 阶段 6H-1 — 音效系统 — **完成**
+
+- [x] Web Audio 原生合成 11 音效（`src/ui/audio/sfx.ts`），无资源下载、无第三方库；`settings.ts` 开关 + 音量 + localStorage；`index.ts` AudioManager（首次交互建 Context，事件流播新 seq，首快照静默）
+- [x] UI：顶栏喇叭 + 设置面板（开关/音量/11 试听，新选择器）；触发：GameEvent 映射 + 砸物三类音色 + 目标选择"叮"
+- [x] 测试：`tests/ui/audio.test.ts`（12，含 BGM 兼容项）+ `tests/e2e/stage6h-audio.spec.ts` + 11 音效逐个试听无错（临时 spec，跑完删）；截图 `docs/06H_screenshots/audio-panel.png`（`7f6d157`）
+
+### 阶段 6H-2 — BGM/环境音 — **完成**
+
+- [x] `src/ui/audio/bgm.ts`：night（低 drone + 风声/虫鸣）/ reveal（五声音阶拨弦）合成循环，setInterval 前视调度；`phaseToBgmTrack` 纯函数；默认关闭，独立开关 + 音量，复用 settings 持久化（`2d27a5a`）
+- [x] UI：设置面板 BGM 独立开关 + 音量；阶段变化自动切换，离房/终止停止
+- [x] 测试：单测（轨道映射 + 旧存档兼容）+ `tests/e2e/stage6h-bgm.spec.ts`；截图 `bgm-panel.png`
+
+### 阶段 6H-3 — 成就系统 — **完成**
+
+- [x] `src/ui/achievements/`（definitions 8 成就 + store 本地 localStorage + tracker 事件判定；击杀归因见文件注释）；解锁卡片右上滑入 3s；奖杯面板展示已解锁/未解锁（`5a7ae96`）
+- [x] 测试：`tests/ui/achievements.test.ts`（14）+ `tests/e2e/stage6h-achieve.spec.ts`；截图 `achieve-panel.png` + `achieve-unlock.png`
+
+### 阶段 6H-4 — 高光时刻 — **完成**
+
+- [x] `src/ui/highlights/`（summary 聚合：击杀≤3 + 关键牌≤3 + 获胜行，查看类只进完整日志不进横幅，中文牌名/胜方）；横幅顶部浮层 5s 自动淡出，点击展开完整日志，不阻塞下一轮（`ab3c821`）
+- [x] 测试：`tests/ui/highlights.test.ts`（6）+ `tests/e2e/stage6h-highlight.spec.ts`（走完一轮验证横幅 + 展开）；截图 `highlight-banner.png`
+- [x] 收尾：全量 typecheck + vitest 174 + e2e 37/37 + build:check
+- [ ] 局域网 2 机手工验证（待用户环境）：音效/BGM/成就/高光（后三者纯本地，本机验证即可）
 
