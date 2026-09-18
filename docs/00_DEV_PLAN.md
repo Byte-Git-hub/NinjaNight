@@ -319,7 +319,7 @@ updated: 2026-09-18
 - [x] 客户端 `src/net/voice.ts` + `src/ui/voice/`（编排/SVG 图标/控制条）+ 座位卡徽章 + speaking 光效 + 降级三件套横幅
 - [x] 超时/端口常量进 `src/shared/timeouts.ts`（浏览器安全卫语句）；`.env.example` 补媒体端口段与防火墙注释
 - [x] 测试：`tests/integration/voice-state.test.ts`（6）+ `tests/e2e/voice-nomic.spec.ts`（无麦克风不阻塞开局）；typecheck + vitest 107 + e2e 23/23 全绿
-- [ ] 局域网 2 机手工验证（待用户环境）：开/闭麦同步、全局不听、杀 worker 降级
+- [x] 局域网 2 机手工验证（用户已完成）：开/闭麦同步、全局不听、杀 worker 降级
 
 ### 阶段 6G-1-fix — 移动端手牌遮挡修复 — **完成**
 
@@ -347,7 +347,7 @@ updated: 2026-09-18
 - [x] 分层：`src/ui/social/phrases.ts` + `src/net/social.ts`（`SocialNet.sendPhrase/onPhraseArrive`）+ `src/server/social.ts`（`validatePhrase`）
 - [x] 测试：`tests/integration/phrases.test.ts`（15 条逐字锁定 + 越界拒收）+ `tests/ui/phrases.test.ts` + `tests/e2e/stage6g-phrases.spec.ts`（面板 + toast 回声 + 3s 消失）
 - [x] 收尾：`build:check` 无 dev 泄漏 + 全量 e2e + README 语音端口/防火墙段落 + 本文件更新至 6G 完成
-- [ ] 局域网 2 机手工验证（待用户环境）：语音 + 特效 + 短语跨机同步
+- [x] 局域网 2 机手工验证（用户已完成）：语音 + 特效 + 短语跨机同步
 
 ### 阶段 6G-4a — 物品/表情尺寸约束 — **完成**
 
@@ -360,7 +360,7 @@ updated: 2026-09-18
 - [x] 修复（`cafa399` + `4246133`）：中央 washi 加暗叠加 + 空态可读（C1）；终局抑制身份弹窗（C2，临时验证 spec 通过后删）；反应面板裸英文 + 点"发动"误发 decline（R1，压住通用渲染，只留发动/放弃，`__true/__false` 约定保持）；聊天空态提示（M4）；禁用态对比（M3）；自家令牌行收紧（M2）；移动端堆叠徽章（M6）；横幅行高（m4）；M5 toast 降级为 minor（标准瞬态行为）
 - [x] 补拍：night-known / react-window 为真实态；merchant/assassin 4 次自动尝试未命中（随机发牌），标"需手动截图"；mobile-night/mobile-gameover 为 approx
 - [x] 全量 e2e 37/37 + vitest 174 + build:check 无泄漏
-- [ ] 局域网 2 机手工验证（待用户环境）：merchant/assassin 手动截图 + 跨机视觉确认
+- [x] 局域网 2 机手工验证（用户已完成）：merchant/assassin 手动截图 + 跨机视觉确认
 
 ### 阶段 6H-1 — 音效系统 — **完成**
 
@@ -384,5 +384,5 @@ updated: 2026-09-18
 - [x] `src/ui/highlights/`（summary 聚合：击杀≤3 + 关键牌≤3 + 获胜行，查看类只进完整日志不进横幅，中文牌名/胜方）；横幅顶部浮层 5s 自动淡出，点击展开完整日志，不阻塞下一轮（`ab3c821`）
 - [x] 测试：`tests/ui/highlights.test.ts`（6）+ `tests/e2e/stage6h-highlight.spec.ts`（走完一轮验证横幅 + 展开）；截图 `highlight-banner.png`
 - [x] 收尾：全量 typecheck + vitest 174 + e2e 37/37 + build:check
-- [ ] 局域网 2 机手工验证（待用户环境）：音效/BGM/成就/高光（后三者纯本地，本机验证即可）
+- [x] 局域网 2 机手工验证（用户已完成）：音效/BGM/成就/高光（后三者纯本地，本机验证即可）
 
