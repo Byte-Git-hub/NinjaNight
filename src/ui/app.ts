@@ -6,6 +6,7 @@ import type {
   MarkPair,
 } from '../shared/protocol';
 import { MARK_PER_SEAT_MAX, parseGameSeed } from '../shared/timeouts';
+import { ErrToastGate, shouldHandleImg } from './error-guard';
 import type { ConnectionStatus, GameNet } from '../net/client';
 import { VoiceNet } from '../net/voice';
 import { EffectNet } from '../net/effects';
@@ -163,6 +164,9 @@ export class AppUI {
   private fxTarget = '';
   /** 座位卡抖动：seatId → 命中时间戳（render 时超 350ms 的修剪，避免重渲染复播） */
   private fxHit = new Map<string, number>();
+  /** 6J-2 全局错误 toast 节流 */
+  private errGate = new ErrToastGate();
+  private static errHooked = false;
   /** 6J 种子机制：房主指定的固定种子原文（重渲染不丢失；?seed=xxx 预填） */
   private pendingSeed: string | null = null;
 
@@ -175,8 +179,37 @@ export class AppUI {
     this.net = net;
   }
 
+  /**
+   * 6J-2 前端错误边界（三件套，只 log + toast，不抛）：
+   * 1. window.onerror / unhandledrejection → 节流 toast"发生错误，请刷新页面"。
+   * 2. 资源加载失败（capture 期）：非卡面 img 破图时隐藏（卡面自带 onerror 占位，
+   *    fx-btn 等按钮保留文字 label，不影响点击）。
+   * 3. Socket 断开见 render 横幅（"正在重连"，Socket.IO 内置自动重连，恢复后隐藏）。
+   */
+  private mountErrorGuard(): void {
+    if (AppUI.errHooked) return;
+    AppUI.errHooked = true;
+    window.addEventListener('error', (e) => {
+      const t = e.target as unknown;
+      if (t instanceof HTMLImageElement) {
+        if (shouldHandleImg(t.className)) {
+          t.style.visibility = 'hidden';
+          if (t.alt && !t.title) t.title = t.alt;
+        }
+        return;
+      }
+      console.error('[ui-error]', e.message);
+      if (this.errGate.allow(Date.now())) this.showToast('发生错误，请刷新页面');
+    }, true);
+    window.addEventListener('unhandledrejection', (e) => {
+      console.error('[ui-rejection]', e.reason);
+      if (this.errGate.allow(Date.now())) this.showToast('发生错误，请刷新页面');
+    });
+  }
+
   mount(): void {
     preloadAssets();
+    this.mountErrorGuard();
     // 6H-1：首次交互后初始化 AudioContext（浏览器自动播放策略）
     this.audio.attachGesture(window);
     this.renderShell();
@@ -463,7 +496,7 @@ export class AppUI {
     }
     const banner =
       this.status === 'disconnected'
-        ? `<div class="banner warn">连接已断开。请刷新页面重新加入（首版不自动重同步）。</div>`
+        ? `<div class="banner warn">连接已断开，正在重连…（Socket.IO 自动重连，恢复后自动隐藏）</div>`
         : this.status === 'connecting'
           ? `<div class="banner">连接中…</div>`
           : '';
@@ -825,7 +858,7 @@ export class AppUI {
       <details class="seed-adv">
         <summary>高级（种子复现）</summary>
         <label>固定种子 <input id="seed-input" inputmode="numeric" placeholder="留空=随机" value="${v}" /></label>
-        <span class="hint">?seed=xxx 可预填；固定局全员可见种子，随机局仅终局可见</span>
+        <span class="seed-hint">?seed=xxx 可预填；固定局全员可见种子，随机局仅终局可见</span>
       </details>
     `;
   }

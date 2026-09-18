@@ -44,7 +44,12 @@ export class AudioManager {
     const AC = window.AudioContext;
     if (!AC) return false;
     if (!this.ctx) {
-      this.ctx = new AC();
+      // 6J-2：构造/权限拒绝时静默失败，不抛异常
+      try {
+        this.ctx = new AC();
+      } catch {
+        return false;
+      }
       this.master = this.ctx.createGain();
       this.master.gain.value = this.volume;
       this.master.connect(this.ctx.destination);

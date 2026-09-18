@@ -832,6 +832,12 @@ button.card.sel {
   font-size: 12px;
   margin-top: 8px;
 }
+/* 6J 种子高级入口提示（与 .hint 同样式，独立类名避免撞存量 e2e 选择器） */
+.seed-hint {
+  color: var(--gold-foil);
+  font-size: 12px;
+  margin-top: 8px;
+}
 .toast {
   position: fixed;
   left: 50%;
