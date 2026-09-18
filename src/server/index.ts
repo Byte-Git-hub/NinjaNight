@@ -335,6 +335,10 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
 
     socket.on(EV.roomCreate, (payload: unknown) => {
       try {
+      if (!takeJoinRate(socket.id)) {
+        emitError(socket, 'RATE_LIMITED', '建房过于频繁');
+        return;
+      }
       const body = (payload ?? {}) as { nickname?: unknown };
       const nick = sanitizeNickname(body.nickname, MAX_NICKNAME_LEN);
       if (!nick) {
@@ -369,6 +373,12 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     });
 
     socket.on(EV.roomJoin, (payload: unknown) => {
+      // 6J-3：按 socket 限加入（60s 窗口 20 次），防房间码枚举爆破
+      // （码空间 32^6；20 次/分钟 → 在线爆破不可行）
+      if (!takeJoinRate(socket.id)) {
+        emitError(socket, 'RATE_LIMITED', '加入过于频繁');
+        return;
+      }
       const body = (payload ?? {}) as { roomCode?: unknown; nickname?: unknown };
       const code = sanitizeRoomCode(body.roomCode);
       const nick = sanitizeNickname(body.nickname, MAX_NICKNAME_LEN);
@@ -843,6 +853,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     /**
      * 6G-2a 共享限频桶（command.send 与 effect.send 共用 COMMAND_RATE_PER_SEC 窗口）。
      * 返回 false = 超限（调用方：指令走 commandReject，社交层静默丢弃）。
+     * 6J-3：chat.send 与 voice.* 信令同样纳入（voice.speaking 高频上报重点防护）。
      */
     function takeSharedRate(sess: SessionInfo): boolean {
       const now = Date.now();
@@ -854,8 +865,28 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       return sess.rateCount <= COMMAND_RATE_PER_SEC;
     }
 
-    /** 本房座位 id 全集（lobby + 对局态；社交层目标合法性用） */
-    function seatIdsOf(room: RoomRuntime): Set<string> {
+    /**
+     * 6J-3：建房/加入按 socket 限频（60s 窗口 20 次），防房间码枚举爆破。
+     * 超限返回 false（调用方回 RATE_LIMITED）；断开时清理条目。
+     */
+    const joinRate = new Map<string, { start: number; count: number }>();
+    function takeJoinRate(socketId: string): boolean {
+      const now = Date.now();
+      const r = joinRate.get(socketId);
+      if (!r || now - r.start > 60_000) {
+        if (joinRate.size > 2000) {
+          for (const [k, v] of joinRate) {
+            if (now - v.start > 60_000) joinRate.delete(k);
+          }
+        }
+        joinRate.set(socketId, { start: now, count: 1 });
+        return true;
+      }
+      r.count += 1;
+      return r.count <= 20;
+    }
+
+    /** 本房座位 id 全集（lobby + 对局态；社交层目标合法性用） */    function seatIdsOf(room: RoomRuntime): Set<string> {
       const ids = new Set(room.lobby.map((l) => l.seatId));
       if (room.state) {
         for (const s of room.state.seats) ids.add(s.seatId);
@@ -897,6 +928,11 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         emitError(socket, 'INVALID_PAYLOAD', '人机不参与语音');
         return;
       }
+      if (!takeSharedRate(sess)) {
+        socket.emit(OUT.voiceUnavailable, { message: '操作过于频繁' });
+        if (typeof ack === 'function') ack({ error: 'RATE_LIMITED' });
+        return;
+      }
       voice.join(room.code, sess.seatId);
       voice.broadcastState(room.code);
       void voice.ensureRouter().then((router) => {
@@ -916,6 +952,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       const body = (payload ?? {}) as Record<string, unknown>;
       const sess = voiceSess(body);
       if (!sess) return;
+      if (!takeSharedRate(sess)) return;
       const room = voiceRoomOf(sess);
       if (!room) return;
       voice.leave(room.code, sess.seatId);
@@ -926,6 +963,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       const body = (payload ?? {}) as { seatToken?: unknown; muted?: unknown };
       const sess = voiceSess(body);
       if (!sess) return;
+      if (!takeSharedRate(sess)) return;
       const room = voiceRoomOf(sess);
       if (!room) return;
       voice.setMuted(room.code, sess.seatId, body.muted === true);
@@ -936,6 +974,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       const body = (payload ?? {}) as { seatToken?: unknown; speaking?: unknown };
       const sess = voiceSess(body);
       if (!sess) return;
+      // 高频上报（客户端 1s 节流），超限静默丢弃防广播风暴
+      if (!takeSharedRate(sess)) return;
       const room = voiceRoomOf(sess);
       if (!room) return;
       const snap = voice.setSpeaking(room.code, sess.seatId, body.speaking === true);
@@ -946,6 +986,11 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       const body = (payload ?? {}) as Record<string, unknown>;
       if (!voiceSess(body)) {
         emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      const sess = voiceSess(body);
+      if (sess && !takeSharedRate(sess)) {
+        if (typeof ack === 'function') ack({ error: 'RATE_LIMITED' });
         return;
       }
       void voice.ensureRouter().then((router) => {
@@ -960,6 +1005,10 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       const sess = voiceSess(body);
       if (!sess) {
         emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      if (!takeSharedRate(sess)) {
+        if (typeof ack === 'function') ack({ error: 'RATE_LIMITED' });
         return;
       }
       const room = voiceRoomOf(sess);
@@ -977,8 +1026,13 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
 
     socket.on(EV.voiceConnectTransport, (payload: unknown, ack?: VoiceAck) => {
       const body = (payload ?? {}) as { seatToken?: unknown; transportId?: unknown; dtlsParameters?: unknown };
-      if (!voiceSess(body)) {
+      const sess = voiceSess(body);
+      if (!sess) {
         emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      if (!takeSharedRate(sess)) {
+        if (typeof ack === 'function') ack({ error: 'RATE_LIMITED' });
         return;
       }
       if (typeof body.transportId !== 'string' || !body.dtlsParameters) {
@@ -1000,6 +1054,10 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       const sess = voiceSess(body);
       if (!sess) {
         emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      if (!takeSharedRate(sess)) {
+        if (typeof ack === 'function') ack({ error: 'RATE_LIMITED' });
         return;
       }
       const room = voiceRoomOf(sess);
@@ -1039,6 +1097,10 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         emitError(socket, 'UNAUTHORIZED');
         return;
       }
+      if (!takeSharedRate(sess)) {
+        if (typeof ack === 'function') ack({ error: 'RATE_LIMITED' });
+        return;
+      }
       const room = voiceRoomOf(sess);
       if (!room) {
         emitError(socket, 'ROOM_NOT_FOUND');
@@ -1065,6 +1127,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       const body = (payload ?? {}) as { seatToken?: unknown };
       const sess = voiceSess(body);
       if (!sess) return;
+      if (!takeSharedRate(sess)) return;
       const room = voiceRoomOf(sess);
       if (!room) return;
       voice.removeSeatEverywhere(sess.seatId, room.code);
@@ -1077,6 +1140,10 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       const sess = voiceSess(body);
       if (!sess) {
         emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      if (!takeSharedRate(sess)) {
+        if (typeof ack === 'function') ack({ error: 'RATE_LIMITED' });
         return;
       }
       const room = voiceRoomOf(sess);
@@ -1096,6 +1163,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         emitError(socket, 'INVALID_PAYLOAD', '聊天内容无效');
         return;
       }
+      // 6J-3：聊天纳入共享限频桶（超限静默丢弃，与社交层一致）
+      if (!takeSharedRate(sess)) return;
       const room = rooms.get(sess.roomCode);
       if (!room) {
         emitError(socket, 'ROOM_NOT_FOUND');
@@ -1231,6 +1300,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     });
 
     socket.on('disconnect', () => {
+      joinRate.delete(socket.id);
       const token = socket.data.seatToken as string | undefined;
       if (!token) return;
       const sess = sessionsByToken.get(token);
