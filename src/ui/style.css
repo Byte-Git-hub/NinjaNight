@@ -1475,15 +1475,24 @@ details.collapsed-panel #btn-toggle-log {
     "self self self self self self self self self";
 }
 .ring-top { grid-area: top; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: end; }
-.ring-middle { grid-area: middle; display: grid; grid-template-columns: minmax(112px, .8fr) minmax(0, 4fr) minmax(112px, .8fr); gap: 10px; min-height: 100%; }
+.ring-middle {
+  grid-area: middle;
+  display: grid;
+  grid-template-columns: minmax(112px, .8fr) minmax(0, 4fr) minmax(112px, .8fr);
+  grid-template-areas: "left center right";
+  gap: 10px;
+  min-height: 100%;
+}
 .ring-left, .ring-right { display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.ring-left { grid-area: left; }
+.ring-right { grid-area: right; }
 .ring-bottom { grid-area: bottom; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: start; }
 .self-zone { grid-area: self; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
 .self-zone > .seat-card { width: min(460px, 100%); }
 .self-hand-decision { width: min(920px, 100%); }
 .table-ring .seat-card { min-width: 0; }
 .table-ring .central {
-  grid-area: auto;
+  grid-area: center;
   min-height: 100%;
   margin: 0;
   color: #0a0f1e;
