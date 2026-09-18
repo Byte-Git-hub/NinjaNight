@@ -191,6 +191,7 @@ export class AppUI {
         this.selected.clear();
         this.resetIdentityUi();
         this.soundPrimed = false;
+        this.audio.stopBgm();
         this.voiceClient?.leave();
         this.voiceSeats = [];
         this.resetSocialUi();
@@ -458,6 +459,8 @@ export class AppUI {
           <div class="audio-pop" id="audio-panel"${this.audioPanelOpen ? '' : ' hidden'}>
             <label><input id="sound-enabled" type="checkbox" ${this.audio.enabled ? 'checked' : ''} /> 音效开</label>
             <label>音量 <input id="sound-volume" type="range" min="0" max="100" step="1" value="${Math.round(this.audio.volume * 100)}" /></label>
+            <label><input id="bgm-enabled" type="checkbox" ${this.audio.bgmEnabled ? 'checked' : ''} /> BGM（夜晚/结算）</label>
+            <label>BGM 音量 <input id="bgm-volume" type="range" min="0" max="100" step="1" value="${Math.round(this.audio.bgmVolume * 100)}" /></label>
             <div class="sfx-test">${SFX_NAMES.map((n) => `<button type="button" data-sfx-test="${n}" title="试听 ${n}">${sfxCn(n)}</button>`).join('')}</div>
           </div>
         </div>
@@ -528,10 +531,14 @@ export class AppUI {
       this.soundPrimed = true;
       this.lastSoundSeq = maxSeq;
       this.lastSoundPhase = v.phase;
+      // 6H-2：首快照即同步 BGM 轨道
+      this.audio.syncBgmToPhase(v.phase, Boolean(v.gameOver));
       return;
     }
     if (this.lastSoundPhase !== '' && this.lastSoundPhase !== v.phase) {
       this.audio.play('phase-change');
+      // 6H-2：阶段变化自动切换 BGM
+      this.audio.syncBgmToPhase(v.phase, Boolean(v.gameOver));
     }
     this.lastSoundPhase = v.phase;
     for (const e of v.events) {
@@ -1047,6 +1054,7 @@ export class AppUI {
       this.presence = null;
       this.resetIdentityUi();
       this.soundPrimed = false;
+      this.audio.stopBgm();
       this.render();
     });
     // 6G-1 语音三键（降级时 client 内部消化，不抛错）
@@ -1087,6 +1095,14 @@ export class AppUI {
     });
     $('#sound-volume')?.addEventListener('input', (ev) => {
       this.audio.setVolume(Number((ev.target as HTMLInputElement).value) / 100);
+    });
+    // 6H-2 BGM 独立开关 + 音量（新选择器）
+    $('#bgm-enabled')?.addEventListener('change', (ev) => {
+      const on = (ev.target as HTMLInputElement).checked;
+      void this.audio.ensure().then(() => this.audio.setBgmEnabled(on));
+    });
+    $('#bgm-volume')?.addEventListener('input', (ev) => {
+      this.audio.setBgmVolume(Number((ev.target as HTMLInputElement).value) / 100);
     });
     this.root.querySelectorAll<HTMLButtonElement>('[data-sfx-test]').forEach((btn) => {
       btn.addEventListener('click', () => {

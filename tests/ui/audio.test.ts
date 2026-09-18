@@ -72,6 +72,32 @@ describe('6H-1 音效设置持久化', () => {
   it('保存后可读回', () => {
     const st = fakeStorage();
     saveSoundSettings({ enabled: false, volume: 0.3 }, st);
-    expect(loadSoundSettings(st)).toEqual({ enabled: false, volume: 0.3 });
+    expect(loadSoundSettings(st)).toEqual({ enabled: false, volume: 0.3, bgmEnabled: false, bgmVolume: 0.5 });
+  });
+
+  it('旧存档（无 bgm 字段） back-compat，默认 BGM 关闭', () => {
+    const loaded = loadSoundSettings(fakeStorage('{"enabled":true,"volume":0.7}'));
+    expect(loaded.bgmEnabled).toBe(false);
+    expect(loaded.bgmVolume).toBe(0.5);
+  });
+});
+
+describe('6H-2 BGM 轨道映射', () => {
+  it('夜晚五阶段 → night', async () => {
+    const { phaseToBgmTrack } = await import('../../src/ui/audio/bgm');
+    for (const p of ['nightSpy', 'nightMystic', 'nightTrickster', 'nightBlindAssassin', 'nightShinobi']) {
+      expect(phaseToBgmTrack(p, false)).toBe('night');
+    }
+  });
+
+  it('揭示/计分/胜负/终局 → reveal，选牌/大厅 → null', async () => {
+    const { phaseToBgmTrack } = await import('../../src/ui/audio/bgm');
+    for (const p of ['mastermindReveal', 'houseReveal', 'score', 'victoryCheck', 'gameOver']) {
+      expect(phaseToBgmTrack(p, false)).toBe('reveal');
+    }
+    expect(phaseToBgmTrack('nightSpy', true)).toBe('reveal');
+    for (const p of ['draftPick1', 'draftPick2', 'draftDiscard', 'dealHouses', 'roomLobby']) {
+      expect(phaseToBgmTrack(p, false)).toBe(null);
+    }
   });
 });

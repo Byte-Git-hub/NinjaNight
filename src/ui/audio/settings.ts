@@ -3,11 +3,18 @@
 export interface SoundSettings {
   enabled: boolean;
   volume: number; // 0–1
+  /** 6H-2 BGM：独立开关 + 音量 + 上次轨道（默认关闭，避免打扰） */
+  bgmEnabled?: boolean;
+  bgmVolume?: number;
 }
 
 export const SOUND_SETTINGS_KEY = 'ninja-night:sound-settings';
 
-export const DEFAULT_SOUND_SETTINGS: SoundSettings = { enabled: true, volume: 0.7 };
+export const DEFAULT_SOUND_SETTINGS: SoundSettings = { enabled: true, volume: 0.7, bgmEnabled: false, bgmVolume: 0.5 };
+
+function toVolume(v: unknown, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback;
+}
 
 export function loadSoundSettings(storage?: Pick<Storage, 'getItem'>): SoundSettings {
   try {
@@ -16,10 +23,9 @@ export function loadSoundSettings(storage?: Pick<Storage, 'getItem'>): SoundSett
     const p = JSON.parse(raw) as Partial<SoundSettings>;
     return {
       enabled: typeof p.enabled === 'boolean' ? p.enabled : DEFAULT_SOUND_SETTINGS.enabled,
-      volume:
-        typeof p.volume === 'number' && Number.isFinite(p.volume)
-          ? Math.min(1, Math.max(0, p.volume))
-          : DEFAULT_SOUND_SETTINGS.volume,
+      volume: toVolume(p.volume, DEFAULT_SOUND_SETTINGS.volume),
+      bgmEnabled: typeof p.bgmEnabled === 'boolean' ? p.bgmEnabled : DEFAULT_SOUND_SETTINGS.bgmEnabled,
+      bgmVolume: toVolume(p.bgmVolume, DEFAULT_SOUND_SETTINGS.bgmVolume ?? 0.5),
     };
   } catch {
     return { ...DEFAULT_SOUND_SETTINGS };
