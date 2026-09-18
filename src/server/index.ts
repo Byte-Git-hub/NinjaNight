@@ -14,11 +14,13 @@ import {
   EMPTY_ROOM_TTL_MS,
   ENDED_ROOM_TTL_MS,
   COMMAND_RATE_PER_SEC,
+  FIXED_GAME_SEED,
   IDEMPOTENCY_CACHE_SIZE,
   MAX_CHAT_LEN,
   MAX_NICKNAME_LEN,
   MAX_PLAYERS,
   MIN_PLAYERS,
+  parseGameSeed,
 } from '../shared/timeouts';
 import {
   EV,
@@ -419,7 +421,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     });
 
     socket.on(EV.roomStart, (payload: unknown) => {
-      const body = (payload ?? {}) as { seatToken?: unknown };
+      const body = (payload ?? {}) as { seatToken?: unknown; seed?: unknown };
       const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
       if (!sess) {
         emitError(socket, 'UNAUTHORIZED');
@@ -451,11 +453,25 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       // 排序确保 s0..sn-1 顺序与 createGame 一一对应
       room.lobby.sort((a, b) => Number(a.seatId.slice(1)) - Number(b.seatId.slice(1)));
       const nicknames = room.lobby.map((l) => l.nickname);
+      // 6J 种子机制：房主请求 seed（?seed=xxx）> NINJA_SEED > 随机。
+      // 显式固定的局 seedFixed=true（视图可见、可复现）；随机局种子全程保密。
+      const requestedSeed = parseGameSeed(body.seed);
+      const seed = requestedSeed ?? FIXED_GAME_SEED ?? Math.floor(Math.random() * 1_000_000);
+      const seedFixed = requestedSeed !== null || FIXED_GAME_SEED !== null;
+      const seedSource = requestedSeed !== null ? 'client' : FIXED_GAME_SEED !== null ? 'env' : 'random';
       const state = createGame({
-        seed: Date.now() % 1_000_000,
+        seed,
+        seedFixed,
         roomCode: room.code,
         nicknames,
         playerCount: n,
+      });
+      logger.info('room.started', {
+        roomCode: room.code,
+        seatCount: n,
+        seedSource,
+        // 脱敏例外：仅人工显式固定的种子才记值（复现对局用）；随机种子只记来源
+        ...(seedFixed ? { fixedSeed: seed } : {}),
       });
       // 大厅 seatId s0..sn-1 与 createGame 座位一一对应
       for (let i = 0; i < n; i += 1) {

@@ -189,9 +189,10 @@ export class GameNet {
     this.socket?.emit(EV.roomReady, { seatToken: this.seatToken, ready });
   }
 
-  startRoom(): void {
+  startRoom(seed?: number): void {
     if (!this.seatToken) return;
-    this.socket?.emit(EV.roomStart, { seatToken: this.seatToken });
+    // 6J 种子机制：seed 仅房主固定复现局时传；undefined = 随机
+    this.socket?.emit(EV.roomStart, { seatToken: this.seatToken, ...(seed === undefined ? {} : { seed }) });
   }
 
   forceAdvance(): void {

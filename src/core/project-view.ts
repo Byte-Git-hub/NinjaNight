@@ -89,6 +89,8 @@ export function projectView(state: GameState, seatId: SeatId): PlayerView | null
     step: state.step,
     windowId: state.windowId,
     pendingDecision: pending,
+    // 6J：固定种子局全程可见；随机局仅终局可见（bug 截图用），进行中保密
+    gameSeed: state.seedFixed || state.gameOver ? state.seed : null,
     seats,
     self: selfView,
     events: visibleEvent(state, seatId),

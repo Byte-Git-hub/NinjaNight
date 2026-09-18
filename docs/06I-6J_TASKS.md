@@ -49,17 +49,20 @@ bot 各分支齐全，根因不在 bot 缺分支，而在两处：
 - [x] scheduler：被 reject 的 bot 决策可重试，不永久卡死（defense-in-depth）
 - [x] 回归：typecheck + 相关 vitest + e2e 子集
 - [x] commit：fix: bot 骗徒牌决策补全
-- commit hash：
+- commit hash：da247e7
 
 ## 任务 2：种子机制（可复现对局）
 
-- [ ] 启动时读 env NINJA_SEED（无则随机）
-- [ ] 超时/env 唯一来源：src/shared/timeouts.ts（+ .env.example）
-- [ ] dev / test 可用固定 seed 复现任意对局
-- [ ] UI 大厅隐藏入口（URL query ?seed=xxx 或设置面板），显示当前 seed
-- [ ] 服务端开局日志打印 seed（脱敏：seed 允许记？AGENTS 禁记种子——注意冲突，需处理：只记 seed 是否来自 env / 哈希，不记原始值；或修订约定。先按“不记原始种子值”实现）
-- [ ] 集成测试：同一 seed 跑 3 次，局面完全一致
-- [ ] commit：feat: 种子机制（可复现对局）
+- [x] 启动时读 env NINJA_SEED（无则随机）
+- [x] 超时/env 唯一来源：src/shared/timeouts.ts（+ .env.example）
+- [x] dev / test 可用固定 seed 复现任意对局
+- [x] UI 大厅隐藏入口（URL query ?seed=xxx 或设置面板），显示当前 seed
+- [x] 服务端开局日志打印 seed（脱敏：seed 允许记？AGENTS 禁记种子——注意冲突，需处理：只记 seed 是否来自 env / 哈希，不记原始值；或修订约定。先按“不记原始种子值”实现）
+      → 落地方案（2026-09-18）：优先级 房主请求seed > NINJA_SEED > 随机；
+      日志记 seedSource + 仅显式固定局记 fixedSeed 值（logger.ts 注释留例外说明）；
+      视图 gameSeed 仅固定局全程可见 / 随机局终局可见，进行中保密（AGENTS 可见性不破）
+- [x] 集成测试：同一 seed 跑 3 次，局面完全一致
+- [x] commit：feat: 种子机制（可复现对局）
 - commit hash：
 
 ## 任务 3：6I 线上部署（Vercel + Railway，允许语音降级）

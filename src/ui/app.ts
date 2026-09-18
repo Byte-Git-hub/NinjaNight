@@ -5,7 +5,7 @@ import type {
   EffectBatchItem,
   MarkPair,
 } from '../shared/protocol';
-import { MARK_PER_SEAT_MAX } from '../shared/timeouts';
+import { MARK_PER_SEAT_MAX, parseGameSeed } from '../shared/timeouts';
 import type { ConnectionStatus, GameNet } from '../net/client';
 import { VoiceNet } from '../net/voice';
 import { EffectNet } from '../net/effects';
@@ -162,6 +162,8 @@ export class AppUI {
   private fxTarget = '';
   /** 座位卡抖动：seatId → 命中时间戳（render 时超 350ms 的修剪，避免重渲染复播） */
   private fxHit = new Map<string, number>();
+  /** 6J 种子机制：房主指定的固定种子原文（重渲染不丢失；?seed=xxx 预填） */
+  private pendingSeed: string | null = null;
 
   public get currentView(): PlayerView | null {
     return this.view;
@@ -475,6 +477,7 @@ export class AppUI {
           <h1>忍者之夜</h1>
           ${this.view || this.presence ? `<span class="room">房间 <b>${this.net.roomCode ?? ''}</b></span>` : ''}
           ${this.net.seatId ? `<span class="seat">座位 <b>${this.net.seatId}</b></span>` : ''}
+          ${this.seedBadge()}
         </div>
         ${this.view || this.presence ? `<button id="btn-leave-room" type="button" class="muted">返回大厅</button>` : ''}
         <div class="audio-ctl">
@@ -798,7 +801,39 @@ export class AppUI {
       </div>
       ${isHost ? this.kickButtons() : ''}
       <p class="hint">需要 ${allReady ? '可开始' : '4–11 人且全员准备（房主可不准备）'}</p>
+      ${isHost ? this.seedControls() : ''}
     `;
+  }
+
+  /**
+   * 6J 种子机制：房主隐藏入口（details 折叠 + URL ?seed=xxx 预填）。
+   * 留空 = 随机；填数字 = 下局用固定种子（视图会显示，可复现、可截图报 bug）。
+   */
+  private urlSeed(): string {
+    try {
+      return new URLSearchParams(window.location.search).get('seed') ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  private seedControls(): string {
+    if (this.pendingSeed === null) this.pendingSeed = this.urlSeed();
+    const v = this.pendingSeed.replace(/"/g, '&quot;');
+    return `
+      <details class="seed-adv">
+        <summary>高级（种子复现）</summary>
+        <label>固定种子 <input id="seed-input" inputmode="numeric" placeholder="留空=随机" value="${v}" /></label>
+        <span class="hint">?seed=xxx 可预填；固定局全员可见种子，随机局仅终局可见</span>
+      </details>
+    `;
+  }
+
+  /** 顶栏种子徽标：固定局全程显示，随机局仅终局显示（截图报 bug 用） */
+  private seedBadge(): string {
+    const s = this.view?.gameSeed;
+    if (s === undefined || s === null) return '';
+    return `<span class="seed">种子 <b>${s}</b></span>`;
   }
 
   /** 6G-1 语音条：房间内可见（大厅/对局）；离线连接时隐藏 */
@@ -1122,7 +1157,15 @@ export class AppUI {
       this.net.joinRoom(code, nick);
     });
     $('#btn-ready')?.addEventListener('click', () => this.net.setReady(true));
-    $('#btn-start')?.addEventListener('click', () => this.net.startRoom());
+    $('#btn-start')?.addEventListener('click', () => {
+      const raw = (this.root.querySelector('#seed-input') as HTMLInputElement)?.value ?? '';
+      this.pendingSeed = raw;
+      const seed = parseGameSeed(raw === '' ? undefined : raw);
+      this.net.startRoom(seed ?? undefined);
+    });
+    $('#seed-input')?.addEventListener('input', (e) => {
+      this.pendingSeed = (e.target as HTMLInputElement).value;
+    });
     $('#btn-add-bot')?.addEventListener('click', () => this.net.addBot());
     $('#btn-remove-bot')?.addEventListener('click', () => this.net.removeBot());
     $('#btn-fa')?.addEventListener('click', () => {

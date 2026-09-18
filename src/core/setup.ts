@@ -9,6 +9,8 @@ import { createTokenPool } from './tokens';
 export interface CreateGameOptions {
   roomCode?: string;
   seed: number;
+  /** 6J：显式固定种子（复现对局）；未设为随机局 */
+  seedFixed?: boolean;
   nicknames?: string[];
   playerCount?: number;
 }
@@ -52,6 +54,7 @@ export function createGame(options: CreateGameOptions): GameState {
   const state: GameState = {
     roomCode,
     seed: options.seed,
+    seedFixed: options.seedFixed ?? false,
     rng,
     rngCalls: rng.calls,
     seats,

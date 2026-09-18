@@ -50,3 +50,24 @@ export const EFFECT_COMBO_WINDOW_MS = 1500;
 export const EFFECT_PARTICLE_MAX = envInt('NINJA_EFFECT_PARTICLE_MAX', 200);
 /** 6G-2b 怀疑标记：每人最多标记数（重复点同一目标 = 取消） */
 export const MARK_PER_SEAT_MAX = envInt('NINJA_MARK_PER_SEAT_MAX', 2);
+
+/** 6J 种子机制：种子须为 0–2^32-1 整数；非法返回 null（两端共用校验） */
+export function parseGameSeed(raw: unknown): number | null {
+  if (typeof raw === 'number') {
+    return Number.isInteger(raw) && raw >= 0 && raw <= 0xffffffff ? raw >>> 0 : null;
+  }
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!/^\d{1,10}$/.test(s)) return null;
+    const n = Number(s);
+    return Number.isSafeInteger(n) && n <= 0xffffffff ? n : null;
+  }
+  return null;
+}
+
+/** 6J：NINJA_SEED 固定对局种子（dev/复现用；未设则每局随机） */
+export const FIXED_GAME_SEED: number | null = (() => {
+  const raw = typeof process !== 'undefined' ? process.env?.['NINJA_SEED'] : undefined;
+  if (raw === undefined || raw === '') return null;
+  return parseGameSeed(raw);
+})();

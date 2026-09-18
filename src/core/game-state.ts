@@ -95,6 +95,8 @@ export interface ResolveContext {
 export interface GameState {
   roomCode: RoomCode;
   seed: number;
+  /** 6J：种子是否由人工/环境显式固定（决定 gameSeed 可见性；随机局全程保密） */
+  seedFixed: boolean;
   rng: Rng;
   rngCalls: number;
   seats: SeatState[];

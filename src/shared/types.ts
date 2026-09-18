@@ -225,6 +225,11 @@ export interface PlayerView {
   step: StepKind;
   windowId: WindowId;
   pendingDecision: PendingDecision | null;
+  /**
+   * 6J 种子机制：仅当种子被显式固定（复现局）或对局已结束时下发，
+   * 随机对局进行中为 null（防种子推导暗牌；见 AGENTS 可见性约定）。
+   */
+  gameSeed?: number | null;
   seats: PlayerSeatView[];
   self: SelfView;
   events: GameEvent[];
