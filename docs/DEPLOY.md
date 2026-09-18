@@ -3,6 +3,22 @@
 > 配置已写好，由用户手动执行部署。本文件是唯一操作手册。
 > 游戏核心（规则/Bot/特效/短语）零依赖语音；语音不可用时自动降级。
 
+## 0. 当前部署状态（2026-09-18 已确认）
+
+| 项 | 值 |
+|---|---|
+| 仓库 | `Byte-Git-hub/NinjaNight` |
+| 前端 URL | https://byte-git-hub.github.io/NinjaNight/ |
+| Vite base | `/NinjaNight/` |
+| 后端 URL | https://ninjanight-production.up.railway.app |
+| Pages Source | GitHub Actions |
+| `VITE_API_BASE_URL`（Actions Secret） | 已设为后端 URL |
+
+待确认项：
+
+- [ ] Railway `NINJA_CORS_ORIGIN=https://byte-git-hub.github.io` 是否已配（不带路径、不带引号、全小写）
+- [ ] push main 后 workflow 是否绿、前后端联通冒烟是否通过
+
 ## 1. 部署目标与备案
 
 | 端 | 主线 | 备案 |
@@ -16,8 +32,8 @@
   `VITE_API_BASE_URL`（构建时注入）> 同源。
 - 后端 `createApp()` 在 `dist/` 存在时兼 serve 静态文件 +
   SPA fallback（`/*` → `/index.html`，`/socket.io` 与 `/health` 除外）。
-- 子路径说明：GitHub Pages 项目站地址形如
-  `https://<user>.github.io/<repo>/`，`vite.config.ts` 的
+- 子路径说明：GitHub Pages 项目站地址为
+  `https://byte-git-hub.github.io/NinjaNight/`，`vite.config.ts` 的
   `base: process.env.GITHUB_PAGES_BASE || '/'` 已处理；
   前端静态资源统一经 `assetUrl()`（`import.meta.env.BASE_URL`）拼接，
   CSS `url()` 由 Vite 构建自动 rebase。
@@ -27,12 +43,13 @@
 1. 仓库 Settings → Pages → Source 选 **GitHub Actions**。
 2. 仓库 Settings → Secrets → Actions → New repository secret：
    - Name：`VITE_API_BASE_URL`
-   - Value：Railway 公网地址（见第 3 节，如 `https://xxx.up.railway.app`，
+   - Value：Railway 公网地址（`https://ninjanight-production.up.railway.app`，
      无尾斜杠）。
 3. push 到 `main`（或 Actions 页手动 rerun `Deploy Pages`），
-   workflow 自动 `npm ci` → 构建（含 `GITHUB_PAGES_BASE=/<repo>/`
+   workflow 自动 `npm ci` → 构建（含 `GITHUB_PAGES_BASE`
+  （按仓库名动态注入，本仓库即 `/NinjaNight/`）
    与 `VITE_API_BASE_URL` 注入）→ 上传 `dist` → 发布。
-4. 访问地址：`https://<user>.github.io/<repo>/`。
+4. 访问地址：`https://byte-git-hub.github.io/NinjaNight/`。
 5. 调试时可用 `?server=http://127.0.0.1:3000` 临时指向本地后端。
 
 ## 3. Railway 步骤（后端，用户已部署成功，待收尾）
@@ -48,7 +65,7 @@
 |---|---|---|
 | `PORT` | （自动注入） | 不用手填 |
 | `NINJA_TLS` | `0` | Railway 自带 TLS 终结，server 只跑 ws；客户端用 `wss://` 连即可 |
-| `NINJA_CORS_ORIGIN` | `https://<user>.github.io` | 生产只放行 Pages 域名；留空=全放行（仅开发/局域网） |
+| `NINJA_CORS_ORIGIN` | `https://byte-git-hub.github.io` | 生产只放行 Pages 域名；留空=全放行（仅开发/局域网） |
 | `NINJA_VOICE` | （不设/1） | 本次实测 mediasoup 初始化成功，保持启用；若日后语音异常再设 `0` |
 | `NINJA_MEDIA_ANNOUNCED_IP` | （留空） | 动态公网 IP 下留空走自动探测 |
 | `NINJA_SEED` | （不设） | 设了则所有对局同一种子（仅调试复现用） |
@@ -74,7 +91,7 @@
 | 现象 | 原因 | 解法 |
 |---|---|---|
 | 前端刷不出房间/连不上 | `VITE_API_BASE_URL` 未设或写错 | Secrets 重设后重跑 workflow（构建时注入，改完必须重构建） |
-| `CORS error` / 握手 400 | `NINJA_CORS_ORIGIN` 与 Pages 域名不一致 | 改为 `https://<user>.github.io`（无尾斜杠，无仓库子路径） |
+| `CORS error` / 握手 400 | `NINJA_CORS_ORIGIN` 与 Pages 域名不一致 | 改为 `https://byte-git-hub.github.io`（无尾斜杠，无仓库子路径） |
 | 静态资源 404（图片不显示） | 旧构建未带 base | 重跑 workflow（`GITHUB_PAGES_BASE` 已由 workflow 注入） |
 | 一直「语音暂不可用」 | UDP 不通或 `NINJA_VOICE=0` | 预期内降级，游戏照玩；三层防护见下 |
 | 首次建房慢 5-10 秒 | Railway 休眠唤醒 | 正常，唤醒后恢复 |
