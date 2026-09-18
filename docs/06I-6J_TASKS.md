@@ -89,7 +89,8 @@ bot 各分支齐全，根因不在 bot 缺分支，而在两处：
 - [x] 6J-2：前端错误边界（onerror/toast、img 占位、断线横幅、Audio 静默、麦克风降级检查）；commit：6J-2: 前端错误边界
 - commit hash：ffe0b70
 - [x] 6J-3：安全加固（XSS 全转义+e2e 载荷不执行；chat/voice 全系进共享限频桶+集成测试；房间码 32^6+按 socket 60s/20 次防枚举）；commit：6J-3: 安全加固
-- commit hash：
+- commit hash：000fb46
+- 备注：rate-limit.test.ts 端口与 server-declare-guard.test.ts 撞车（同用 3464 并行起服挂起），已换 3467，全绿 193/193
 - [ ] 6J-4：手机真机测试（Playwright 移动模拟 + 触摸，5 关键流程）→ docs/06J_MOBILE.md；commit：6J-4: 手机真机测试
 - [ ] 6J-5：README 完善（截图/玩法/部署/开发/结构）；commit：6J-5: README 完善
 - [ ] 约束：不引新依赖；不改 core/bot；每子批次独立 commit
