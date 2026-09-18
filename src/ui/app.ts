@@ -172,6 +172,7 @@ export class AppUI {
   private reactionLogs: string[] = [];
   private chatPanelOpen = false;
   private chatTab: 'chat' | 'log' | 'reaction' = 'chat';
+  private phrasePanelOpen = false;
   /** 座位卡抖动：seatId → 命中时间戳（render 时超 350ms 的修剪，避免重渲染复播） */
   private fxHit = new Map<string, number>();
   /** 6J-2 全局错误 toast 节流 */
@@ -889,7 +890,7 @@ export class AppUI {
         : '';
     const tokenStack =
       inGame && tokens !== undefined
-        ? `<span class="token-stack" title="令牌 ${tokens} 枚"><img src="${getHonorTokenPath()}" alt="令牌" onerror="this.style.visibility='hidden'" /><i>×${tokens}</i></span>`
+        ? `<span class="token-stack" title="令牌 ${tokens} 枚"><img src="${getHonorTokenPath()}" alt="令牌" style="visibility:hidden" onload="this.style.visibility='visible'" onerror="this.style.visibility='hidden'" /><i>×${tokens}</i></span>`
         : '';
 
     // 自己的身份/令牌面值：覆盖态只露令牌 + 点击查看提示；窥视态才显示身份名（6F-4）
@@ -986,7 +987,7 @@ export class AppUI {
         ${v ? this.gamePanels(v, pending ?? null) : ''}
         ${v ? this.identityModalHtml(v) : ''}
         ${this.chatLogPanel(v ?? null)}
-        ${phrasesPanelHtml()}
+        ${phrasesPanelHtml().replace('<details class="panel phrases collapsed-panel" id="phrase-panel">', `<details class="panel phrases collapsed-panel" id="phrase-panel"${this.phrasePanelOpen ? ' open' : ''}>`)}
       </div>
     `;
   }
@@ -1543,6 +1544,9 @@ export class AppUI {
     });
     this.root.querySelector<HTMLDetailsElement>('#chat-log-panel')?.addEventListener('toggle', (ev) => {
       this.chatPanelOpen = (ev.currentTarget as HTMLDetailsElement).open;
+    });
+    this.root.querySelector<HTMLDetailsElement>('#phrase-panel')?.addEventListener('toggle', (ev) => {
+      this.phrasePanelOpen = (ev.currentTarget as HTMLDetailsElement).open;
     });
     this.root.querySelectorAll<HTMLButtonElement>('.kick[data-seat]').forEach((btn) => {
       btn.addEventListener('click', () => {
