@@ -137,11 +137,11 @@ test.describe('6G-4b 截图：桌面开局与阶段', () => {
       if (await page.locator('.round-banner').isVisible().catch(() => false)) break;
       await autoStep(page);
     }
-    // 未命中兜底：仍产出文件，review 标注 approx
-    if (!gotNight) await shot(page, 'desktop-night-known');
-    if (!gotMerchant) await shot(page, 'desktop-trickster-merchant');
-    if (!gotAssassin) await shot(page, 'desktop-assassin-target');
-    if (!gotReact) await shot(page, 'desktop-react-window');
+    // 未命中兜底：写 -approx 后缀，不覆盖已有的真实态截图（全量回归不破坏基线）
+    if (!gotNight) await shot(page, 'desktop-night-known-approx');
+    if (!gotMerchant) await shot(page, 'desktop-trickster-merchant-approx');
+    if (!gotAssassin) await shot(page, 'desktop-assassin-target-approx');
+    if (!gotReact) await shot(page, 'desktop-react-window-approx');
   });
 });
 

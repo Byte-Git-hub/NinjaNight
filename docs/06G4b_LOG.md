@@ -5,3 +5,4 @@
 [06:30] DONE | C1/C2/R1/M2/M3/M4/M6/m4修复+验证，M1部分(merchant/assassin需手动截图) | 待commit
 [07:52] DONE | 6H-1音效系统(11合成+面板+映射+单测9+e2e) | 待commit
 [08:20] DONE | 6H-2BGM(night/reveal合成+轨道切换+独立开关+单测12+e2e) | 待commit
+[08:45] DONE | 全量e2e35绿，基线刷新(修复后UI)，capture兜底改-approx防覆盖 | 待commit
