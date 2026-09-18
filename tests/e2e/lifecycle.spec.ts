@@ -55,6 +55,7 @@ test.describe('房间生命周期与 UI 修复', () => {
     await expect(page.locator('.phase')).toBeVisible({ timeout: 15_000 });
 
     // 3. 点击「终止本局」
+    await page.locator('[data-info-toggle]').click();
     await expect(page.locator('#btn-end')).toBeVisible({ timeout: 5_000 });
     await page.click('#btn-end');
 

@@ -17,6 +17,7 @@ test.describe('6H-4 高光时刻', () => {
     for (let loop = 0; loop < 60; loop += 1) {
       if (await page.locator('.round-banner').isVisible().catch(() => false)) break;
       if (await page.locator('.game-over-banner').isVisible().catch(() => false)) break;
+      if (await page.locator('.table-info[hidden]').count()) await page.locator('[data-info-toggle]').click();
       const fa = page.locator('#btn-fa');
       if (await fa.isVisible().catch(() => false)) {
         await fa.click({ timeout: 5000 }).catch(() => {});

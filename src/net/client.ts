@@ -9,6 +9,7 @@ import {
   type RoomErrorPayload,
   type ReactionEventPayload,
   type ReactionKind,
+  type ReactionEmojiId,
 } from '../shared/protocol';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
@@ -24,6 +25,8 @@ export interface NetHandlers {
   onPrivateEvents?: (events: GameEvent[]) => void;
   onCommandAck?: (commandId: string) => void;
   onCommandReject?: (commandId: string, reasonCode: string) => void;
+  /** 社交链路拒绝单独分流，避免在牌桌上显示游戏指令的 RATE_LIMITED 横幅。 */
+  onSocialReject?: (commandId: string, reasonCode: string) => void;
   onChat?: (payload: ChatEventPayload) => void;
   onReaction?: (payload: ReactionEventPayload) => void;
   onStatus?: (status: ConnectionStatus) => void;
@@ -109,9 +112,13 @@ export class GameNet {
     this.socket.on(OUT.commandAck, (p: { commandId: string }) =>
       this.handlers.onCommandAck?.(p.commandId),
     );
-    this.socket.on(OUT.commandReject, (p: { commandId: string; reasonCode: string }) =>
-      this.handlers.onCommandReject?.(p.commandId, p.reasonCode),
-    );
+    this.socket.on(OUT.commandReject, (p: { commandId: string; reasonCode: string }) => {
+      if (p.commandId.startsWith('reaction-')) {
+        this.handlers.onSocialReject?.(p.commandId, p.reasonCode);
+      } else {
+        this.handlers.onCommandReject?.(p.commandId, p.reasonCode);
+      }
+    });
     this.socket.on(OUT.chatEvent, (p: ChatEventPayload) => this.handlers.onChat?.(p));
     this.socket.on(OUT.reactionEvent, (p: ReactionEventPayload) => this.handlers.onReaction?.(p));
     this.bindPendingHandlers();
@@ -272,7 +279,7 @@ export class GameNet {
     this.socket?.emit(EV.chatSend, { seatToken: this.seatToken, text });
   }
 
-  sendReaction(targetSeatId: string, kind: ReactionKind, count = 1, emoji?: string): void {
+  sendReaction(targetSeatId: string, kind: ReactionKind, count = 1, emoji?: string, emojiId?: ReactionEmojiId): void {
     if (!this.seatToken) return;
     this.socket?.emit(EV.reactionSend, {
       seatToken: this.seatToken,
@@ -280,6 +287,7 @@ export class GameNet {
       kind,
       count,
       ...(emoji ? { emoji } : {}),
+      ...(emojiId ? { emojiId } : {}),
       commandId: `reaction-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     });
   }

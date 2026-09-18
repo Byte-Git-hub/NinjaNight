@@ -198,9 +198,11 @@ export interface EffectSendItem {
   targetSeatId: string;
   itemId: string;
   comboId: string;
+  /** 压缩的粒子数量；省略时按 1 处理，避免为每一粒子发送 socket 消息。 */
+  count?: number;
 }
 
-/** effect.send 上行：客户端 50ms 窗口合并，最多 10 条/批 */
+/** effect.send 上行：客户端 50ms 窗口合并，最多 EFFECT_BATCH_MAX 条压缩记录/批。 */
 export interface EffectSendPayload {
   seatToken: string;
   items: EffectSendItem[];
@@ -223,11 +225,18 @@ export interface EffectBatchPayload {
 
 export type ReactionKind = 'egg' | 'flower' | 'emoji';
 
+export const REACTION_EMOJI_IDS = [
+  'swords', 'kunai', 'ninja_head', 'noh_mask', 'flame', 'water',
+  'moon', 'star', 'tea_cup', 'bamboo', 'kitsune_mask', 'scroll',
+] as const;
+export type ReactionEmojiId = (typeof REACTION_EMOJI_IDS)[number];
+
 export interface RoomReactionPayload {
   seatToken: string;
   targetSeatId: string;
   kind: ReactionKind;
   emoji?: string;
+  emojiId?: ReactionEmojiId;
   count: number;
   /** 可选关联 id；不参与业务校验，仅用于 command.reject 对应。 */
   commandId?: string;
@@ -238,6 +247,7 @@ export interface ReactionEventPayload {
   targetSeatId: string;
   kind: ReactionKind;
   emoji?: string;
+  emojiId?: ReactionEmojiId;
   count: number;
   sentAt: number;
 }

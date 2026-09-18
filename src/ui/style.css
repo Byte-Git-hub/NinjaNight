@@ -1691,4 +1691,6 @@ button.card.sel,
 @media (prefers-reduced-motion: reduce) {
   .reaction-projectile { animation: reducedReaction 1ms linear both; }
 }
-@keyframes reducedReaction { from { opacity: .8; } to { opacity: 1; } }
+
+
+

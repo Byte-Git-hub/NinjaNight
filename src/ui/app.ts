@@ -1,3 +1,4 @@
+import { TableMoments } from './effects/moments';
 import type {
   PresencePayload,
   ChatEventPayload,
@@ -6,6 +7,7 @@ import type {
   MarkPair,
   ReactionEventPayload,
   ReactionKind,
+  ReactionEmojiId,
 } from '../shared/protocol';
 import { MARK_PER_SEAT_MAX, parseGameSeed } from '../shared/timeouts';
 import { ErrToastGate, shouldHandleImg } from './error-guard';
@@ -15,16 +17,19 @@ import { EffectNet } from '../net/effects';
 import { SocialNet } from '../net/social';
 import { VoiceClient, type VoiceClientStatus } from './voice/client';
 import { micBadge } from './voice/icons';
-import { AudioManager, SFX_NAMES, effectTimbre, type SfxName } from './audio';
+import { AudioManager, SFX_NAMES, type SfxName } from './audio';
 import { AchievementTracker } from './achievements/tracker';
 import { ACHIEVEMENTS, achievementDef } from './achievements/definitions';
 import { buildHighlight, type RoundHighlight } from './highlights/summary';
 import { highlightBannerHtml } from './highlights/banner';
 import { voiceBannerHtml, voiceBarHtml } from './voice/controls';
-import { EFFECT_ITEMS, QUICK_EMOJIS, getEffectItem, isQuickEmoji } from './effects/items';
+import { EFFECT_ITEMS, QUICK_EMOJIS, getEffectItem } from './effects/items';
 import { EffectLayer } from './effects/particles';
+import { ItemFlightLayer } from './effects/flights';
+import { CardDragController, type CardDropPayload } from './card-drag';
 import { markBadge, markButton, myMarkedTargets } from './social/marks';
-import { phrasesPanelHtml, phraseToastText } from './social/phrases';
+import { phrasesPanelHtml } from './social/phrases';
+import { PHRASES } from '../data/phrases';
 import type { PlayerView, PendingDecision, NinjaCardInstanceView, GameEvent } from '../shared/types';
 import {
   assetUrl,
@@ -97,7 +102,7 @@ const PRELOAD_VISUALS = [
   'ronin',
 ];
 
-const REACTION_EMOJIS = ['😂', '👍', '😮', '🎉', '💀', '🎴', '🥷', '⚔️', '🔥', '👏', '❤️', '❓', '😎', '🤝', '😭', '🤔', '💢', '✨', '🙈', '🍵', '🌙', '🐉', '🎯', '💯'];
+
 
 function preloadAssets(): void {
   if (typeof window === 'undefined') return;
@@ -109,7 +114,7 @@ function preloadAssets(): void {
     'assets/ui/lobby-bg.webp',
     'assets/ui/table-texture.webp',
     'assets/ui/button-primary.webp',
-    'assets/tokens/honor-token.webp',
+    'assets/tokens/honor-token-cutout.webp',
     'assets/visuals/ninja-card-back.webp',
     'assets/visuals/house-card-back.webp',
     'assets/ui/table-emblem.webp',
@@ -165,14 +170,30 @@ export class AppUI {
   private effectNet: EffectNet | null = null;
   private socialNet: SocialNet | null = null;
   private fxLayer: EffectLayer | null = null;
+  private flightLayer: ItemFlightLayer | null = null;
+  private lastHitAt = new Map<string, number>();
+  private cardDrag: CardDragController | null = null;
+  private dragIntent: { instanceId: string; targetSeatId: string; round: number; phase: string } | null = null;
+  private playOrigins = new Map<string, { html: string; rect: DOMRect }>();
   private marks: MarkPair[] = [];
   private fxTarget = '';
-  private reactionDraft: { kind: ReactionKind; emoji?: string } | null = null;
+  private reactionDraft: { kind: ReactionKind; emoji?: string; emojiId?: ReactionEmojiId } | null = null;
   private reactionTargetSeatId = '';
   private reactionLogs: string[] = [];
   private chatPanelOpen = false;
   private chatTab: 'chat' | 'log' | 'reaction' = 'chat';
   private phrasePanelOpen = false;
+  private socialTab: 'effects' | 'emoji' | 'phrases' | 'chat' | null = null;
+  private chatDraft = '';
+  private socialPage = 0;
+  private historyPage = 0;
+  private centralPage = 0;
+  private centralPhase = '';
+  private infoOpen = false;
+  private moments = new TableMoments();
+  private selectedItem = '';
+  private socialCount = 1;
+  private unread = 0;
   /** 座位卡抖动：seatId → 命中时间戳（render 时超 350ms 的修剪，避免重渲染复播） */
   private fxHit = new Map<string, number>();
   /** 6J-2 全局错误 toast 节流 */
@@ -272,6 +293,8 @@ export class AppUI {
           console.log(`[view.snapshot] phase=${v.phase} pending=${pending} at=${this.lastViewTimestamp}`);
         }
         if (this.view?.phase !== v.phase) {
+          this.centralPhase = '';
+          this.centralPage = 0;
           this.selected.clear();
         }
         if (this.view && this.view.round !== v.round) {
@@ -289,9 +312,12 @@ export class AppUI {
         this.playViewSounds(v);
         this.render();
         if (hadView) this.animateViewEvents(v);
+        this.resolveDragIntent(v);
       },
       onChat: (c) => {
         this.chat.push(c);
+        if (!this.chatPanelOpen) this.unread++;
+        if (this.historyPage > 0 && this.chat.length % 5 === 1) this.historyPage++;
         if (this.chat.length > 80) this.chat.shift();
         this.render();
       },
@@ -301,6 +327,8 @@ export class AppUI {
         this.render();
       },
       onCommandReject: (_id, reason) => {
+        this.dragIntent = null;
+        this.playOrigins.clear();
         this.lastReject = reason;
         this.showToast(`指令被拒绝：${reason}`);
         this.render();
@@ -338,6 +366,8 @@ export class AppUI {
     // 6G-2 特效 + 怀疑标记接线（独立 Canvas 层常驻 root，不随 #ui 重绘销毁）
     this.fxLayer = new EffectLayer();
     this.fxLayer.mount(this.root);
+    this.flightLayer = new ItemFlightLayer({ onHit: (seatId, strength) => this.itemHit(seatId, strength) });
+    this.flightLayer.mount(this.root);
     const enet = new EffectNet(this.net);
     enet.attach();
     this.effectNet = enet;
@@ -351,15 +381,27 @@ export class AppUI {
     });
     // 6G-3 快捷短语：全房 toast 浮层 3s（#toast 在 #ui 之外，无需重渲染）
     snet.onPhraseArrive((p) => {
-      this.showToast(phraseToastText(p.nickname, p.text), 3000);
+      this.showPhraseBubble(p);
     });
     // 6G-2：根点击委托（mount 时一次）。render 会重建 #ui 内所有节点，
     // 逐个绑定会被重渲染竞态吞点击；委托挂在常驻 root 上，天然免疫。
+    this.cardDrag = new CardDragController(this.root, {
+      canStart: el => {
+        const p = this.view?.pendingDecision;
+        const iid = el.dataset['iid'] ?? '';
+        return Boolean(p && ((p.kind === 'declareCards' && p.options.includes(iid) && el.closest('.hand')) || (p.kind === 'chooseTarget' && p.context.relatedInstanceIds.includes(iid))));
+      },
+      onDrop: drop => this.dropCard(drop),
+    });
+    this.cardDrag.mount();
     this.root.addEventListener('click', (ev) => this.onRootClick(ev));
     window.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape' && (this.reactionDraft || this.reactionTargetSeatId)) {
+      if ((ev.key === 'Enter' || ev.key === ' ') && document.activeElement?.matches('.seat-card[role="button"]')) { ev.preventDefault(); (document.activeElement as HTMLElement).click(); }
+      if (ev.key === 'Escape' && (this.reactionDraft || this.selectedItem || this.socialTab)) {
         this.reactionDraft = null;
         this.reactionTargetSeatId = '';
+        this.selectedItem = '';
+        this.socialTab = null;
         this.render();
       }
     });
@@ -375,6 +417,22 @@ export class AppUI {
     if (!t?.closest) return;
     // 6H-1：点击即手势，顺手确保 AudioContext 已建（幂等， cheap）
     void this.audio.ensure();
+    const socialTab = t.closest('[data-social-tab]');
+    if (socialTab) {
+      const tab = (socialTab as HTMLElement).dataset['socialTab'];
+      if (tab === 'effects' || tab === 'emoji' || tab === 'phrases' || tab === 'chat') {
+        this.socialTab = this.socialTab === tab ? null : tab;
+        this.socialPage = 0;
+        this.render();
+      }
+      return;
+    }
+    const phraseSummary = t.closest('#phrase-panel > summary');
+    if (phraseSummary) {
+      const details = phraseSummary.parentElement as HTMLDetailsElement | null;
+      this.phrasePanelOpen = Boolean(details?.open);
+      return;
+    }
     const markBtn = t.closest('[data-mark]');
     if (markBtn) {
       const target = (markBtn as HTMLElement).dataset['mark'] ?? '';
@@ -390,19 +448,31 @@ export class AppUI {
     const fxBtn = t.closest('[data-fx]');
     if (fxBtn) {
       const itemId = (fxBtn as HTMLElement).dataset['fx'] ?? '';
-      const meta = getEffectItem(itemId);
-      if (!meta || !this.effectNet) return;
-      if (!this.fxTarget) {
-        this.showToast('先点一张座位卡选目标');
-        return;
-      }
-      const target = this.fxTarget;
-      // 6H-1：砸物音（按物品三类音色）
-      this.audio.play('effect-send', effectTimbre(itemId));
-      if (this.effectNet.send(target, itemId) === 'local-only') {
-        this.renderEffectLocal(target, itemId);
-      }
+      if (!getEffectItem(itemId)) return;
+      this.selectedItem = itemId;
+      this.reactionDraft = null;
+      this.render();
       return;
+    }
+    const pageBtn = t.closest<HTMLElement>('[data-page]');
+    if (pageBtn) {
+      const delta = Number(pageBtn.dataset['delta']);
+      if (pageBtn.dataset['page'] === 'social') this.socialPage = Math.max(0, this.socialPage + delta);
+      if (pageBtn.dataset['page'] === 'history') this.historyPage = Math.max(0, this.historyPage + delta);
+      if (pageBtn.dataset['page'] === 'central') this.centralPage = Math.max(0, this.centralPage + delta);
+      this.render(); return;
+    }
+    const phaseBtn = t.closest<HTMLElement>('[data-central-phase]');
+    if (phaseBtn) { this.centralPhase = phaseBtn.dataset['centralPhase'] ?? ''; this.centralPage = 0; this.render(); return; }
+    if (t.closest('[data-info-toggle]')) { this.infoOpen = !this.infoOpen; this.render(); return; }
+    if (t.closest('[data-social-send]')) {
+      if (!this.fxTarget) { this.showToast('请选择一个目标座位'); return; }
+      if (this.selectedItem) {
+        this.effectNet?.send(this.fxTarget, this.selectedItem, this.socialCount);
+      } else if (this.reactionDraft) {
+        this.net.sendReaction(this.fxTarget, this.reactionDraft.kind, this.socialCount, this.reactionDraft.emoji, this.reactionDraft.emojiId);
+      }
+      this.render(); return;
     }
     const phraseBtn = t.closest('[data-phrase]');
     if (phraseBtn) {
@@ -412,56 +482,37 @@ export class AppUI {
       this.socialNet.sendPhrase(id);
       return;
     }
-    const reactionBtn = t.closest('[data-reaction-kind], [data-reaction-emoji]');
+    const reactionBtn = t.closest('[data-reaction-kind], [data-reaction-emoji], [data-reaction-emoji-id]');
     if (reactionBtn) {
       const el = reactionBtn as HTMLElement;
       const kind = el.dataset['reactionKind'] as ReactionKind | undefined;
       const emoji = el.dataset['reactionEmoji'];
-      if (kind === 'emoji' && !emoji) {
-        this.chatPanelOpen = true;
-        this.chatTab = 'reaction';
+      const emojiId = el.dataset['reactionEmojiId'] as ReactionEmojiId | undefined;
+      if (kind === 'emoji' && !emoji && !emojiId) {
+        this.socialTab = 'effects';
         this.render();
         return;
       }
-      if (kind === 'egg' || kind === 'flower' || (kind === 'emoji' && emoji)) {
-        this.reactionDraft = kind === 'emoji' ? { kind, emoji } : { kind };
-        this.reactionTargetSeatId = '';
-        this.chatPanelOpen = true;
-        this.chatTab = 'reaction';
+      if (kind === 'egg' || kind === 'flower' || (kind === 'emoji' && (emoji || emojiId))) {
+        this.reactionDraft = kind === 'emoji'
+          ? (emojiId ? { kind, emojiId } : { kind, emoji })
+          : { kind };
+        this.selectedItem = '';
+        this.socialCount = Math.min(10, this.socialCount);
+        this.reactionTargetSeatId = this.fxTarget;
+        this.socialTab = 'emoji';
         this.render();
       }
       return;
     }
-    const reactionCount = t.closest('[data-reaction-count]');
-    if (reactionCount && this.reactionDraft && this.reactionTargetSeatId) {
-      const count = Number((reactionCount as HTMLElement).dataset['reactionCount']);
-      if (Number.isInteger(count) && count >= 1 && count <= 10) {
-        const target = this.reactionTargetSeatId;
-        const draft = this.reactionDraft;
-        this.net.sendReaction(target, draft.kind, count, draft.emoji);
-        this.reactionDraft = null;
-        this.reactionTargetSeatId = '';
-        this.render();
-      }
-      return;
-    }
+    const reactionCount = t.closest<HTMLElement>('[data-reaction-count]');
+    if (reactionCount) { this.socialCount = Number(reactionCount.dataset['reactionCount']); this.render(); return; }
     const reactionCancel = t.closest('[data-reaction-cancel]');
     if (reactionCancel) {
       this.reactionDraft = null;
+      this.selectedItem = '';
       this.reactionTargetSeatId = '';
       this.render();
-      return;
-    }
-    const emojiBtn = t.closest('[data-emoji]');
-    if (emojiBtn) {
-      const emojiId = (emojiBtn as HTMLElement).dataset['emoji'] ?? '';
-      if (!isQuickEmoji(emojiId)) return;
-      if (!this.fxTarget) {
-        this.showToast('先点一张座位卡选目标');
-        return;
-      }
-      const el = this.root.querySelector(`.seat-card[data-seat="${this.fxTarget}"]`);
-      if (el) this.fxLayer?.emojiAt(el, emojiId);
       return;
     }
     const card = t.closest('.seat-card[data-seat]');
@@ -469,41 +520,56 @@ export class AppUI {
       if (t.closest('button, .flip-wrap, a, input, summary')) return;
       const sid = (card as HTMLElement).dataset['seat'] ?? '';
       if (!sid) return;
-      if (this.reactionDraft) {
-        if (sid === this.view?.self.seatId) return;
-        this.reactionTargetSeatId = sid;
-        this.chatPanelOpen = true;
-        this.chatTab = 'reaction';
-        this.render();
-        return;
+      const pending = this.view?.pendingDecision;
+      if (pending?.kind === 'chooseTarget' && pending.options.includes(sid)) {
+        this.root.querySelector<HTMLButtonElement>(`.pending [data-opt="${cssEscape(sid)}"]`)?.click(); return;
+      }
+      if (this.reactionDraft || this.selectedItem) {
+        this.fxTarget = sid; this.reactionTargetSeatId = sid; this.render(); return;
       }
       // 再点同一张取消选中
-      this.fxTarget = this.fxTarget === sid ? '' : sid;
-      this.render();
+      // Social targeting starts only from the Dock.
+      return;
+    }
+    if (t.closest('.central, .table') && !t.closest('button, input') && (this.selectedItem || this.reactionDraft)) {
+      this.selectedItem = ''; this.reactionDraft = null; this.render();
     }
   }
 
-  /** 6G-2：收到特效广播 → Canvas 爆发 + 座位卡抖动 + 连击飘字（同 comboId 1.5s 内累计） */
+  /** Broadcast is the only source of playback, including the sending client. */
   private onEffectBatch(items: EffectBatchItem[]): void {
-    const layer = this.fxLayer;
-    if (!layer) return;
-    const now = Date.now();
-    for (const it of items) {
-      const el = this.root.querySelector(`.seat-card[data-seat="${it.targetSeatId}"]`);
-      if (!el) continue;
-      const meta = getEffectItem(it.itemId);
-      if (!meta) continue;
-      const combo = layer.combos.hit(it.comboId, now);
-      // 6G-4a：连击主粒子放大至 particleMax（48px 上限），不遮挡公共区
-      layer.burstAt(el, meta, combo >= 2 ? { big: true } : undefined);
-      this.fxHit.set(it.targetSeatId, now);
-      // 6H-3：被砸计数（目标是自己时）
-      if (this.view && it.targetSeatId === this.view.self.seatId) {
-        for (const id of this.achieve.hitByEffect()) this.showAchievementCard(id);
-      }
-      if (combo >= 2) layer.textAt(el, `${combo} 连击`);
+    for (const item of items) {
+      this.animateEffectItem(item);
+      const to = this.view?.seats.find(s => s.seatId === item.targetSeatId)?.nickname ?? item.targetSeatId;
+      this.reactionLogs.push(`${item.fromNickname} 向 ${to} 送出 ${item.count ?? 1} 个${getEffectItem(item.itemId)?.name ?? item.itemId}`);
     }
+    this.reactionLogs = this.reactionLogs.slice(-80);
+    if (!this.chatPanelOpen) this.unread += items.length;
     this.render();
+  }
+
+  private itemHit(seatId: string | undefined, strength: number): void {
+    if (!seatId) return;
+    const now = performance.now();
+    if (now - (this.lastHitAt.get(seatId) ?? -Infinity) < 80) return;
+    this.lastHitAt.set(seatId, now);
+    const seat = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(seatId)}"]`);
+    if (!seat) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      seat.dataset['hitNotice'] = '收到互动';
+      window.setTimeout(() => delete seat.dataset['hitNotice'], 1200);
+      return;
+    }
+    seat.style.setProperty('--hit-strength', `${Math.min(10, 4 + strength * 2)}px`);
+    this.addAnimationElement(seat, 'fx-hit');
+    this.fxHit.set(seatId, Date.now());
+  }
+
+  private animateEffectItem(item: EffectBatchItem): void {
+    const source = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(item.fromSeatId)}"]`);
+    const target = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(item.targetSeatId)}"]`);
+    if (!source || !target || !getEffectItem(item.itemId)) return;
+    this.flightLayer?.launch({ from: source.getBoundingClientRect(), to: target.getBoundingClientRect(), itemId: item.itemId, targetSeatId: item.targetSeatId, count: item.count ?? 1 });
   }
 
   private onReaction(event: ReactionEventPayload): void {
@@ -512,7 +578,7 @@ export class AppUI {
       const from = v.seats.find((s) => s.seatId === event.fromSeatId)?.nickname ?? event.fromSeatId;
       const to = v.seats.find((s) => s.seatId === event.targetSeatId)?.nickname ?? event.targetSeatId;
       const label = event.kind === 'egg' ? '砸了' : event.kind === 'flower' ? '送了' : '发送了';
-      const item = event.kind === 'egg' ? `${event.count} 个蛋` : event.kind === 'flower' ? `${event.count} 朵花` : `${event.emoji ?? ''}`;
+      const item = event.kind === 'egg' ? `${event.count} 个蛋` : event.kind === 'flower' ? `${event.count} 朵花` : `${event.emoji ?? event.emojiId ?? ''}`;
       this.reactionLogs.push(`${from} 向 ${to} ${label} ${item}`);
       if (this.reactionLogs.length > 80) this.reactionLogs.shift();
     }
@@ -521,64 +587,31 @@ export class AppUI {
   }
 
   private animateReaction(event: ReactionEventPayload): void {
-    const source = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(event.fromSeatId)}"]`);
     const target = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(event.targetSeatId)}"]`);
-    if (!source || !target || typeof document === 'undefined') return;
-    const a = source.getBoundingClientRect();
-    const b = target.getBoundingClientRect();
-    const icon = event.kind === 'egg' ? '🥚' : event.kind === 'flower' ? '🌸' : (event.emoji ?? '✨');
-    const total = Math.max(1, Math.min(10, event.count));
-    for (let i = 0; i < total; i += 1) {
-      const projectile = document.createElement('span');
-      projectile.className = 'reaction-projectile';
-      projectile.textContent = icon;
-      const ox = Math.round((Math.random() * 30) - 15);
-      const oy = Math.round((Math.random() * 30) - 15);
-      projectile.style.setProperty('--reaction-x', `${b.left - a.left + ox}px`);
-      projectile.style.setProperty('--reaction-y', `${b.top - a.top + oy}px`);
-      projectile.style.setProperty('--reaction-arc', `${Math.min(-70, -(Math.abs(b.top - a.top) * 0.35 + 70))}px`);
-      projectile.style.setProperty('--reaction-delay', `${i * 80}ms`);
-      projectile.style.left = `${a.left + a.width / 2}px`;
-      projectile.style.top = `${a.top + a.height / 2}px`;
-      document.body.appendChild(projectile);
-      projectile.addEventListener('animationend', () => {
-        projectile.remove();
-        this.addReactionFeedback(target, event.kind, event.emoji);
-      }, { once: true });
+    if (!target) return;
+    if (event.kind === 'egg' || event.kind === 'flower') {
+      this.animateEffectItem({ fromSeatId: event.fromSeatId, fromNickname: '', targetSeatId: event.targetSeatId, itemId: event.kind === 'egg' ? 'egg' : 'sakura', comboId: 'legacy', count: event.count });
+    } else if (event.emojiId) {
+      this.flightLayer?.emojiPop(target.getBoundingClientRect(), event.emojiId, event.count, event.targetSeatId);
+    } else {
+      this.showPhraseBubble({ seatId: event.targetSeatId, nickname: '', text: event.emoji ?? '✨' } as ChatEventPayload);
     }
-  }
-
-  private addReactionFeedback(target: HTMLElement, kind: ReactionKind, emoji?: string): void {
-    const cls = kind === 'egg' ? 'animate-hit-egg' : kind === 'flower' ? 'animate-hit-flower' : 'animate-hit-emoji';
-    this.addAnimationElement(target, cls);
-    const pop = document.createElement('span');
-    pop.className = 'reaction-pop';
-    pop.textContent = kind === 'egg' ? '🥚' : kind === 'flower' ? '🌸' : (emoji ?? '✨');
-    target.appendChild(pop);
-    window.setTimeout(() => pop.remove(), 700);
-  }
-
-  /** 6G-2：本地回退渲染（镜像限频/离线时只画本地，不发网） */
-  private renderEffectLocal(targetSeatId: string, itemId: string): void {
-    const layer = this.fxLayer;
-    if (!layer) return;
-    const el = this.root.querySelector(`.seat-card[data-seat="${targetSeatId}"]`);
-    if (!el) return;
-    const meta = getEffectItem(itemId);
-    if (!meta) return;
-    const now = Date.now();
-    const combo = layer.combos.hit(`local-${targetSeatId}-${itemId}`, now);
-    layer.burstAt(el, meta, combo >= 2 ? { big: true } : undefined);
-    this.fxHit.set(targetSeatId, now);
-    if (combo >= 2) layer.textAt(el, `${combo} 连击`);
-    this.render();
   }
 
   private resetSocialUi(): void {
     this.marks = [];
     this.fxTarget = '';
     this.fxHit.clear();
+    this.lastHitAt.clear();
+    this.cardDrag?.cancel();
+    this.dragIntent = null;
+    this.playOrigins.clear();
     this.fxLayer?.clear();
+    this.flightLayer?.clear();
+    this.moments.clear();
+    this.selectedItem = ''; this.reactionDraft = null; this.reactionTargetSeatId = '';
+    this.socialTab = null;
+    document.querySelectorAll('.phrase-bubble, .reaction-projectile, .reaction-pop, .effect-projectile, .played-card-flight').forEach(el => el.remove());
   }
 
   private renderShell(): void {
@@ -591,6 +624,20 @@ export class AppUI {
     t.textContent = msg;
     t.removeAttribute('hidden');
     window.setTimeout(() => t.setAttribute('hidden', ''), ms);
+  }
+
+  private showPhraseBubble(p: ChatEventPayload): void {
+    const source = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(p.seatId)}"]`);
+    document.querySelector(`.phrase-bubble[data-speaker="${cssEscape(p.seatId)}"]`)?.remove();
+    const bubble = document.createElement('div');
+    bubble.dataset['speaker'] = p.seatId;
+    bubble.className = 'phrase-bubble';
+    bubble.textContent = p.nickname ? `${p.nickname}：${p.text}` : p.text;
+    const r = source?.getBoundingClientRect();
+    bubble.style.left = `${Math.max(130, Math.min(window.innerWidth - 130, (r?.left ?? window.innerWidth / 2) + (r?.width ?? 0) / 2))}px`;
+    bubble.style.top = `${Math.max(110, (r?.top ?? window.innerHeight / 2) - 8)}px`;
+    document.body.appendChild(bubble);
+    window.setTimeout(() => bubble.remove(), 3200);
   }
 
   private ui(): HTMLElement | null {
@@ -625,6 +672,9 @@ export class AppUI {
       ? `<div class="banner err">${escapeHtml(this.lastReject)}</div>`
       : '';
     const voiceBanner = voiceBannerHtml(this.voiceNotice);
+    const oldChat = this.root.querySelector<HTMLInputElement>('#chat-input');
+    const chatFocused = document.activeElement === oldChat && !!oldChat;
+    const chatCursor = oldChat?.selectionStart ?? 0;
     el.innerHTML = `
       ${banner}${reject}${voiceBanner}
       <header class="top">
@@ -657,6 +707,7 @@ export class AppUI {
       ${!this.view && !this.presence ? this.lobbyForm() : this.gameBody()}
     `;
     this.bind();
+    if (chatFocused) { const input = this.root.querySelector<HTMLInputElement>('#chat-input'); input?.focus(); input?.setSelectionRange(chatCursor,chatCursor); }
   }
 
   private lobbyForm(): string {
@@ -749,20 +800,95 @@ export class AppUI {
     this.lastSoundSeq = Math.max(this.lastSoundSeq, maxSeq);
   }
 
+  private dropCard(drop: CardDropPayload): void {
+    const v = this.view, pending = v?.pendingDecision;
+    if (!v || !pending || (!drop.targetSeatId && !drop.central)) return;
+    if (pending.kind === 'chooseTarget' && drop.targetSeatId && pending.options.includes(drop.targetSeatId) && pending.context.relatedInstanceIds.includes(drop.instanceId)) {
+      this.net.sendCommand(v.windowId, 'night.chooseTarget', { targetSeatId: drop.targetSeatId });
+      this.playCardFlight(drop.html, drop.sourceRect, this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(drop.targetSeatId)}"]`));
+      return;
+    }
+    if (pending.kind !== 'declareCards' || !pending.options.includes(drop.instanceId)) return;
+    this.playOrigins.set(drop.instanceId, { html: drop.html, rect: drop.sourceRect });
+    this.dragIntent = drop.targetSeatId ? { instanceId: drop.instanceId, targetSeatId: drop.targetSeatId, round: v.round, phase: v.phase } : null;
+    this.net.sendCommand(v.windowId, 'night.declare', { cardInstanceIds: [drop.instanceId] });
+    this.selected.clear();
+  }
+
+  private resolveDragIntent(v: PlayerView): void {
+    const intent = this.dragIntent;
+    if (!intent) return;
+    if (intent.round !== v.round || intent.phase !== v.phase || v.gameOver) { this.dragIntent = null; return; }
+    const p = v.pendingDecision;
+    if (p?.kind !== 'chooseTarget' || !p.context.relatedInstanceIds.includes(intent.instanceId)) return;
+    this.dragIntent = null;
+    if (p.options.includes(intent.targetSeatId)) {
+      this.net.sendCommand(v.windowId, 'night.chooseTarget', { targetSeatId: intent.targetSeatId });
+    } else {
+      this.showPhraseBubble({ seatId: v.self.seatId, nickname: '', text: '目标已不可选，请点击其他高亮座位' } as ChatEventPayload);
+    }
+  }
+
+  private rememberPlayOrigins(): void {
+    this.root.querySelectorAll<HTMLElement>('.hand .card.sel').forEach(el => {
+      const id = el.dataset['iid'];
+      if (id) this.playOrigins.set(id, { html: el.outerHTML, rect: el.getBoundingClientRect() });
+    });
+  }
+
+  private playCardFlight(html: string, from: DOMRect, target: HTMLElement | null): void {
+    if (!target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const to = target.getBoundingClientRect();
+    const ghost = document.createElement('div');
+    ghost.className = 'played-card-flight';
+    ghost.innerHTML = html;
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.style.setProperty('--from-x', `${from.left}px`);
+    ghost.style.setProperty('--from-y', `${from.top}px`);
+    ghost.style.setProperty('--to-x', `${to.left + to.width / 2 - from.width / 2}px`);
+    ghost.style.setProperty('--to-y', `${to.top + to.height / 2 - from.height / 2}px`);
+    ghost.style.width = `${from.width}px`; ghost.style.height = `${from.height}px`;
+    document.body.appendChild(ghost);
+    ghost.addEventListener('animationend', () => { ghost.remove(); if(target.isConnected) this.addAnimationElement(target, 'card-arrival'); }, { once:true });
+    window.setTimeout(() => ghost.remove(), 1000);
+  }
+
   private animateViewEvents(v: PlayerView): void {
     const fresh = v.events.filter((e) => (e.seq ?? 0) > this.lastAnimationSeq);
     if (fresh.length === 0) return;
     for (const e of fresh) {
       const payload = (e.payload ?? {}) as Record<string, unknown>;
-      if (e.type === 'night.phaseStarted') this.addAnimation('.phase-banner', 'animate-phase');
+      if (e.type === 'night.phaseStarted') this.moments.phase(phaseLabel(v.phase));
       if (e.type === 'night.playerDied' && typeof payload['seatId'] === 'string') {
         this.addAnimation(`.seat-card[data-seat="${cssEscape(String(payload['seatId']))}"]`, 'animate-death');
-        this.addAnimation('#ui', 'animate-kill');
+        this.moments.kill();
       }
-      if (e.type === 'score.roundWinner') this.addAnimation('.central', 'animate-token-fly');
-      if (e.type === 'score.victory') this.addAnimation('#ui', 'animate-victory');
+      if (e.type === 'score.roundWinner') {
+        const center = this.root.querySelector('.central')?.getBoundingClientRect();
+        const awards = payload['awarded'] as Array<{ seatId: string; count: number }> | undefined;
+        let offset = 0;
+        for (const award of awards ?? []) {
+          const target = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(award.seatId)}"] .token-stack`);
+          if (center && target) this.moments.award(center, target, award.count, offset);
+          offset += award.count;
+        }
+      }
+      if (e.type === 'react.resolved' && typeof payload['victimSeatId'] === 'string') {
+        this.addAnimation(`.seat-card[data-seat="${cssEscape(payload['victimSeatId'])}"] .hand-stack`, 'animate-reaction-flip');
+      }
+      if (e.type === 'score.victory') {
+        const winners = (payload['winners'] as string[] | undefined) ?? [];
+        this.moments.victory(`${winners.map(id => seatName(v, id)).join(' · ')} 获胜`);
+      }
       if (e.type === 'night.cardsDeclared') {
-        this.root.querySelectorAll<HTMLElement>('.hand .card.sel').forEach((el) => this.addAnimationElement(el, 'animate-play-card'));
+        const cards = payload['cards'] as Array<{ instanceId: string; cardId: string; actorSeatId: string }> | undefined;
+        for (const card of cards ?? []) {
+          const origin = this.playOrigins.get(card.instanceId);
+          const seat = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(card.actorSeatId)}"] .hand-stack`);
+          const rect = origin?.rect ?? seat?.getBoundingClientRect();
+          if (rect) this.playCardFlight(origin?.html ?? renderCardHtml(card.cardId, undefined, false), rect, this.root.querySelector<HTMLElement>(`.central [data-iid="${cssEscape(card.instanceId)}"]`) ?? this.root.querySelector('.central'));
+          this.playOrigins.delete(card.instanceId);
+        }
       }
     }
     this.lastAnimationSeq = Math.max(this.lastAnimationSeq, ...fresh.map((e) => e.seq ?? 0));
@@ -865,9 +991,10 @@ export class AppUI {
     const dead = alive === false;
     const inGame = Boolean(v);
 
+
     // 身份缩略：死者强制卡背；他人按 publicHouseId 切正/背；
     // 自己：卡背覆盖 + 点击翻转（6F-4 纯本地，窥视时才显示身份名）
-    let houseImg = '';
+    let houseImg = `<img class="house-mini back" src="${getHouseCardBackPath()}" alt="等待分配身份" />`;
     if (inGame) {
       if (isSelf && v) {
         const front = getVisualPath(getVisualId(v.self.houseId));
@@ -885,7 +1012,7 @@ export class AppUI {
     }
 
     const handStack =
-      inGame && !isSelf && handCount !== undefined
+      inGame && handCount !== undefined
         ? `<span class="hand-stack" title="手牌 ${handCount} 张"><img src="${getNinjaCardBackPath()}" alt="手牌背面" /><i>×${handCount}</i></span>`
         : '';
     const tokenStack =
@@ -922,14 +1049,16 @@ export class AppUI {
     // 6G-2：命中抖动（fxHit 时间戳 350ms 内有效）+ 特效目标高亮 + 怀疑徽章/按钮（纯社交层）
     const hitAt = this.fxHit.get(s.seatId) ?? 0;
     const hitCls = inGame && Date.now() - hitAt < 350 ? ' fx-hit' : '';
-    const targetCls = inGame && !isSelf && this.fxTarget === s.seatId ? ' fx-target' : '';
+    const targetCls = inGame && this.fxTarget === s.seatId ? ' fx-target' : '';
+    const decisionTarget = v?.pendingDecision?.kind === 'chooseTarget' && v.pendingDecision.options.includes(s.seatId) ? ' game-target' : '';
+    const socialTarget = this.selectedItem || this.reactionDraft ? ' social-target' : '';
     const selfId = v?.self.seatId ?? '';
     const markB = inGame ? markBadge(this.marks, s.seatId) : '';
     const markB2 = inGame && !isSelf ? markButton(this.marks, selfId, s.seatId, MARK_PER_SEAT_MAX) : '';
 
-    return `<li class="seat-card${s.isHost ? ' host' : ''}${isBot ? ' bot' : ''}${dead ? ' dead' : ''}${isSelf ? ' self' : ''}${speakingCls}${hitCls}${targetCls}" data-seat="${escapeHtml(s.seatId)}" data-seat-position="${escapeHtml(seatPosition)}">
+    return `<li class="seat-card${s.isHost ? ' host' : ''}${isBot ? ' bot' : ''}${dead ? ' dead' : ''}${isSelf ? ' self' : ''}${speakingCls}${hitCls}${targetCls}${decisionTarget}${socialTarget}" data-seat="${escapeHtml(s.seatId)}" data-seat-position="${escapeHtml(seatPosition)}"${decisionTarget || socialTarget ? ' tabindex="0" role="button"' : ''}>
       <div class="seat-head"><b>${isBot ? '🤖 ' : ''}${escapeHtml(s.nickname)}</b> <span class="seat-id">${escapeHtml(s.seatId)}</span>${s.isHost ? '👑' : ''} ${s.connected ? '●' : '○'}${mic}${markB}${isSelf ? '<em class="you">你</em>' : ''}</div>
-      ${inGame ? `<div class="seat-body">${houseImg}${handStack}${tokenStack}</div>` : ''}
+      <div class="seat-body">${houseImg}${handStack}${tokenStack}</div>
       ${selfMeta}
       ${metaBits.length > 0 ? `<div class="seat-meta">${metaBits.join(' ')}</div>` : ''}
       ${markB2}
@@ -948,7 +1077,8 @@ export class AppUI {
     // 大厅才用 presence（含 ready）。反向会把对局字段遮掉（6F-4 目检发现）。
     const allSeats = v?.seats ?? p?.seats ?? [];
     const selfId = v?.self.seatId ?? this.net.seatId ?? '';
-    const others = allSeats.filter((s) => s.seatId !== selfId);
+    const selfIndex = allSeats.findIndex(s => s.seatId === selfId);
+    const others = [...allSeats.slice(selfIndex + 1), ...allSeats.slice(0, Math.max(0, selfIndex))];
     const bucket = playerCountBucket(allSeats.length);
     const positions = ringPositions(bucket, others.length);
     const seatByPosition = new Map<string, string>();
@@ -967,10 +1097,10 @@ export class AppUI {
     return `
       <div class="grid table-layout${v ? ' game-layout' : ''}">
         <section class="panel seats-panel">
-          <h2>座位</h2>
+          <h2 class="table-caption">夜幕已至 · 忍者之夜</h2>
           <div class="table">
             <img class="table-emblem" src="${getTableEmblemPath()}" alt="" aria-hidden="true" />
-            <div class="table-ring seats ring" data-player-count="${bucket}">
+            <div class="table-ring seats ring" data-player-count="${bucket}" data-seat-count="${allSeats.length}">
               <div class="self-zone" data-seat-position="self">${selfHtml}${selfContent}</div>
               <div class="ring-top" data-ring="top">${ring('top')}</div>
               <div class="ring-middle">
@@ -982,12 +1112,12 @@ export class AppUI {
             </div>
           </div>
           ${!v ? this.lobbyControls() : ''}
-          ${this.voiceBar()}
+          
         </section>
         ${v ? this.gamePanels(v, pending ?? null) : ''}
         ${v ? this.identityModalHtml(v) : ''}
+        ${v ? this.socialDockHtml(v) : ''}
         ${this.chatLogPanel(v ?? null)}
-        ${phrasesPanelHtml().replace('<details class="panel phrases collapsed-panel" id="phrase-panel">', `<details class="panel phrases collapsed-panel" id="phrase-panel"${this.phrasePanelOpen ? ' open' : ''}>`)}
       </div>
     `;
   }
@@ -1117,18 +1247,17 @@ export class AppUI {
     return `
       ${phaseBanner}
       <section class="panel in-game-table">
-        <h2>对局 <span class="phase">${escapeHtml(phaseLabel(v.phase))}</span></h2>
+        <h2>第 ${v.round} 轮 · <span class="phase">${escapeHtml(phaseLabel(v.phase))}</span></h2>
         ${gameOverBanner}
         ${roundBanner}
         ${nextRoundBtn}
-        ${this.fxBarHtml(v)}
-        <div class="reserved"><b>预留：</b>${reserved || '无'}</div>
+        <button type="button" data-info-toggle class="info-toggle">情报 / 管理</button><div class="table-info"${this.infoOpen ? "" : " hidden"}>${this.voiceBar()}<div class="reserved"><b>预留：</b>${reserved || '无'}</div>
         <div class="known"><h3>已知身份</h3>${known || '无'}</div>
         <div class="row">
           ${this.net.isHost ? `<button id="btn-fa" type="button">强制推进</button>` : ''}
           ${this.net.isHost ? `<button id="btn-end" type="button" class="danger">终止本局</button>` : ''}
         </div>
-        ${this.net.isHost ? this.kickButtons() : ''}
+        ${this.net.isHost ? this.kickButtons() : ''}</div>
       </section>
     `;
   }
@@ -1138,65 +1267,60 @@ export class AppUI {
     const hand = v.self.hand.map((c) => {
       const isSel = this.selected.has(c.instanceId);
       const offPhase = playableSet !== null && !playableSet.has(c.instanceId);
-      const cls = `${isSel ? 'sel' : ''}${offPhase ? ' dim' : ''}`.trim();
-      return renderCardHtml(c.cardId, c.instanceId, true, cls);
+      const cls = `${isSel ? 'sel' : ''}${offPhase ? ' dim' : ''}${playableSet?.has(c.instanceId) ? ' opt declare-opt' : ''}`.trim();
+      return renderCardHtml(c.cardId, c.instanceId, true, cls, playableSet?.has(c.instanceId) ? c.instanceId : undefined);
     }).join('');
-    return `<div class="bottom-bar self-hand-decision">
+    return `<div class="bottom-bar self-hand-decision${pending?.kind.startsWith('draft') ? ' drafting' : ''}">
       <div class="hand-section"><h3>手牌</h3><div class="hand">${hand || '<i>无手牌</i>'}</div></div>
       <div id="decision-zone">${this.pendingPanel(pending)}</div>
     </div>`;
   }
 
-  /**
-   * 6G-2b 互动条：9 物品 + 12 快捷表情（图集切图）+ 目标提示。
-   * 点座位卡选目标（高亮 fx-target），再点物品发网（effect.send 批发送）；
-   * 表情为本地渲染（不发网）；怀疑标记点座位卡上的 👁 按钮。选择器均为新增 data-*，不动已有选择器。
-   */
-  private fxBarHtml(v: PlayerView): string {
-    const target = v.seats.find((s) => s.seatId === this.fxTarget);
-    const hint = target ? `目标：${escapeHtml(target.nickname)}` : '先点座位卡选目标';
-    const items = EFFECT_ITEMS.map(
-      (m) =>
-        `<button type="button" class="fx-btn" data-fx="${m.id}" title="扔${m.name}"><img src="${getItemPath(m.id)}" alt="${m.name}" draggable="false" /><i>${m.name}</i></button>`,
-    ).join('');
-    const emojis = QUICK_EMOJIS.map(
-      (e) =>
-        `<button type="button" class="fx-btn emoji" data-emoji="${e}" title="表情 ${e}"><img src="${getEmojiPath(e)}" alt="${e}" draggable="false" /></button>`,
-    ).join('');
-    return `<div class="fx-bar" aria-label="互动特效">
-      <div class="fx-row">${items}</div>
-      <div class="fx-row">${emojis}</div>
-      <div class="fx-hint" id="fx-target-hint">${hint} · 怀疑标记点座位卡上的 👁</div>
-    </div>`;
+  /** A single composer: each tab owns only its own content. */
+  private socialDockHtml(v: PlayerView): string {
+    const tabs = [['effects', '物品'], ['emoji', '表情'], ['phrases', '短语'], ['chat', '聊天']];
+    const target = v.seats.find(s => s.seatId === this.fxTarget);
+    const selecting = Boolean(this.selectedItem || this.reactionDraft);
+    const items = this.socialTab === 'effects'
+      ? EFFECT_ITEMS.map(m => `<button type="button" class="fx-btn${this.selectedItem === m.id ? ' active' : ''}" data-fx="${m.id}" title="${m.name}"><img src="${getItemPath(m.id)}" alt="${m.name}" /><i>${m.name}</i></button>`)
+      : QUICK_EMOJIS.map(e => `<button type="button" class="fx-btn emoji" data-emoji="${e}" data-reaction-kind="emoji" data-reaction-emoji-id="${e}" title="${e}"><img src="${getEmojiPath(e)}" alt="${e}" /></button>`);
+    const perPage = this.socialTab === 'phrases' ? 5 : 6;
+    const pages = Math.ceil((this.socialTab === 'phrases' ? PHRASES.length : items.length) / perPage);
+    this.socialPage = Math.min(this.socialPage, pages - 1);
+    const picker = selecting ? `<div class="social-selection"><span>${target ? `目标：${escapeHtml(target.nickname)}` : '点击座位选择目标'}</span><div class="reaction-count-picker">${(this.selectedItem ? [1, 3, 10, 100, 1000] : [1, 3, 5, 10]).map(n => `<button type="button" class="${this.socialCount === n ? 'active' : ''}" data-reaction-count="${n}">${n}</button>`).join('')}</div><button type="button" data-social-send ${target ? '' : 'disabled'}>发送</button><button type="button" data-reaction-cancel>取消</button></div>` : '';
+    let content = '';
+    if (this.socialTab === 'chat') content = `<div class="social-chat-compose"><input id="chat-input" maxlength="200" placeholder="说点什么…" value="${escapeHtml(this.chatDraft)}" /><button id="btn-chat" type="button">发送</button></div>`;
+    if (this.socialTab === 'phrases') {
+      const all = phrasesPanelHtml().match(/<button[\s\S]*?<\/button>/g) ?? [];
+      content = `<section id="phrase-panel"><h3>快捷短语</h3><div class="fx-row">${all.slice(this.socialPage * perPage, (this.socialPage + 1) * perPage).join('')}</div>${this.pager('social', this.socialPage, pages)}</section>`;
+    }
+    if (this.socialTab === 'effects' || this.socialTab === 'emoji') content = `<div class="fx-bar" aria-label="互动特效"><div class="fx-row">${items.slice(this.socialPage * perPage, (this.socialPage + 1) * perPage).join('')}</div><div class="fx-hint" id="fx-target-hint">${target ? `目标：${escapeHtml(target.nickname)}` : '选择内容 → 点击座位 → 选择数量 → 发送'}</div>${this.pager('social', this.socialPage, pages)}${picker}</div>`;
+    return `<section class="social-dock" aria-label="社交互动"><div class="social-dock-tabs">${tabs.map(([id, label]) => `<button type="button" data-social-tab="${id}" class="${this.socialTab === id ? 'active' : ''}">${label}</button>`).join('')}</div>${this.socialTab ? `<div class="social-pop panel"><button type="button" class="social-close" data-social-tab="${this.socialTab}" aria-label="关闭社交">×</button>${content}</div>` : ''}</section>`;
+  }
+
+  private pager(area: string, page: number, total: number): string {
+    return `<nav class="pager"><button type="button" data-page="${area}" data-delta="-1" ${page <= 0 ? 'disabled' : ''}>‹</button><span>${page+1} / ${Math.max(1,total)}</span><button type="button" data-page="${area}" data-delta="1" ${page >= total-1 ? 'disabled' : ''}>›</button></nav>`;
   }
 
   /** 6F-5 聊天/日志折叠面板（默认折叠；DOM 常驻，关闭态由 details 原生折叠） */
   private chatLogPanel(v: PlayerView | null): string {
     // 6G-4b(M4)：空态提示，避免大面积空白
     const chatHtml = this.chat.length > 0
-      ? this.chat
+      ? this.chat.slice(Math.max(0, this.chat.length - (this.historyPage+1)*5), Math.max(0, this.chat.length - this.historyPage*5))
           .map((c) => `<div><b>${escapeHtml(c.nickname)}</b>: ${escapeHtml(c.text)}</div>`)
           .join('')
       : '<div class="chat-empty">暂无消息，来说第一句话吧</div>';
     const logHtml = v
       ? v.events
-          .slice(-40)
+          .slice(Math.max(0, v.events.length-(this.historyPage+1)*5), Math.max(0,v.events.length-this.historyPage*5))
           .map((e) => `<div class="ev" title="${escapeHtml(e.type)}">${escapeHtml(eventLabel(e, v))}</div>`)
           .join('')
       : '';
-    const reactionEmojis = REACTION_EMOJIS.map((e) => `<button type="button" class="reaction-emoji" data-reaction-kind="emoji" data-reaction-emoji="${escapeHtml(e)}" aria-label="发送 ${escapeHtml(e)}">${e}</button>`).join('');
     const reactionLogs = this.reactionLogs.length > 0
-      ? this.reactionLogs.map((x) => `<div class="ev reaction-log-entry">${escapeHtml(x)}</div>`).join('')
+      ? this.reactionLogs.slice(Math.max(0,this.reactionLogs.length-(this.historyPage+1)*5),Math.max(0,this.reactionLogs.length-this.historyPage*5)).map((x) => `<div class="ev reaction-log-entry">${escapeHtml(x)}</div>`).join('')
       : '<div class="chat-empty">暂无互动记录</div>';
-    const targetName = this.reactionTargetSeatId && v
-      ? v.seats.find((s) => s.seatId === this.reactionTargetSeatId)?.nickname ?? this.reactionTargetSeatId
-      : '';
-    const picker = this.reactionDraft
-      ? `<div class="reaction-target-hint">${targetName ? `目标：${escapeHtml(targetName)}` : '请选择目标座位'}${this.reactionTargetSeatId ? ' · 选择数量' : ''}<button type="button" data-reaction-cancel>取消</button></div>
-         ${this.reactionTargetSeatId ? `<div class="reaction-count-picker">${[1, 3, 5, 10].map((n) => `<button type="button" data-reaction-count="${n}">${n}</button>`).join('')}</div>` : ''}`
-      : '';
     return `<details class="panel chat chat-panel collapsed-panel" id="chat-log-panel"${this.chatPanelOpen ? ' open' : ''}>
-      <summary>聊天/日志</summary>
+      <summary>记录${this.unread ? ` · ${this.unread}` : ''}</summary>
       <button type="button" id="btn-toggle-log" class="muted">展开/收起</button>
       <nav class="chat-tabs" aria-label="聊天日志互动">
         <button type="button" data-chat-tab="chat" class="${this.chatTab === 'chat' ? 'active' : ''}">聊天</button>
@@ -1204,21 +1328,15 @@ export class AppUI {
         <button type="button" data-chat-tab="reaction" class="${this.chatTab === 'reaction' ? 'active' : ''}">互动</button>
       </nav>
       <div class="chat-pane${this.chatTab === 'chat' ? ' active' : ''}" data-chat-pane="chat">
-        <div class="reaction-shortcuts">
-          <button type="button" data-reaction-kind="emoji">😀 表情</button>
-          <button type="button" data-reaction-kind="egg">🥚 砸蛋</button>
-          <button type="button" data-reaction-kind="flower">🌸 送花</button>
-        </div>
-        <div class="chat-log" id="chat-log">${chatHtml}</div>
-        <div class="row"><input id="chat-input" maxlength="200" placeholder="说点什么…" /><button id="btn-chat" type="button">发送</button></div>
+        <div class="chat-log" id="chat-log">${chatHtml}</div>${!v ? `<div class="social-chat-compose"><input id="chat-input" maxlength="200" placeholder="说点什么…" value="${escapeHtml(this.chatDraft)}" /><button id="btn-chat" type="button">发送</button></div>` : ''}
       </div>
       <div class="chat-pane${this.chatTab === 'log' ? ' active' : ''}" data-chat-pane="log">
         ${v ? `<h3 class="log-title">对局日志</h3><div class="log" id="game-log">${logHtml}</div>` : ''}
       </div>
       <div class="chat-pane${this.chatTab === 'reaction' ? ' active' : ''}" data-chat-pane="reaction">
-        <div class="reaction-shortcuts"><button type="button" data-reaction-kind="egg">🥚 砸蛋</button><button type="button" data-reaction-kind="flower">🌸 送花</button></div>
-        <div class="reaction-emoji-grid">${reactionEmojis}</div>${picker}<div class="reaction-log">${reactionLogs}</div>
+        <div class="reaction-log">${reactionLogs}</div>
       </div>
+      ${this.pager('history',this.historyPage,Math.ceil((this.chatTab === 'chat' ? this.chat.length : this.chatTab === 'log' ? v?.events.length ?? 0 : this.reactionLogs.length)/5))}
     </details>`;
   }
 
@@ -1257,23 +1375,13 @@ export class AppUI {
     if (phases.length === 0) {
       return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3><div class="central-empty">本轮暂无打出</div></section>`;
     }
-    const body = phases
-      .map((ph) => {
-        const isNow = ph === v.phase;
-        const cards = groups.get(ph) ?? [];
-        const items =
-          cards.length > 0
-            ? cards
-                .map(
-                  (c) =>
-                    `<span class="played-item"><span class="played-who">${escapeHtml(seatName(v, c.actorSeatId))} 打出了 ${escapeHtml(getCardDisplayName(c.cardId))}</span>${renderCardHtml(c.cardId, c.instanceId, false, 'mini')}</span>`,
-                )
-                .join('')
-            : '<div class="central-empty">本阶段暂无打出</div>';
-        return `<div class="phase-group${isNow ? ' now' : ' past'}" data-phase="${escapeHtml(ph)}"><h4 class="phase-group-title">${escapeHtml(phaseLabel(ph))}${isNow ? ' <span class="phase-now">进行中</span>' : ''}</h4><div class="cards-row">${items}</div></div>`;
-      })
-      .join('');
-    return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3>${body}</section>`;
+    const phase = phases.includes(this.centralPhase) ? this.centralPhase : phases.includes(v.phase) ? v.phase : phases[phases.length - 1];
+    const cards = groups.get(phase) ?? [];
+    const pageCount = Math.max(1, Math.ceil(cards.length / 4));
+    this.centralPage = Math.min(this.centralPage, pageCount - 1);
+    const items = cards.slice(this.centralPage * 4, (this.centralPage + 1) * 4).map(c => `<span class="played-item" data-actor-seat="${escapeHtml(c.actorSeatId)}"><span class="played-who">${escapeHtml(seatName(v, c.actorSeatId))} · ${escapeHtml(getCardDisplayName(c.cardId))}</span>${renderCardHtml(c.cardId, c.instanceId, false, 'mini')}</span>`).join('');
+    const phaseNav = `<nav class="central-nav" aria-label="阶段筛选">${phases.map(ph => `<button type="button" data-central-phase="${escapeHtml(ph)}" class="${phase === ph ? 'active' : ''}">${escapeHtml(phaseLabel(ph))}</button>`).join('')}</nav>`;
+    return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3>${phaseNav}<div class="phase-group${phase === v.phase ? ' now' : ' past'}" data-phase="${escapeHtml(phase)}"><h4 class="phase-group-title">${escapeHtml(phaseLabel(phase))}${phase === v.phase ? ' · 进行中' : ''}</h4><div class="cards-row">${items || '<div class="central-empty">本阶段暂无打出</div>'}</div></div>${pageCount > 1 ? this.pager('central', this.centralPage, pageCount) : ''}</section>`;
   }
 
   private pendingPanel(pending: PendingDecision | null): string {
@@ -1300,23 +1408,7 @@ export class AppUI {
         })
         .join('');
     } else if (pending.kind === 'declareCards') {
-      opts = pending.options
-        .map((o: string) => {
-          const card = v?.self.hand.find((c) => c.instanceId === o);
-          const isSel = this.selected.has(o);
-          const cls = `opt declare-opt${isSel ? ' sel' : ''}`;
-          if (card) {
-            return renderCardHtml(card.cardId, card.instanceId, true, cls, o);
-          }
-          return `<button class="card opt declare-opt${isSel ? ' sel' : ''}" data-opt="${escapeHtml(o)}" data-iid="${escapeHtml(o)}" type="button">
-            <div class="card-inner">
-              <div class="card-placeholder">
-                <span class="card-placeholder-text">${escapeHtml(o)}</span>
-              </div>
-            </div>
-          </button>`;
-        })
-        .join('');
+      opts = ''; // Select the actual hand; no duplicate row of candidate cards.
     } else if (pending.kind === 'chooseTarget') {
       opts = pending.options
         .map((o: string) => {
@@ -1352,8 +1444,8 @@ export class AppUI {
     const kindLabel: Record<string, string> = {
       draftPick: '选一张留下（点击卡面确认）',
       draftDiscard: '弃一张（点击卡面确认）',
-      declareCards: '声明打出（点击卡面选择，再点确认）或跳过',
-      chooseTarget: '选择目标',
+      declareCards: '拖动手牌到玩家或中央出牌，也可点选后确认',
+      chooseTarget: '直接点击高亮座位，或将中央技能牌拖向目标',
       chooseOptional: '可选决策',
       reactDecide: '是否发动反应？',
       merchantChoose: '商人：查看身份或令牌（必选）',
@@ -1500,11 +1592,14 @@ export class AppUI {
       this.showToast('正在进入下一轮…');
       this.net.forceAdvance();
     });
+    $('#chat-input')?.addEventListener('input', ev => { this.chatDraft = (ev.target as HTMLInputElement).value; });
+    $('#chat-input')?.addEventListener('keydown', ev => { if ((ev as KeyboardEvent).key === 'Enter') this.root.querySelector<HTMLButtonElement>('#btn-chat')?.click(); });
     $('#btn-chat')?.addEventListener('click', () => {
       const input = this.root.querySelector('#chat-input') as HTMLInputElement | null;
       if (input?.value) {
         this.net.sendChat(input.value);
         input.value = '';
+        this.chatDraft = '';
       }
     });
     $('#btn-pass')?.addEventListener('click', () => {
@@ -1519,6 +1614,7 @@ export class AppUI {
         this.showToast('请先点击卡面选择要打出的牌，或直接点击「跳过」');
         return;
       }
+      this.rememberPlayOrigins();
       this.net.sendCommand(v.windowId, 'night.declare', {
         cardInstanceIds: [...this.selected],
       });
@@ -1537,13 +1633,17 @@ export class AppUI {
         const tab = btn.dataset['chatTab'];
         if (tab === 'chat' || tab === 'log' || tab === 'reaction') {
           this.chatTab = tab;
+          this.historyPage = 0;
           this.chatPanelOpen = true;
           this.render();
         }
       });
     });
     this.root.querySelector<HTMLDetailsElement>('#chat-log-panel')?.addEventListener('toggle', (ev) => {
-      this.chatPanelOpen = (ev.currentTarget as HTMLDetailsElement).open;
+      const details = ev.currentTarget as HTMLDetailsElement;
+      if (!details.isConnected) return;
+      this.chatPanelOpen = details.open;
+      if (details.open) this.unread = 0;
     });
     this.root.querySelector<HTMLDetailsElement>('#phrase-panel')?.addEventListener('toggle', (ev) => {
       this.phrasePanelOpen = (ev.currentTarget as HTMLDetailsElement).open;
@@ -1636,21 +1736,9 @@ function playerCountBucket(count: number): PlayerCountBucket {
   return '4-5';
 }
 
-function ringPositions(bucket: PlayerCountBucket, count: number): string[] {
-  const capacity: Record<PlayerCountBucket, string[]> = {
-    '4-5': ['top-1', 'top-2', 'left-1', 'right-1', 'bottom-1'],
-    '6-7': ['top-1', 'top-2', 'top-3', 'left-1', 'right-1', 'bottom-1', 'bottom-2'],
-    '8-9': [
-      'top-1', 'top-2', 'top-3', 'top-4',
-      'left-1', 'left-2', 'right-1', 'right-2',
-      'bottom-1', 'bottom-2', 'bottom-3',
-    ],
-    '10-11': [
-      'top-1', 'top-2', 'top-3', 'top-4', 'top-5',
-      'bottom-1', 'bottom-2', 'bottom-3', 'bottom-4', 'bottom-5',
-    ],
-  };
-  return capacity[bucket].slice(0, Math.max(0, count));
+function ringPositions(_bucket: PlayerCountBucket, count: number): string[] {
+  const tops = count <= 4 ? count-2 : count <= 6 ? 3 : count <= 8 ? 4 : 5;
+  return [...Array.from({length:Math.max(0,tops)},(_,i)=>`top-${i+1}`),'left-1','right-1',...Array.from({length:3},(_,i)=>`bottom-${i+1}`)].slice(0,count);
 }
 
 /** 6H-1：音效试听按钮中文名 */

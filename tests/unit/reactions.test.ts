@@ -17,6 +17,15 @@ describe('reaction payload validation', () => {
     expect(validateReaction({ targetSeatId: 's1', kind: 'emoji', emoji: '12345', count: 1 }, inRoom)).toBeNull();
   });
 
+  it('accepts one allowlisted image emoji id and rejects mixed/unknown fields', () => {
+    expect(validateReaction({ targetSeatId: 's1', kind: 'emoji', emojiId: 'scroll', count: 2 }, inRoom)).toEqual({
+      targetSeatId: 's1', kind: 'emoji', emojiId: 'scroll', count: 2,
+    });
+    expect(validateReaction({ targetSeatId: 's1', kind: 'emoji', emojiId: 'not-an-asset', count: 1 }, inRoom)).toBeNull();
+    expect(validateReaction({ targetSeatId: 's1', kind: 'emoji', emoji: '🎉', emojiId: 'scroll', count: 1 }, inRoom)).toBeNull();
+    expect(validateReaction({ targetSeatId: 's1', kind: 'egg', emojiId: 'scroll', count: 1 }, inRoom)).toBeNull();
+  });
+
   it('rejects invalid target, kind and count', () => {
     expect(validateReaction({ targetSeatId: 's9', kind: 'egg', count: 1 }, inRoom)).toBeNull();
     expect(validateReaction({ targetSeatId: 's1', kind: 'stone', count: 1 }, inRoom)).toBeNull();

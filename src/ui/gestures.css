@@ -1,0 +1,28 @@
+/* Pointer gestures and confirmation effects live outside the rerendered table. */
+body.in-game .hand .card, body.in-game .central .card { touch-action:none; }
+body.in-game .hand .card:not(.dim) { cursor:grab; }
+body.in-game .seat-card.game-target, body.in-game .seat-card.social-target { cursor:crosshair; outline:1px solid #68ced266; outline-offset:3px; }
+body.in-game .seat-card.drag-target, body.in-game .central.drag-target { outline:3px solid #edd08e; outline-offset:6px; box-shadow:0 0 32px #ead08d66; }
+.drag-ghost { z-index:1800; pointer-events:none; opacity:.95; filter:drop-shadow(0 10px 16px #0009); }
+.drag-ghost .card, .played-card-flight .card { width:100%!important; height:100%!important; transform:none!important; margin:0!important; }
+.played-card-flight { position:fixed; top:0; left:0; z-index:1600; pointer-events:none; animation:table-card-flight .46s cubic-bezier(.22,.8,.32,1) both; }
+@keyframes table-card-flight { 0% { transform:translate(var(--from-x),var(--from-y)) rotate(-6deg) scale(1); opacity:1; } 45% { transform:translate(calc((var(--from-x) + var(--to-x)) / 2),calc((var(--from-y) + var(--to-y)) / 2 - 80px)) rotate(10deg) scale(1.12); } 100% { transform:translate(var(--to-x),var(--to-y)) rotate(0deg) scale(.85); opacity:.9; } }
+.card-arrival { animation:card-land .38s ease-out; }
+@keyframes card-land { 0%{filter:drop-shadow(0 0 24px #ecc36e);scale:1.12} 100%{filter:none;scale:1} }
+body.in-game .seat-card[data-hit-notice]::after { content:attr(data-hit-notice); position:absolute; top:-24px; left:0; right:0; text-align:center; font-size:12px; color:#f2d899; }
+@media(prefers-reduced-motion:reduce){ .played-card-flight,.card-arrival { animation:none!important; } }
+
+.table-moment { position:fixed; pointer-events:none; z-index:1300; }
+.moment-phase { inset:32% 0 auto; text-align:center; padding:30px 0; color:#f3deb0; font:700 clamp(28px,5vw,64px) serif; letter-spacing:.2em; background:linear-gradient(90deg,transparent,#091426de,transparent); text-shadow:0 2px 15px #bf984a; animation:moment-phase 1.4s both; }
+@keyframes moment-phase { 0%{opacity:0;scale:.8;filter:blur(10px)} 28%,68%{opacity:1;scale:1;filter:blur(0)} 100%{opacity:0;scale:1.08} }
+.moment-kill { inset:0; background:radial-gradient(ellipse,transparent 35%,#a91c3280); animation:moment-kill .6s both; }
+@keyframes moment-kill { 0%,30%,60%,100%{opacity:0} 15%,45%,75%{opacity:.85} }
+.moment-token { left:0;top:0;width:40px;height:40px;animation:moment-token .6s cubic-bezier(.22,.7,.3,1) both; }
+.moment-token img { width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 9px #e6b955); }
+@keyframes moment-token { 0%{opacity:0;transform:translate(var(--from-x),var(--from-y)) scale(.5)} 15%{opacity:1} 50%{transform:translate(calc((var(--from-x) + var(--to-x))/2),calc((var(--from-y) + var(--to-y))/2 - 65px)) rotate(140deg) scale(1.25)} 100%{opacity:1;transform:translate(var(--to-x),var(--to-y)) rotate(360deg) scale(.8)} }
+.moment-victory { inset:0;display:grid;place-items:center;background:radial-gradient(ellipse,#162339aa,transparent 70%);animation:moment-victory 3s both; }
+.moment-victory strong { color:#ffe3a2;font:700 clamp(28px,5vw,70px) serif;text-shadow:0 0 28px #aa7928;max-width:85vw;text-align:center; }
+.moment-victory i { position:absolute;top:-12%;left:var(--foil-x);width:6px;height:14px;background:#edce80;animation:moment-foil 2.4s var(--foil-delay) ease-in both; }
+@keyframes moment-victory { 0%{opacity:0} 18%,76%{opacity:1} 100%{opacity:0} }
+@keyframes moment-foil { to{transform:translate(60px,110vh) rotate(var(--foil-turn));opacity:0} }
+@media(prefers-reduced-motion:reduce){.table-moment{display:none!important}}

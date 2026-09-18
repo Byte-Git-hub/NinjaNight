@@ -27,34 +27,39 @@ async function startGame(page: Page): Promise<void> {
 }
 
 async function dismissIdentity(page: Page): Promise<void> {
-  await page.locator('#identity-modal .identity-modal').click({ timeout: 5_000 }).catch(() => {});
-  await expect(page.locator('#identity-modal')).toHaveCount(0, { timeout: 5_000 }).catch(() => {});
+  const modal = page.locator('#identity-modal');
+  await expect(modal).toBeVisible({ timeout: 8_000 });
+  await modal.locator('.identity-modal').click({ timeout: 5_000 });
+  await expect(modal).toHaveCount(0, { timeout: 5_000 });
 }
 
 /** 走一步决策：declare→opt→pass→forceAdvance，返回 true 表示走了一步 */
 async function autoStep(page: Page): Promise<boolean> {
-  const declareOpts = page.locator('.pending .declare-opt');
-  if ((await declareOpts.count().catch(() => 0)) > 0) {
-    await declareOpts.first().click().catch(() => {});
-    await page.click('#btn-declare').catch(() => {});
+  const declareOpts = page.locator('.hand .declare-opt');
+  if ((await declareOpts.count()) > 0) {
+    await declareOpts.first().click();
+    await page.click('#btn-declare');
     await page.waitForTimeout(400);
     return true;
   }
   const opt = page.locator('.pending .opt[data-opt]').first();
-  if ((await opt.count().catch(() => 0)) > 0 && (await opt.isVisible().catch(() => false))) {
-    await opt.click().catch(() => {});
+  if ((await opt.count()) > 0 && (await opt.isVisible())) {
+    await opt.click();
     await page.waitForTimeout(400);
     return true;
   }
   const passBtn = page.locator('#btn-pass');
-  if (await passBtn.isVisible().catch(() => false)) {
-    await passBtn.click().catch(() => {});
+  if (await passBtn.isVisible()) {
+    await passBtn.click();
     await page.waitForTimeout(400);
     return true;
   }
+  if (await page.locator('.table-info[hidden]').count()) {
+    await page.locator('[data-info-toggle]').click();
+  }
   const fa = page.locator('#btn-fa');
-  if (await fa.isVisible().catch(() => false)) {
-    await fa.click().catch(() => {});
+  if (await fa.isVisible()) {
+    await fa.click();
     await page.waitForTimeout(700);
     return true;
   }
@@ -63,7 +68,7 @@ async function autoStep(page: Page): Promise<boolean> {
 }
 
 async function pendingText(page: Page): Promise<string> {
-  return (await page.locator('.pending').textContent().catch(() => '')) ?? '';
+  return (await page.locator('.pending').textContent()) ?? '';
 }
 
 /** 有界点击：不可见/不可点时跳过，绝不无限等待（默认动作超时为无限） */
@@ -153,7 +158,7 @@ test.describe('6G-4b 截图：桌面社交', () => {
     await setupRoom(page, '截图员', 3);
     await startGame(page);
     await dismissIdentity(page);
-    await expect(page.locator('.fx-bar')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.social-dock')).toBeVisible({ timeout: 15_000 });
 
     // 怀疑标记 2 人（先拍，静态徽章）
     const cards = page.locator('.seat-card.bot');
@@ -163,35 +168,35 @@ test.describe('6G-4b 截图：桌面社交', () => {
     await page.waitForTimeout(600);
     await shot(page, 'desktop-suspect-2');
 
-    // 砸物品 10 连击（选首个 bot 为目标，快速连点后立即拍粒子飞行）
-    await tap(page, '.seat-card.bot >> nth=0 >> .seat-head');
-    await page.waitForTimeout(300);
-    const fxBtns = page.locator('.fx-bar [data-fx]');
-    const n = await fxBtns.count().catch(() => 0);
-    for (let i = 0; i < 10; i += 1) {
-      const b = fxBtns.nth(i % Math.max(n, 1));
-      if (await b.isVisible().catch(() => false)) await b.click({ timeout: 4000 }).catch(() => {});
-      await page.waitForTimeout(90);
-    }
+    // 物品：打开 Dock → 选物品 → 选座位 → 选数量 → 发送。
+    await page.locator('[data-social-tab="effects"]').click();
+    const fxBtn = page.locator('.social-pop [data-fx]').first();
+    await expect(fxBtn).toBeVisible();
+    await fxBtn.click();
+    await page.locator('.seat-card.bot').first().click();
+    await page.locator('[data-reaction-count="10"]').click();
+    await page.locator('[data-social-send]').click();
+    await page.waitForTimeout(500);
     await shot(page, 'desktop-combo-10');
 
-    // 快捷表情 5 连弹
-    const emojiBtns = page.locator('.fx-bar [data-emoji]');
-    for (let i = 0; i < 5; i += 1) {
-      const b = emojiBtns.nth(i % 12);
-      if (await b.isVisible().catch(() => false)) await b.click({ timeout: 4000 }).catch(() => {});
-      await page.waitForTimeout(120);
-    }
+    // 图片表情：与物品使用同一目标选择流程，服务端广播 event.reaction。
+    await page.locator('[data-social-tab="emoji"]').click();
+    const emojiBtn = page.locator('.social-pop [data-reaction-kind="emoji"]').first();
+    await expect(emojiBtn).toBeVisible();
+    await emojiBtn.click();
+    await page.locator('.seat-card.bot').first().click();
+    await page.locator('[data-reaction-count="5"]').click();
+    await page.locator('[data-social-send]').click();
+    await page.waitForTimeout(500);
     await shot(page, 'desktop-emoji-5');
 
-    // 聊天/日志展开：打开折叠面板 + 发一句话 + 发一快捷短语
-    await tap(page, '#chat-log-panel summary');
-    await tap(page, '#phrase-panel summary');
-    if (await page.locator('#chat-input').isVisible().catch(() => false)) {
-      await page.fill('#chat-input', '视觉审查走一波', { timeout: 5000 }).catch(() => {});
-      await tap(page, '#btn-chat');
-    }
-    await tap(page, '#phrase-panel [data-phrase="0"]');
+    // 短语在头像上方冒泡，全局可见；聊天输入在 Dock 的聊天页。
+    await page.locator('[data-social-tab="phrases"]').click();
+    await page.locator('#phrase-panel [data-phrase="0"]').click();
+    await expect(page.locator('.phrase-bubble')).toBeVisible({ timeout: 5_000 });
+    await page.locator('[data-social-tab="chat"]').click();
+    await page.fill('#chat-input', '视觉审查走一波');
+    await page.locator('#btn-chat').click();
     await page.waitForTimeout(800);
     await shot(page, 'desktop-chat-expanded');
   });
@@ -208,6 +213,7 @@ test.describe('6G-4b 截图：桌面终局', () => {
     for (let loop = 0; loop < 60; loop += 1) {
       if (await page.locator('.round-banner').isVisible().catch(() => false)) break;
       if (await page.locator('.game-over-banner').isVisible().catch(() => false)) break;
+      if (await page.locator('.table-info[hidden]').count()) await page.locator('[data-info-toggle]').click();
       const fa = page.locator('#btn-fa');
       if (await fa.isVisible().catch(() => false)) {
         await fa.click().catch(() => {});
@@ -228,6 +234,7 @@ test.describe('6G-4b 截图：桌面终局', () => {
         await page.waitForTimeout(700);
         continue;
       }
+      if (await page.locator('.table-info[hidden]').count()) await page.locator('[data-info-toggle]').click();
       const fa = page.locator('#btn-fa');
       if (await fa.isVisible().catch(() => false)) {
         await fa.click().catch(() => {});
@@ -263,16 +270,13 @@ test.describe('6G-4b 截图：移动端', () => {
     }
     await page.waitForTimeout(300);
     await shot(page, 'mobile-night');
-    await expect(page.locator('.fx-bar')).toBeVisible({ timeout: 15_000 }).catch(() => {});
-    const botCard = page.locator('.seat-card.bot').first();
-    await botCard.locator('.seat-head').click().catch(() => {});
-    await page.waitForTimeout(300);
-    const fxBtns = page.locator('.fx-bar [data-fx]');
-    const n = await fxBtns.count().catch(() => 0);
-    for (let i = 0; i < 6; i += 1) {
-      await fxBtns.nth(i % Math.max(n, 1)).click().catch(() => {});
-      await page.waitForTimeout(100);
-    }
+    await expect(page.locator('.social-dock')).toBeVisible({ timeout: 15_000 });
+    await page.locator('[data-social-tab="effects"]').click();
+    await page.locator('.social-pop [data-fx]').first().click();
+    await page.locator('.seat-card.bot').first().click();
+    await page.locator('[data-reaction-count="10"]').click();
+    await page.locator('[data-social-send]').click();
+    await page.waitForTimeout(500);
     await shot(page, 'mobile-combo');
   });
 
@@ -289,6 +293,7 @@ test.describe('6G-4b 截图：移动端', () => {
         await page.waitForTimeout(700);
         continue;
       }
+      if (await page.locator('.table-info[hidden]').count()) await page.locator('[data-info-toggle]').click();
       const fa = page.locator('#btn-fa');
       if (await fa.isVisible().catch(() => false)) {
         await fa.click().catch(() => {});

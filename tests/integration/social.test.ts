@@ -102,7 +102,7 @@ describe('effect relay', () => {
     ).toBeNull();
   });
 
-  it('非法目标 / 非法 comboId / 空批 / 超 10 条整批丢弃', () => {
+  it('非法目标 / 非法 comboId / 空批 / 超 64 条整批丢弃', () => {
     expect(
       validateEffectItems({ items: [{ targetSeatId: 'ghost', itemId: 'egg', comboId: 'c1' }] }, inRoom),
     ).toBeNull();
@@ -110,7 +110,7 @@ describe('effect relay', () => {
       validateEffectItems({ items: [{ targetSeatId: 's1', itemId: 'egg', comboId: '' }] }, inRoom),
     ).toBeNull();
     expect(validateEffectItems({ items: [] }, inRoom)).toBeNull();
-    const big = Array.from({ length: 11 }, (_, i) => ({
+    const big = Array.from({ length: 65 }, (_, i) => ({
       targetSeatId: 's1',
       itemId: 'egg',
       comboId: `c${i}`,

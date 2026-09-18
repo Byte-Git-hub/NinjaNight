@@ -855,9 +855,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     });
 
     /**
-     * 6G-2a 共享限频桶（command.send 与 effect.send 共用 COMMAND_RATE_PER_SEC 窗口）。
-     * 返回 false = 超限（调用方：指令走 commandReject，社交层静默丢弃）。
-     * 6J-3：chat.send 与 voice.* 信令同样纳入（voice.speaking 高频上报重点防护）。
+     * 游戏/聊天/语音使用共享限频桶；effect.send 走压缩条目并独立于游戏命令，
+     * 避免一阵物品飞行触发 RATE_LIMITED 横幅。
      */
     function takeSharedRate(sess: SessionInfo): boolean {
       const now = Date.now();
@@ -1195,7 +1194,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       });
     });
 
-    // ---- 6G-2a 互动特效（seatToken 鉴权；共享限频桶，超限静默丢弃；只广播不存） ----
+    // ---- 6G-2a 互动特效（seatToken 鉴权；压缩批量、独立于游戏限频；只广播不存） ----
     socket.on(EV.effectSend, (payload: unknown) => {
       const body = (payload ?? {}) as { seatToken?: unknown; items?: unknown };
       const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
@@ -1203,7 +1202,6 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         emitError(socket, 'UNAUTHORIZED');
         return;
       }
-      if (!takeSharedRate(sess)) return;
       const room = rooms.get(sess.roomCode);
       if (!room) {
         emitError(socket, 'ROOM_NOT_FOUND');
@@ -1218,7 +1216,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       logger.info('effect.relay', { roomCode: room.code, seatId: sess.seatId, type: 'batch' });
     });
 
-    // ---- 6F-B2 reaction（独立 5/s 限频；只广播、不存历史、不进入 GameState） ----
+    // ---- 6F-B2 reaction（独立保护限频，超限静默；只广播、不存历史、不进入 GameState） ----
     socket.on(EV.reactionSend, (payload: unknown) => {
       const body = (payload ?? {}) as { seatToken?: unknown; commandId?: unknown };
       const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
@@ -1227,11 +1225,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         return;
       }
       const commandId = typeof body.commandId === 'string' ? body.commandId : '';
-      if (!takeReactionRate(socket.id)) {
-        socket.emit(OUT.commandReject, { commandId, reasonCode: 'RATE_LIMITED' });
-        logger.warn('reaction.reject', { roomCode: sess.roomCode, seatId: sess.seatId, reasonCode: 'RATE_LIMITED' });
-        return;
-      }
+      // reaction 有独立的保护桶，但超限静默丢弃，不污染游戏拒绝提示。
+      if (!takeReactionRate(socket.id)) return;
       const room = rooms.get(sess.roomCode);
       if (!room) {
         emitError(socket, 'ROOM_NOT_FOUND');
@@ -1248,6 +1243,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         targetSeatId: reaction.targetSeatId,
         kind: reaction.kind,
         ...(reaction.emoji ? { emoji: reaction.emoji } : {}),
+        ...(reaction.emojiId ? { emojiId: reaction.emojiId } : {}),
         count: reaction.count,
         sentAt: Date.now(),
       };

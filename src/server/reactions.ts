@@ -2,7 +2,7 @@ import {
   REACTION_EMOJI_MAX_LEN,
   REACTION_MAX_COUNT,
 } from '../shared/timeouts';
-import type { ReactionKind } from '../shared/protocol';
+import { REACTION_EMOJI_IDS, type ReactionEmojiId, type ReactionKind } from '../shared/protocol';
 
 const KINDS = new Set<ReactionKind>(['egg', 'flower', 'emoji']);
 
@@ -10,6 +10,7 @@ export interface ValidatedReaction {
   targetSeatId: string;
   kind: ReactionKind;
   emoji?: string;
+  emojiId?: ReactionEmojiId;
   count: number;
 }
 
@@ -27,15 +28,24 @@ export function validateReaction(
     return null;
   }
   const rawEmoji = r['emoji'];
+  const rawEmojiId = r['emojiId'];
   if (kind === 'emoji') {
-    if (typeof rawEmoji !== 'string' || rawEmoji.length < 1 || rawEmoji.length > REACTION_EMOJI_MAX_LEN) return null;
+    const hasText = typeof rawEmoji === 'string' && rawEmoji.length > 0;
+    const hasId = typeof rawEmojiId === 'string' && (REACTION_EMOJI_IDS as readonly string[]).includes(rawEmojiId);
+    if (hasText === hasId) return null;
+    if (hasText && (rawEmoji as string).length > REACTION_EMOJI_MAX_LEN) return null;
   } else if (rawEmoji !== undefined && typeof rawEmoji !== 'string') {
+    return null;
+  } else if (rawEmojiId !== undefined) {
     return null;
   }
   return {
     targetSeatId: r['targetSeatId'],
     kind,
     ...(typeof rawEmoji === 'string' && rawEmoji.length > 0 ? { emoji: rawEmoji } : {}),
+    ...(typeof rawEmojiId === 'string' && (REACTION_EMOJI_IDS as readonly string[]).includes(rawEmojiId)
+      ? { emojiId: rawEmojiId as ReactionEmojiId }
+      : {}),
     count: rawCount,
   };
 }

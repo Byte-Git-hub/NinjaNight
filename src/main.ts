@@ -1,4 +1,6 @@
 import './ui/style.css';
+import './ui/arena.css';
+import './ui/gestures.css';
 import { GameNet } from './net/client';
 import { AppUI } from './ui/app';
 import { setAssetBase } from './ui/assets';

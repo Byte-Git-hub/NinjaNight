@@ -19,9 +19,9 @@ test.describe('6E.7-bug1: 非本阶段手牌置灰不可选', () => {
 
     let verified = false;
     for (let loop = 0; loop < 60; loop += 1) {
-      const declareOpts = page.locator('.pending .declare-opt');
+      const declareOpts = page.locator('.hand .declare-opt');
       const optCount = await declareOpts.count().catch(() => 0);
-      if (optCount > 0) {
+      if (optCount > 0 || (await page.locator('#btn-pass').isVisible() && await page.locator('.hand .card.dim').count() > 0)) {
         const handCount = await page.locator('.hand .card').count().catch(() => 0);
         if (handCount > optCount) {
           // 手牌中有非本阶段牌：置灰数应等于差值

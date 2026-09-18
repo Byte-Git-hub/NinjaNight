@@ -52,7 +52,7 @@ describe('EffectNet batching', () => {
     expect(fx.pendingCount).toBe(0);
   });
 
-  it('单批上限 10 条：12 条入队只发 10 条，溢出丢弃', () => {
+  it('高密度连点：相同目标压缩为 count，不静默丢弃', () => {
     const { fx, emitted, setNow } = makeNet();
     fx.attach();
     for (let i = 0; i < 10; i += 1) {
@@ -62,11 +62,12 @@ describe('EffectNet batching', () => {
     setNow(1_000_000 + 1001);
     expect(fx.send('s1', 'egg')).toBe('sent');
     expect(fx.send('s1', 'egg')).toBe('sent');
-    expect(fx.pendingCount).toBe(12);
+    expect(fx.pendingCount).toBe(1);
     vi.advanceTimersByTime(50);
     expect(emitted).toHaveLength(1);
-    const payload = emitted[0]!.payload as { items: unknown[] };
-    expect(payload.items).toHaveLength(10);
+    const payload = emitted[0]!.payload as { items: Array<{ count?: number }> };
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0]?.count).toBe(12);
     expect(fx.pendingCount).toBe(0);
   });
 
@@ -90,16 +91,26 @@ describe('EffectNet batching', () => {
     expect(combos[2]).not.toBe(combos[0]);
   });
 
-  it('镜像限频：1s 内第 11 条只本地渲染（local-only），不发网', () => {
+  it('镜像不限频：1s 内第 11 条仍广播，压缩为 count', () => {
     const { fx, emitted } = makeNet();
     fx.attach();
     for (let i = 0; i < 10; i += 1) {
       expect(fx.send('s1', 'egg')).toBe('sent');
     }
-    expect(fx.send('s1', 'egg')).toBe('local-only');
+    expect(fx.send('s1', 'egg')).toBe('sent');
     vi.advanceTimersByTime(50);
     const total = emitted.flatMap((e) => (e.payload as { items: unknown[] }).items);
-    expect(total).toHaveLength(10);
+    expect(total).toHaveLength(1);
+    expect((total[0] as { count?: number }).count).toBe(11);
+  });
+
+  it('单次可发送 1000 个粒子，服务端只收到一条压缩记录', () => {
+    const { fx, emitted } = makeNet();
+    fx.attach();
+    expect(fx.send('s1', 'shuriken', 1000)).toBe('sent');
+    vi.advanceTimersByTime(50);
+    const payload = emitted[0]!.payload as { items: Array<{ itemId: string; count?: number }> };
+    expect(payload.items).toEqual([{ targetSeatId: 's1', itemId: 'shuriken', comboId: expect.any(String), count: 1000 }]);
   });
 
   it('离线/非法物品 → local-only，不发网', () => {

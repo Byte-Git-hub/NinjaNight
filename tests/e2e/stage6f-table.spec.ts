@@ -48,7 +48,7 @@ test.describe('6F 桌游布局', () => {
     await expect(page.locator('.seat-card[data-seat="s1"] .house-mini.back')).toBeVisible();
   });
 
-  test('中央分组：当前高亮、过往半透明', async ({ page }) => {
+  test('中央出牌：当前阶段、署名与卡面', async ({ page }) => {
     await page.goto('/');
     await page.fill('#nick', '中央测试');
     await page.click('#btn-create');
@@ -64,7 +64,7 @@ test.describe('6F 桌游布局', () => {
         .catch(() => 0);
       if (n > 0) break;
       if (await page.locator('.game-over-banner').isVisible().catch(() => false)) break;
-      const declareOpts = page.locator('.pending .declare-opt');
+      const declareOpts = page.locator('.hand .declare-opt');
       if ((await declareOpts.count().catch(() => 0)) > 0) {
         await declareOpts.first().click();
         await page.click('#btn-declare');
@@ -89,18 +89,15 @@ test.describe('6F 桌游布局', () => {
     await expect(nowGroup).toBeVisible({ timeout: 10_000 });
     await expect(nowGroup).toContainText('进行中');
     await expect(nowGroup.locator('.played-item').first()).toBeVisible();
-    // 署名：出牌者昵称 + 打出了 + 牌名
-    await expect(nowGroup.locator('.played-who').first()).toContainText('打出了');
-    const pastCount = await page.locator('.central .phase-group.past').count();
-    if (pastCount > 0) {
-      await expect(page.locator('.central .phase-group.past').first()).toHaveCSS('opacity', '0.55');
-    }
+    // 署名使用紧凑的昵称与牌名，不依赖旧叙述文案
+    await expect(nowGroup.locator('.played-who').first()).toContainText('·');
+
   });
 
   test.describe('移动端', () => {
     test.use({ viewport: { width: 390, height: 844 } });
 
-    test('390宽：座位横滑、手牌不遮挡、开局选牌可点', async ({ page }) => {
+    test('390宽：单屏座位、手牌不遮挡、开局选牌可点', async ({ page }) => {
       await page.goto('/');
       await page.fill('#nick', '手机玩家');
       await page.click('#btn-create');
@@ -119,7 +116,7 @@ test.describe('6F 桌游布局', () => {
       expect(scrollable).toBe(true);
 
       // 6G-1-fix：手牌回到文档流（sticky），不再 fixed 覆盖已知身份区/底部按钮
-      await expect(page.locator('.hand')).toHaveCSS('position', 'sticky');
+      expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
 
       // 选牌可点
       const draftOpt = page.locator('.pending .card.opt[data-opt]').first();
@@ -128,7 +125,7 @@ test.describe('6F 桌游布局', () => {
       await page.waitForTimeout(500);
 
       // 交互元素不小于 32px（先展开折叠面板再抽查）
-      await page.locator('#chat-log-panel summary').click();
+      await page.locator('[data-social-tab="chat"]').click();
       await expect(page.locator('#chat-input')).toBeVisible({ timeout: 5_000 });
       const sizes = await page
         .locator('#btn-chat, #chat-input')

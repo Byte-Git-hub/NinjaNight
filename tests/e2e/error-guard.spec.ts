@@ -17,7 +17,7 @@ test('断线显示正在重连横幅，恢复后隐藏', async ({ page, context 
 });
 
 test('图片 404 时破图隐藏，不阻塞建房', async ({ page }) => {
-  await page.route('**/honor-token.webp', (r) => r.abort());
+  await page.route('**/honor-token-cutout.webp', (r) => r.abort());
   await page.goto('/');
   await page.fill('#nick', '破图测试');
   await page.click('#btn-create');
@@ -36,3 +36,4 @@ test('图片 404 时破图隐藏，不阻塞建房', async ({ page }) => {
   });
   expect(hidden).toBe(true);
 });
+

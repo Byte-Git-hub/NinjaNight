@@ -27,6 +27,7 @@ test.describe('6E.7-bug3: 本轮横幅 + 下一轮按钮 + 终局排名', () => 
         break;
       }
       if (phaseText?.includes('结束')) break;
+      if (await page.locator('.table-info[hidden]').count()) await page.locator('[data-info-toggle]').click();
       const fa = page.locator('#btn-fa');
       if (await fa.isVisible().catch(() => false)) {
         await fa.click();
@@ -58,6 +59,7 @@ test.describe('6E.7-bug3: 本轮横幅 + 下一轮按钮 + 终局排名', () => 
         await page.waitForTimeout(700);
         continue;
       }
+      if (await page.locator('.table-info[hidden]').count()) await page.locator('[data-info-toggle]').click();
       const fa = page.locator('#btn-fa');
       if (await fa.isVisible().catch(() => false)) {
         await fa.click();

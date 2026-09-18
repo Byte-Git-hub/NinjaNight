@@ -40,10 +40,12 @@ export const VOICE_PORT_MAX = envInt('NINJA_MEDIA_PORT_MAX', 40100);
 export const VOICE_SPEAKING_THROTTLE_MS = 1000;
 /** 6G-2a 特效：客户端合并发送窗口（毫秒） */
 export const EFFECT_BATCH_WINDOW_MS = envInt('NINJA_EFFECT_BATCH_MS', 50);
-/** 6G-2a 特效：单批上限（条） */
-export const EFFECT_BATCH_MAX = envInt('NINJA_EFFECT_BATCH_MAX', 10);
-/** 6G-2a 特效：客户端镜像限频（条/秒，超限只本地渲染不发网，回退） */
-export const EFFECT_MIRROR_PER_SEC = envInt('NINJA_EFFECT_MIRROR_PER_SEC', 10);
+/** 6G-2a 特效：单个 effect.send/effect.batch 最多携带的压缩条目。 */
+export const EFFECT_BATCH_MAX = envInt('NINJA_EFFECT_BATCH_MAX', 64);
+/** 6G-2a 特效：单条压缩记录代表的最多粒子数。 */
+export const EFFECT_MAX_COUNT = envInt('NINJA_EFFECT_MAX_COUNT', 1000);
+/** 6G-2a 特效：payload 的硬上限（避免恶意大包；正常批量使用 count 压缩）。 */
+export const EFFECT_PAYLOAD_MAX_BYTES = envInt('NINJA_EFFECT_PAYLOAD_MAX_BYTES', 256 * 1024);
 /** 6G-2a 特效：comboId 分组窗口（毫秒；同目标同物品归一组，服务端透传） */
 export const EFFECT_COMBO_WINDOW_MS = 1500;
 /** 6G-2b 特效：Canvas 粒子池上限（超限合并为 +N 飘字） */
@@ -51,7 +53,8 @@ export const EFFECT_PARTICLE_MAX = envInt('NINJA_EFFECT_PARTICLE_MAX', 200);
 /** 6G-2b 怀疑标记：每人最多标记数（重复点同一目标 = 取消） */
 export const MARK_PER_SEAT_MAX = envInt('NINJA_MARK_PER_SEAT_MAX', 2);
 /** 6F-B2：reaction 独立限频（每 socket 每秒）与 payload 上限。 */
-export const REACTION_RATE_PER_SEC = 5;
+/** reaction 仅做保护性限频，超限静默丢弃，不产生游戏 RATE_LIMITED 横幅。 */
+export const REACTION_RATE_PER_SEC = envInt('NINJA_REACTION_RATE_PER_SEC', 30);
 export const REACTION_MAX_COUNT = 10;
 export const REACTION_EMOJI_MAX_LEN = 4;
 

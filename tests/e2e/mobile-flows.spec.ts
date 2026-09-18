@@ -50,13 +50,13 @@ test('移动端 5 流程全 tap 走通', async ({ page }) => {
         await tapFirst(page, '#btn-next-round');
         return 'progress';
       }
-      // 砸物品优先做（fx-bar 开局即有），只做一次
-      if (!smashed && (await page.locator('.fx-bar').count()) > 0) {
-        const botCard = page.locator('.seat-card.bot').first();
-        await botCard.locator('.seat-head').tap({ timeout: 3_000 }).catch(() => {});
-        for (let i = 0; i < 5; i += 1) {
-          await page.locator('[data-fx="egg"]').tap({ timeout: 3_000 }).catch(() => {});
-        }
+      if (!smashed) {
+        await page.locator('[data-social-tab="effects"]').tap();
+        await page.locator('[data-fx="egg"]').tap();
+        await page.locator('.seat-card.bot .seat-head').first().tap();
+        await page.locator('[data-reaction-count="10"]').tap();
+        await page.locator('[data-social-send]').tap();
+        await page.locator('.social-close').tap();
         smashed = true;
         return 'progress';
       }

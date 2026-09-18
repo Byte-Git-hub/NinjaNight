@@ -111,6 +111,7 @@ test('超时路径：房主 forceAdvance 跳过当前窗口', async ({ browser }
   await p3.click('#btn-ready');
   await host.click('#btn-start');
   await expect(host.locator('.phase')).toBeVisible({ timeout: 15_000 });
+  await host.locator('[data-info-toggle]').click();
   await expect(host.locator('#btn-fa')).toBeVisible({ timeout: 10_000 });
   const phase1 = await host.locator('.phase').innerText();
   await host.click('#btn-fa');

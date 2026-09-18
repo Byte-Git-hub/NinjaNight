@@ -68,7 +68,7 @@ describe('UI assets mapping & card rendering', () => {
     expect(getUiAssetPath('table-texture')).toBe('/assets/ui/table-texture.webp');
     expect(getUiAssetPath('ui-button-primary')).toBe('/assets/ui/button-primary.webp');
     expect(getUiAssetPath('button-primary')).toBe('/assets/ui/button-primary.webp');
-    expect(getHonorTokenPath()).toBe('/assets/tokens/honor-token.webp');
+    expect(getHonorTokenPath()).toBe('/assets/tokens/honor-token-cutout.webp');
   });
 
   it('getNinjaCardBackPath & getHouseCardBackPath: 卡背路径（6F 布局用）', () => {

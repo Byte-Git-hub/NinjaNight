@@ -29,18 +29,18 @@ test.describe('阶段 6E：状态同步与声明阶段卡面修复', () => {
     // 持续推进直到进入某个 declareCards 阶段（卡牌声明打出）
     for (let loop = 0; loop < 30; loop += 1) {
       // 检查是否进入了 declareCards 决策
-      const declareOpts = page.locator('.pending .declare-opt');
+      const declareOpts = page.locator('.hand .declare-opt');
       if (await declareOpts.count().then((c) => c > 0).catch(() => false)) {
         foundDeclareCards = true;
         console.log('Detected declareCards decision in pending panel!');
 
         // 验证待决策面板包含真实卡面图片（.card-art）与编号徽章（.card-number）
-        const cardArts = page.locator('.pending .declare-opt .card-art');
+        const cardArts = page.locator('.hand .declare-opt .card-art');
         await expect(cardArts.first()).toBeVisible({ timeout: 5000 });
         const artCount = await cardArts.count();
         expect(artCount).toBeGreaterThanOrEqual(1);
 
-        const cardNumbers = page.locator('.pending .declare-opt .card-number');
+        const cardNumbers = page.locator('.hand .declare-opt .card-number');
         expect(await cardNumbers.count()).toBeGreaterThanOrEqual(1);
 
         // 验证声明操作按钮可见
@@ -109,6 +109,7 @@ test.describe('阶段 6E：状态同步与声明阶段卡面修复', () => {
     expect(initialPhase).toBeTruthy();
 
     // 点击强制推进
+    if (await page.locator('.table-info[hidden]').count()) await page.locator('[data-info-toggle]').click();
     await page.click('#btn-fa');
 
     // 验证 Toast 提示及时出现
@@ -154,7 +155,7 @@ test.describe('阶段 6E：状态同步与声明阶段卡面修复', () => {
 
       // 动作处理：
       // 1. 如果有 declare-opt，点击选中第一张再点击确认打出
-      const declareOpts = page.locator('.pending .declare-opt');
+      const declareOpts = page.locator('.hand .declare-opt');
       if (await declareOpts.count().then((c) => c > 0).catch(() => false)) {
         await declareOpts.first().click();
         await page.click('#btn-declare');

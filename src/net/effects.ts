@@ -1,14 +1,14 @@
 /**
  * 6G-2a 互动特效发送封装（复用 Socket.IO，不另建连接；纯社交层）。
- * - 本地 50ms 窗口合并发送，最多 10 条/批（EFFECT_BATCH_WINDOW_MS / EFFECT_BATCH_MAX）
- * - 客户端镜像限频 EFFECT_MIRROR_PER_SEC/秒：超限只本地渲染、不发网（回退）
+ * - 本地 50ms 窗口合并发送，单条记录可压缩 1..1000 个粒子
+ * - 不按粒子限频；同目标/物品/连击组会合并，所有客户端都能看到整批效果
  * - comboId：同目标+同物品 1.5s 内归为一组（EFFECT_COMBO_WINDOW_MS），服务端透传
  */
 import {
   EFFECT_BATCH_MAX,
   EFFECT_BATCH_WINDOW_MS,
   EFFECT_COMBO_WINDOW_MS,
-  EFFECT_MIRROR_PER_SEC,
+  EFFECT_MAX_COUNT,
 } from '../shared/timeouts';
 import { EV, OUT, isEffectItemId, type EffectBatchItem } from '../shared/protocol';
 
@@ -37,16 +37,13 @@ export type BatchHandler = (items: EffectBatchItem[]) => void;
 export class EffectNet {
   private net: EffectSocket;
   private now: () => number;
-  private queue: Array<{ targetSeatId: string; itemId: string; comboId: string }> = [];
+  private queue: Array<{ targetSeatId: string; itemId: string; comboId: string; count: number }> = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private batchHandlers = new Set<BatchHandler>();
   private bound = false;
   /** combo 分组：key=`target|item` → { comboId, lastAt } */
   private combos = new Map<string, { comboId: string; lastAt: number }>();
   private comboSeq = 0;
-  /** 镜像限频：最近 1s 内已发网条数时间戳 */
-  private sentAt: number[] = [];
-
   private onBatch = (p: unknown): void => {
     if (isRecord(p) && Array.isArray(p['items'])) {
       this.batchHandlers.forEach((h) => h(p['items'] as EffectBatchItem[]));
@@ -83,10 +80,16 @@ export class EffectNet {
 
   /**
    * 发送一个特效（先本地渲染，后合并发网）。
-   * @returns 'sent' 已入队待发网；'local-only' 镜像限频/离线，仅本地渲染回退
+   * @returns 'sent' 已入队待发网；'local-only' 仅在离线或参数非法时返回
    */
-  send(targetSeatId: string, itemId: string): 'sent' | 'local-only' {
-    if (typeof targetSeatId !== 'string' || targetSeatId === '' || !isEffectItemId(itemId)) {
+  send(targetSeatId: string, itemId: string, count = 1): 'sent' | 'local-only' {
+    if (
+      typeof targetSeatId !== 'string' ||
+      targetSeatId === '' ||
+      !isEffectItemId(itemId) ||
+      !Number.isInteger(count) ||
+      count < 1
+    ) {
       return 'local-only';
     }
     const t = this.now();
@@ -100,10 +103,26 @@ export class EffectNet {
       combo.lastAt = t;
     }
     if (!this.net.isSocketConnected) return 'local-only';
-    this.sentAt = this.sentAt.filter((ts) => t - ts < 1000);
-    if (this.sentAt.length >= EFFECT_MIRROR_PER_SEC) return 'local-only';
-    this.sentAt.push(t);
-    this.queue.push({ targetSeatId, itemId, comboId: combo.comboId });
+    let remaining = count;
+    while (remaining > 0) {
+      const amount = Math.min(remaining, EFFECT_MAX_COUNT);
+      const tail = this.queue[this.queue.length - 1];
+      if (
+        tail &&
+        tail.targetSeatId === targetSeatId &&
+        tail.itemId === itemId &&
+        tail.comboId === combo.comboId &&
+        tail.count < EFFECT_MAX_COUNT
+      ) {
+        const room = EFFECT_MAX_COUNT - tail.count;
+        const add = Math.min(room, amount);
+        tail.count += add;
+        remaining -= add;
+      } else {
+        this.queue.push({ targetSeatId, itemId, comboId: combo.comboId, count: amount });
+        remaining -= amount;
+      }
+    }
     if (this.flushTimer === null) {
       this.flushTimer = setTimeout(() => this.flush(), EFFECT_BATCH_WINDOW_MS);
     }
@@ -118,10 +137,18 @@ export class EffectNet {
   private flush(): void {
     this.flushTimer = null;
     if (this.queue.length === 0) return;
-    const batch = this.queue.splice(0, EFFECT_BATCH_MAX);
-    // 队列超长（极端连点）时丢弃溢出部分：社交层允许丢，保 10 条/批上限
-    if (this.queue.length > 0) this.queue.splice(0, this.queue.length);
     if (!this.net.isSocketConnected) return;
-    this.net.emitVoice(EV.effectSend, { items: batch });
+    const batch = this.queue.splice(0, EFFECT_BATCH_MAX);
+    this.net.emitVoice(EV.effectSend, {
+      items: batch.map((item) => ({
+        targetSeatId: item.targetSeatId,
+        itemId: item.itemId,
+        comboId: item.comboId,
+        ...(item.count > 1 ? { count: item.count } : {}),
+      })),
+    });
+    if (this.queue.length > 0) {
+      this.flushTimer = setTimeout(() => this.flush(), EFFECT_BATCH_WINDOW_MS);
+    }
   }
 }

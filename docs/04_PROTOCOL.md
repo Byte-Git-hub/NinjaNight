@@ -1,8 +1,8 @@
 # 04 — 联机协议
 
 status: frozen-for-stage-4  
-updated: 2026-09-16  
-实现阶段：4  
+updated: 2026-09-18
+实现阶段：6G / 6F 互动层
 
 ---
 
@@ -73,6 +73,51 @@ updated: 2026-09-16
 | `chat.send` | C→S | `{ seatToken, text }` |
 | `chat.event` | 房间广播 | `{ seatId, nickname, text, ts }` |
 
+### 社交互动（不进入 GameState）
+
+互动广播只在房间内即时消费，不写入对局状态、数据库或历史快照；重连不会补播旧互动。
+
+#### 物品飞行
+
+| 事件 | 方向 | payload | 说明 |
+|---|---|---|---|
+| `effect.send` | C→S | `{ seatToken, items }` | `items` 为 1–64 条压缩记录 |
+| `effect.batch` | S→房间 | `{ roomCode, items }` | 服务端校验后广播给房间内所有连接 |
+
+单条记录为：
+
+```ts
+{
+  targetSeatId: string,
+  itemId: 'egg' | 'sakura' | 'geta' | 'rotten_pill' | 'basket' |
+           'secret_letter' | 'tea' | 'snowball' | 'shuriken',
+  comboId: string,
+  count?: number // 省略按 1；整数 1–1000
+}
+```
+
+`count` 用于把大量相同物品压缩成一条记录，客户端按目标座位播放对应数量/强度的飞行与命中特效。物品广播使用独立社交链路，不占用 `command.send` 的游戏限频，也不会因正常物品连发返回游戏 `RATE_LIMITED`。
+
+下行条目会附带服务端解析出的 `fromSeatId`、`fromNickname`；`count: 1` 可省略。服务端同时限制单批条目数（默认 64）和 JSON payload 大小（默认 256 KiB）。
+
+#### 图片表情、文字表情与鲜花/鸡蛋
+
+| 事件 | 方向 | payload | 说明 |
+|---|---|---|---|
+| `room.reaction` | C→S | `{ seatToken, targetSeatId, kind, count, emoji?, emojiId?, commandId? }` | 纯互动请求 |
+| `event.reaction` | S→房间 | `{ fromSeatId, targetSeatId, kind, count, emoji?, emojiId?, sentAt }` | 即时房间广播，不保存历史 |
+
+`kind` 只能是 `egg`、`flower`、`emoji`；`count` 为整数 1–10（省略按 1）。`kind: 'emoji'` 时必须在文本 `emoji` 与图片 `emojiId` 中**二选一**：文本长度最多 4 个 UTF-16 code units；图片 id 只能是以下 12 个资源名：
+
+```text
+swords  kunai  ninja_head  noh_mask  flame  water
+moon    star   tea_cup     bamboo    kitsune_mask  scroll
+```
+
+`egg`/`flower` 不得携带 `emoji` 或 `emojiId`。目标座位必须属于当前房间。格式或目标校验失败返回 `command.reject { commandId, reasonCode: 'INVALID_REACTION' }`；reaction 的保护性超限静默丢弃，不污染游戏指令拒绝提示。
+
+reaction 保护桶默认每 socket 每秒 30 条（`NINJA_REACTION_RATE_PER_SEC` 可调）；它只保护服务端，不改变游戏指令的 `COMMAND_RATE_PER_SEC`。
+
 ---
 
 ## 幂等与窗口
@@ -122,6 +167,7 @@ ROOM_FULL
 ROOM_NOT_FOUND
 GAME_IN_PROGRESS
 INVALID_PAYLOAD
+INVALID_REACTION
 UNAUTHORIZED
 RATE_LIMITED
 PHASE_MISMATCH

@@ -35,6 +35,7 @@ test.describe('6E.7-bug2: 上忍不再卡住 + 胜负后可进下一轮', () => 
         await page.waitForTimeout(800);
         continue;
       }
+      if (await page.locator('.table-info[hidden]').count()) await page.locator('[data-info-toggle]').click();
       const fa = page.locator('#btn-fa');
       if (await fa.isVisible().catch(() => false)) {
         await fa.click();

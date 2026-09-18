@@ -96,7 +96,7 @@ export function getUiAssetPath(id: string): string {
  * 获取荣誉标记图片路径
  */
 export function getHonorTokenPath(): string {
-  return assetUrl('assets/tokens/honor-token.webp');
+  return assetUrl('assets/tokens/honor-token-cutout.webp');
 }
 
 /**
