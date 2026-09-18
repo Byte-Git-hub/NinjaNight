@@ -10,6 +10,18 @@ Private repository，如需协作请联系维护者。
 
 中文网页多人联机：4–11 人，浏览器完成一整局基础规则对战。
 
+| 大厅（桌面） | 对局中（桌面） | 移动端对局 |
+|---|---|---|
+| ![大厅](docs/06J_screenshots/desktop-lobby.jpg) | ![对局](docs/06J_screenshots/desktop-game.jpg) | ![移动端](docs/06J_screenshots/mobile-game.png) |
+
+## 玩法（5 行）
+
+- 4–11 人开房，房主建房发 6 位房间码，全员准备后开局。
+- 每轮先选忍者牌（选 2 留牌），再按密探→隐士→骗徒→刺客→上忍五阶段夜晚结算。
+- 白天亮身份分阵营（仙鹤/莲花/浪人），拿荣誉令牌，凑齐胜利条件即胜。
+- 可加人机（Bot）凑数，掉线 5 分钟内凭 token 重连回座。
+- 全程点选操作（鼠标/触摸）：选牌、出牌、选目标、扔表情砸人，无复杂键位。
+
 ## 当前阶段
 
 **阶段 5 — 稳定性与可部署**
@@ -108,6 +120,17 @@ npm run build
 npm run test:e2e
 ```
 
+## 开发（npm scripts）
+
+| 命令 | 用途 |
+|---|---|
+| `npm run dev` / `npm run dev:server` | 前端 :5173 / 后端 :3000（开发联调） |
+| `npm run typecheck` / `npm test` | 类型检查 / 全量单测集成 |
+| `npm run build` / `npm run build:check` | 生产构建 / 构建后断无 dev 泄漏 |
+| `npm run test:e2e` | Playwright 全量 e2e（自动起 :3000+:5173） |
+| `npm start` | 生产入口（读 PORT，默认 3000） |
+| `npm run bench` | 6J-1 性能基准 → `docs/06J_BENCH.md` |
+
 ## 目录导航
 
 | 路径 | 说明 |
@@ -118,10 +141,11 @@ npm run test:e2e
 | `docs/03_STATE_MACHINE.md` | 状态机 |
 | `docs/04_PROTOCOL.md` | 联机协议 |
 | `docs/05_TEST_PLAN.md` | 测试计划 |
-| `src/shared` | 类型 / 协议 / 超时常量 |
-| `src/core` | 规则核心 |
-| `src/server` | 权威房间 + 日志脱敏 |
-| `src/net` | Socket 客户端 |
+| `src/shared` | 类型 / 协议 / 超时常量（两端唯一共用层） |
+| `src/data` | 卡牌/令牌/阶段静态定义（无对局状态） |
+| `src/core` | 权威规则：校验指令、推进结算、产出事件 |
+| `src/server` | 权威房间 + 日志脱敏（不广播暗牌） |
+| `src/net` | Socket 客户端（只传指令收视图，无规则） |
 | `src/ui` | 原生 DOM（含移动端断点） |
 | `src/dev` | LocalAdapter（不进生产） |
 | `tests/` | core / integration / e2e |
