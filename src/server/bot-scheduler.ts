@@ -30,7 +30,9 @@ export function scheduleBots(room: RoomRuntime, executeCommand: BotCommandExecut
   if (!room.state || room.bots.size === 0) return;
   if (room.state.pending.length === 0) return;
 
-  const baseDelay = Number(process.env.BOT_DELAY_MS ?? 500);
+  // 给每次人机决策留出可感知的停顿，避免多个阶段在一瞬间连续结算。
+  // 仍保留环境变量覆盖，测试/调试可显式设为更短的值。
+  const baseDelay = Number(process.env.BOT_DELAY_MS ?? 1000);
   const jitter = Number(process.env.BOT_JITTER_MS ?? 1000);
 
   for (const botSeatId of room.bots) {

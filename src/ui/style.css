@@ -518,32 +518,50 @@ button.card.sel {
   min-height: 14px;
 }
 
-/* —— 卡面纯 CSS tooltip（6F.5-fix2：hover 桌面 + :active 触屏按住，不引新依赖） —— */
+/* —— 顶层卡牌说明：悬停与键盘聚焦均可查看，不受牌桌 overflow 裁切 —— */
 .card[data-tip] {
   overflow: visible;
 }
-.card[data-tip]:hover::after,
-.card[data-tip]:active::after {
-  content: attr(data-tip);
-  position: absolute;
-  left: 50%;
-  bottom: 105%;
-  transform: translateX(-50%);
-  min-width: 140px;
-  max-width: 220px;
+.card-tooltip {
+  position: fixed;
+  width: min(300px, calc(100vw - 16px));
+  box-sizing: border-box;
   white-space: normal;
   overflow-wrap: anywhere;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-main);
-  background: rgba(15, 23, 42, 0.96);
-  border: 1px solid var(--gold-foil);
-  border-radius: 6px;
-  padding: 6px 8px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #f3e8cd;
+  background: rgba(9, 18, 33, 0.98);
+  border: 1px solid #bfa16a;
+  border-radius: 8px;
+  padding: 12px 14px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-  z-index: 30;
+  z-index: 10000;
   pointer-events: none;
 }
+.card-tooltip[hidden], .intel-notice[hidden] { display: none; }
+
+/* 私密情报居中保留 2.5 秒；不挡点击、不随阶段演出消失。 */
+.intel-notice {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9000;
+  box-sizing: border-box;
+  width: min(620px, calc(100vw - 32px));
+  padding: clamp(16px, 3vw, 28px);
+  text-align: center;
+  color: #faf0d5;
+  background: linear-gradient(135deg, #0a1429fa, #142739fa);
+  border: 1px solid #d4b778;
+  border-radius: 12px;
+  box-shadow: 0 20px 70px #000b, 0 0 32px #c7a45340;
+  pointer-events: none;
+}
+.intel-notice strong { display: block; font-size: clamp(20px, 3vw, 28px); letter-spacing: .18em; color: #efd18c; }
+.intel-notice p { margin: 14px 0; font-size: clamp(16px, 2.3vw, 22px); font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.intel-notice small { color: #aebed1; font-size: 12px; }
 
 /* —— 座位列表 —— */
 .seats {
@@ -1691,6 +1709,5 @@ button.card.sel,
 @media (prefers-reduced-motion: reduce) {
   .reaction-projectile { animation: reducedReaction 1ms linear both; }
 }
-
 
 

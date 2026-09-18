@@ -27,6 +27,7 @@ import { EFFECT_ITEMS, QUICK_EMOJIS, getEffectItem } from './effects/items';
 import { EffectLayer } from './effects/particles';
 import { ItemFlightLayer } from './effects/flights';
 import { CardDragController, type CardDropPayload } from './card-drag';
+import { mountCardTooltip } from './card-tooltip';
 import { markBadge, markButton, myMarkedTargets } from './social/marks';
 import { phrasesPanelHtml } from './social/phrases';
 import { PHRASES } from '../data/phrases';
@@ -155,6 +156,8 @@ export class AppUI {
   private audio = new AudioManager();
   private lastSoundSeq = 0;
   private lastAnimationSeq = 0;
+  private intelNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+  private hideCardTooltip: (() => void) | null = null;
   private lastSoundPhase = '';
   private soundPrimed = false;
   /** 6H-1：音效面板显隐（字段保持，避免重渲染丢失） */
@@ -245,6 +248,7 @@ export class AppUI {
     // 6H-1：首次交互后初始化 AudioContext（浏览器自动播放策略）
     this.audio.attachGesture(window);
     this.renderShell();
+    this.hideCardTooltip = mountCardTooltip(this.root);
     // 6H-4：高光横幅常驻节点只绑一次（render 不重建该节点，避免重复监听）
     this.root.querySelector('#highlight-pop')?.addEventListener('click', () => {
       if (!this.highlight) return;
@@ -599,6 +603,10 @@ export class AppUI {
   }
 
   private resetSocialUi(): void {
+    if (this.intelNoticeTimer !== null) clearTimeout(this.intelNoticeTimer);
+    this.intelNoticeTimer = null;
+    this.root.querySelector('#intel-notice')?.setAttribute('hidden', '');
+    this.hideCardTooltip?.();
     this.marks = [];
     this.fxTarget = '';
     this.fxHit.clear();
@@ -615,7 +623,7 @@ export class AppUI {
   }
 
   private renderShell(): void {
-    this.root.innerHTML = `<div class="app" id="ui"></div><div id="toast" class="toast" hidden></div><div id="achieve-pop" aria-live="polite"></div><div id="highlight-pop" hidden></div>`;
+    this.root.innerHTML = `<div class="app" id="ui"></div><div id="toast" class="toast" hidden></div><div id="achieve-pop" aria-live="polite"></div><div id="highlight-pop" hidden></div><div id="intel-notice" class="intel-notice" role="status" aria-live="polite" hidden></div>`;
   }
 
   private showToast(msg: string, ms = 2500): void {
@@ -645,6 +653,7 @@ export class AppUI {
   }
 
   render(): void {
+    this.hideCardTooltip?.();
     if (import.meta.env.DEV) {
       console.log('[render]', {
         viewPhase: this.view?.phase,
@@ -856,6 +865,12 @@ export class AppUI {
   private animateViewEvents(v: PlayerView): void {
     const fresh = v.events.filter((e) => (e.seq ?? 0) > this.lastAnimationSeq);
     if (fresh.length === 0) return;
+    // 只用当前客户端收到的私密事件；同一次查看的身份和忍者牌合并展示。
+    const intel = fresh.filter(e =>
+      (e.type === 'night.houseViewed' || e.type === 'night.ninjaViewed') &&
+      (e.payload as Record<string, unknown>)['viewerSeatId'] === v.self.seatId,
+    );
+    if (intel.length) this.showIntelNotice(intel, v);
     for (const e of fresh) {
       const payload = (e.payload ?? {}) as Record<string, unknown>;
       if (e.type === 'night.phaseStarted') this.moments.phase(phaseLabel(v.phase));
@@ -892,6 +907,19 @@ export class AppUI {
       }
     }
     this.lastAnimationSeq = Math.max(this.lastAnimationSeq, ...fresh.map((e) => e.seq ?? 0));
+  }
+
+  private showIntelNotice(events: GameEvent[], v: PlayerView): void {
+    const host = this.root.querySelector<HTMLElement>('#intel-notice');
+    if (!host) return;
+    if (this.intelNoticeTimer !== null) clearTimeout(this.intelNoticeTimer);
+    host.innerHTML = `<strong>获得情报</strong>${events.map(e => `<p>${escapeHtml(eventLabel(e, v))}</p>`).join('')}<small>仅你可见 · 可在对局日志中回看</small>`;
+    host.hidden = false;
+    // 浮层独立于牌桌重绘，后续快照和阶段切换不会提前清除提示。
+    this.intelNoticeTimer = setTimeout(() => {
+      host.hidden = true;
+      this.intelNoticeTimer = null;
+    }, 2500);
   }
 
   private addAnimation(selector: string, className: string): void {
@@ -1879,10 +1907,17 @@ function eventLabel(e: GameEvent, v: PlayerView): string {
       const cn = typeof p['cardId'] === 'string' ? getCardDisplayName(p['cardId']) : '牌';
       return `${who} 的 ${cn} 结算完毕`;
     }
-    case 'night.houseViewed':
-      return `👁 你查看了身份`;
+    case 'night.houseViewed': {
+      if (p['view'] === 'honor') return `👁 ${sid('targetSeatId')} → 令牌面值 ${String(p['honorFace'] ?? '')}`;
+      if (Array.isArray(p['seats']) && Array.isArray(p['houses'])) {
+        const houses = p['houses'];
+        return p['seats'].map((id, i) => `${seatName(v, String(id))} → ${getHouseDisplayName(String(houses[i] ?? ''))}`).join('；');
+      }
+      const via = typeof p['viaCardId'] === 'string' ? ` · 借由 ${getCardDisplayName(p['viaCardId'])}` : '';
+      return `👁 ${sid('targetSeatId')} → ${getHouseDisplayName(String(p['houseId'] ?? ''))}${via}`;
+    }
     case 'night.ninjaViewed':
-      return `👁 你查看了忍者牌`;
+      return `👁 ${sid('targetSeatId')} 的忍者牌 → ${getCardDisplayName(String(p['cardId'] ?? ''))}`;
     case 'night.cardsDeclared': {
       const cards =
         (p['cards'] as Array<{ actorSeatId: string; cardId: string }> | undefined) ?? [];
