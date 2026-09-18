@@ -19,6 +19,7 @@
     "gen:preview": "tsx scripts/gen-assets/preview-prompts.ts",
     "gen:slice": "tsx scripts/gen-assets/slice-sheet.ts",
     "assets:optimize": "tsx scripts/optimize-assets.ts",
+    "bench": "tsx scripts/bench/run.ts",
     "certs": "tsx scripts/gen-certs.ts"
   },
   "dependencies": {

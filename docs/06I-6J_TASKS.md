@@ -84,7 +84,8 @@ bot 各分支齐全，根因不在 bot 缺分支，而在两处：
 
 ## 任务 4：6J 加固与基准
 
-- [ ] 6J-1：scripts/bench/run.ts（11 人房整局耗时/内存/吞吐；10 连击首帧/FPS/粒子峰值）→ docs/06J_BENCH.md；commit：6J-1: 性能基准
+- [x] 6J-1：scripts/bench/run.ts（11 人房整局耗时/内存/吞吐；10 连击首帧/FPS/粒子峰值）→ docs/06J_BENCH.md；commit：6J-1: 性能基准
+- commit hash：
 - [ ] 6J-2：前端错误边界（onerror/toast、img 占位、断线横幅、Audio 静默、麦克风降级检查）；commit：6J-2: 前端错误边界
 - [ ] 6J-3：安全加固（XSS textContent/escape + 测试；限频审计 + 测试；房间码空间/失败限频）；commit：6J-3: 安全加固
 - [ ] 6J-4：手机真机测试（Playwright 移动模拟 + 触摸，5 关键流程）→ docs/06J_MOBILE.md；commit：6J-4: 手机真机测试

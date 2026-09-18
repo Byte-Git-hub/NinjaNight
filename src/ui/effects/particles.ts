@@ -210,6 +210,10 @@ export class EffectLayer {
     try {
       const w = window as unknown as Record<string, unknown>;
       w['__ninjaFxBursts'] = (typeof w['__ninjaFxBursts'] === 'number' ? w['__ninjaFxBursts'] : 0) + 1;
+      // 6J-1 基准探针：存活粒子峰值（只写数字，不影响渲染）
+      const alive = this.pool.aliveCount;
+      const peak = typeof w['__ninjaFxPeak'] === 'number' ? (w['__ninjaFxPeak'] as number) : 0;
+      if (alive > peak) w['__ninjaFxPeak'] = alive;
     } catch {
       /* 非浏览器/测试环境忽略 */
     }
