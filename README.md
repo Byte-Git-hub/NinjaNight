@@ -91,6 +91,14 @@ npm run build:check  # 构建后断言 dist 不含 dev/local-adapter/omniscient
 
 > `npm start` 仅启动游戏服务端；前端静态页可用 `npm run preview` 或任意静态托管指向 `dist/`。
 
+## 部署
+
+- 前端主线：GitHub Pages（push 到 `main` 自动发布，需配 Secrets
+  `VITE_API_BASE_URL` + Pages Source 选 GitHub Actions）。
+- 前端备案：Vercel（`vercel.json` 保留）。
+- 后端：Railway（`railway.toml`，需配 `NINJA_CORS_ORIGIN` + Generate Domain）。
+- 完整步骤见 [docs/DEPLOY.md](docs/DEPLOY.md)（含局域网聚会场景与常见问题）。
+
 ## 验证
 
 ```powershell

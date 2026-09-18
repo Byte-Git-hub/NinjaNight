@@ -91,6 +91,19 @@ export class VoiceManager {
     return !this.workerFailed;
   }
 
+  /**
+   * 6I：彻底禁用语音（NINJA_VOICE=0，Railway 免费层降级）。
+   * 此后 ensureRouter 直接返回 null，前端收到 voice.unavailable 并显示"语音暂不可用"。
+   */
+  disable(reason = ''): void {
+    this.workerFailed = true;
+    this.worker = null;
+    this.router = null;
+    this.transports.clear();
+    this.producers.clear();
+    logger.warn('voice.disabled', { reason });
+  }
+
   private roomChannel(roomCode: string): string {
     return `room:${roomCode}`;
   }

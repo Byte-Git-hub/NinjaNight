@@ -28,6 +28,9 @@ function cleanDistOriginals() {
 export default defineConfig({
   root: '.',
   plugins: [cleanDistOriginals()],
+  // 6I：GitHub Pages 项目站路径为 /<repo-name>/，用 GITHUB_PAGES_BASE 注入；
+  // 本地/Vercel 默认为 '/'。
+  base: process.env.GITHUB_PAGES_BASE || '/',
   build: {
     outDir: 'dist',
     emptyOutDir: true,

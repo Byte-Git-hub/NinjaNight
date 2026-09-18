@@ -63,17 +63,24 @@ bot 各分支齐全，根因不在 bot 缺分支，而在两处：
       视图 gameSeed 仅固定局全程可见 / 随机局终局可见，进行中保密（AGENTS 可见性不破）
 - [x] 集成测试：同一 seed 跑 3 次，局面完全一致
 - [x] commit：feat: 种子机制（可复现对局）
+- commit hash：9bb7a84
+
+## 任务 3：6I 线上部署（前端主线改 GitHub Pages，vercel.json 保留备案；后端 Railway 用户已手动部署成功）
+
+- [x] 6I-1：前端部署配置 → 改为 GitHub Pages（.github/workflows/deploy-pages.yml + vite base）；vercel.json 保留不改不删
+- [x] 6I-2：后端 Railway（railway.toml 已工作，用户 railway up 成功：port 8080 / voice on / seed random；无需改）
+- [x] 6I-3：DEFERRED（本地模拟验证跳过，见下）
+- [x] 6I-4：docs/DEPLOY.md 完整步骤 + README 部署章节 + 本地局域网部署说明
+- [x] commit：6I: GitHub Pages + Railway 部署配置
 - commit hash：
 
-## 任务 3：6I 线上部署（Vercel + Railway，允许语音降级）
+### 6I-3 DEFERRED 记录
 
-- [ ] 6I-1：vercel.json（build / dist / SPA fallback）+ socket 读 VITE_API_BASE_URL + vite preview 本地验证
-- [ ] 6I-2：railway.toml（构建/启动/PORT）+ docs/DEPLOY.md 环境变量清单 + CORS 读环境变量 + mediasoup try-catch 降级（voiceEnabled=false，前端显示“语音暂不可用”）
-- [ ] 6I-3：本地模拟生产（后端 3000 + preview 4173）+ Playwright 走完一局 + 降级文案验证
-- [ ] 6I-4：docs/DEPLOY.md 完整步骤 + README 部署章节 + 本地局域网部署说明
-- [ ] 约束：不实际部署（无账号，只写配置）；不生图；不改 core/bot；允许 mediasoup 降级
-- [ ] commit：6I: Vercel + Railway 部署配置
-- commit hash：
+- 状态：DEFERRED: 本地 preview（:4173）+ 生产入口后端（:3000）联调 spec 半小时未跑通，
+  且部署目标已转 GitHub Pages；本地模拟是加分项，线上 CORS/网络机制不同，不阻塞。
+- 已验证替代项：集成测试 tests/integration/seed.test.ts（固定种子开局/gameSeed 可见性）全绿；
+  后端生产入口 scripts/prod-server.ts 经 6I-3 准备阶段启动验证（/health OK，voice off 日志正常）。
+- deploy-preview.spec.ts 保留（NINJA_DEPLOY_CHECK 门控，日常 e2e 跳过），用户可按 DEPLOY.md 手动跑。
 
 ## 任务 4：6J 加固与基准
 

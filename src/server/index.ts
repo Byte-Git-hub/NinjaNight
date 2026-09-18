@@ -71,8 +71,11 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   // 6G-1 自签证书：仅当 NINJA_TLS=1 且 certs/ 下证书齐全时跑 https，
   // 否则降级为 http（默认，保证现有 e2e 不受影响）。
   const httpServer = buildHttpServer(app);
-  const io = new Server(httpServer, { cors: { origin: true } });
+  const io = new Server(httpServer, { cors: { origin: resolveCorsOrigin() } });
+  // 6I：NINJA_VOICE=0 时彻底禁用语音（Railway 免费层 UDP/C++ 受限时用）；
+  // 游戏核心功能零依赖语音，照常运行。
   const voice = new VoiceManager(io);
+  if (process.env.NINJA_VOICE === '0') voice.disable('NINJA_VOICE=0');
   // 6G-2a：特效只中继广播（无状态）
   const effects = new EffectRelay(io);
   // 6G-2b：怀疑标记（服务端内存持有，快照广播；不进 core）
@@ -1366,7 +1369,14 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     listen(portNum = port) {
       return new Promise<void>((resolve) => {
         // 局域网访问：监听所有网卡（Socket.IO 复用同一 httpServer，一并生效）
-        httpServer.listen(portNum, '0.0.0.0', () => resolve());
+        httpServer.listen(portNum, '0.0.0.0', () => {
+          logger.info('server.start', {
+            port: portNum,
+            voice: voice.isAvailable() ? 'on' : 'off',
+            seedMode: FIXED_GAME_SEED !== null ? 'fixed' : 'random',
+          });
+          resolve();
+        });
       });
     },
     close() {
@@ -1381,6 +1391,18 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
 }
 
 // 仅作为库导出；启动入口见 scripts/dev-server.ts
+
+/**
+ * 6I：Socket.IO CORS 来源。
+ * - NINJA_CORS_ORIGIN 未设（开发/局域网）：全放行（含 localhost 与局域网 IP）。
+ * - 生产（Railway）：设为 Vercel 域名逗号分隔，如 https://ninja-night.vercel.app。
+ */
+function resolveCorsOrigin(): true | string[] {
+  const raw = (process.env.NINJA_CORS_ORIGIN ?? '').trim();
+  if (raw === '') return true;
+  const list = raw.split(',').map((s) => s.trim()).filter((s) => s !== '');
+  return list.length > 0 ? list : true;
+}
 
 /** 6G-1：有证书 + NINJA_TLS=1 时返回 https server，否则 http（降级开发模式） */
 function buildHttpServer(app: ReturnType<typeof createApp>) {

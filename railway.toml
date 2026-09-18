@@ -1,0 +1,9 @@
+# 忍者之夜后端（Railway）：Node + Socket.IO + 可选 mediasoup（默认降级关闭语音）
+[build]
+buildCommand = "npm ci && npm run build:server"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"

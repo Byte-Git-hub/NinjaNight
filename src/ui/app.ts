@@ -24,6 +24,7 @@ import { markBadge, markButton, myMarkedTargets } from './social/marks';
 import { phrasesPanelHtml, phraseToastText } from './social/phrases';
 import type { PlayerView, PendingDecision, NinjaCardInstanceView, GameEvent } from '../shared/types';
 import {
+  assetUrl,
   getCardDisplayName,
   getEmojiPath,
   getHonorTokenPath,
@@ -97,22 +98,22 @@ function preloadAssets(): void {
   if (typeof window === 'undefined') return;
   for (const v of PRELOAD_VISUALS) {
     const img = new Image();
-    img.src = `/assets/visuals/${v}.webp`;
+    img.src = assetUrl(`assets/visuals/${v}.webp`);
   }
   const uiAssets = [
-    '/assets/ui/lobby-bg.webp',
-    '/assets/ui/table-texture.webp',
-    '/assets/ui/button-primary.webp',
-    '/assets/tokens/honor-token.webp',
-    '/assets/visuals/ninja-card-back.webp',
-    '/assets/visuals/house-card-back.webp',
-    '/assets/ui/table-emblem.webp',
-    '/assets/ui/washi-central-bg.webp',
-    '/assets/ui/identity-modal-bg.webp',
+    'assets/ui/lobby-bg.webp',
+    'assets/ui/table-texture.webp',
+    'assets/ui/button-primary.webp',
+    'assets/tokens/honor-token.webp',
+    'assets/visuals/ninja-card-back.webp',
+    'assets/visuals/house-card-back.webp',
+    'assets/ui/table-emblem.webp',
+    'assets/ui/washi-central-bg.webp',
+    'assets/ui/identity-modal-bg.webp',
   ];
   for (const u of uiAssets) {
     const img = new Image();
-    img.src = u;
+    img.src = assetUrl(u);
   }
 }
 

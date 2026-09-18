@@ -1,6 +1,22 @@
 import { VISUAL_MAP } from '../../scripts/gen-assets/prompts';
 import { CARD_DESCRIPTION_ZH, CARD_PHASE_ZH } from '../data/card-text';
 
+/**
+ * 6I：静态资源统一走 vite base（GitHub Pages 项目站为 /<repo>/，本地/Vercel 为 '/'）。
+ * public/ 下文件构建时原样拷贝到 dist，运行时用 base 拼接，子路径部署不 404。
+ * node 工程（vitest）无 vite/client 类型，base 由 main.ts 经 setAssetBase 注入，
+ * 默认 '/'（本地/dev/测试行为不变）。
+ */
+let ASSET_BASE = '/';
+
+export function setAssetBase(base: string): void {
+  ASSET_BASE = base.endsWith('/') ? base : `${base}/`;
+}
+
+export function assetUrl(p: string): string {
+  return `${ASSET_BASE}${p.replace(/^\//, '')}`;
+}
+
 export const CARD_CN: Record<string, string> = {
   spy: '密探',
   mystic: '隐士',
@@ -39,32 +55,32 @@ export function getVisualId(cardId: string): string {
  * 返回卡牌图片路径 '/assets/visuals/{visualId}.webp'
  */
 export function getVisualPath(visualId: string): string {
-  return `/assets/visuals/${visualId}.webp`;
+  return assetUrl(`assets/visuals/${visualId}.webp`);
 }
 
 /**
  * UI 素材映射表（对齐无前缀文件名：lobby-bg.webp / table-texture.webp / button-primary.webp）
  */
 export const UI_ASSETS: Record<string, string> = {
-  'ui-lobby-bg': '/assets/ui/lobby-bg.webp',
-  'lobby-bg': '/assets/ui/lobby-bg.webp',
-  'ui-table-texture': '/assets/ui/table-texture.webp',
-  'table-texture': '/assets/ui/table-texture.webp',
-  'ui-button-primary': '/assets/ui/button-primary.webp',
-  'button-primary': '/assets/ui/button-primary.webp',
-  'ui-washi-central-bg': '/assets/ui/washi-central-bg.webp',
-  'washi-central-bg': '/assets/ui/washi-central-bg.webp',
-  'ui-table-emblem': '/assets/ui/table-emblem.webp',
-  'table-emblem': '/assets/ui/table-emblem.webp',
-  'ui-identity-modal-bg': '/assets/ui/identity-modal-bg.webp',
-  'identity-modal-bg': '/assets/ui/identity-modal-bg.webp',
+  'ui-lobby-bg': assetUrl('assets/ui/lobby-bg.webp'),
+  'lobby-bg': assetUrl('assets/ui/lobby-bg.webp'),
+  'ui-table-texture': assetUrl('assets/ui/table-texture.webp'),
+  'table-texture': assetUrl('assets/ui/table-texture.webp'),
+  'ui-button-primary': assetUrl('assets/ui/button-primary.webp'),
+  'button-primary': assetUrl('assets/ui/button-primary.webp'),
+  'ui-washi-central-bg': assetUrl('assets/ui/washi-central-bg.webp'),
+  'washi-central-bg': assetUrl('assets/ui/washi-central-bg.webp'),
+  'ui-table-emblem': assetUrl('assets/ui/table-emblem.webp'),
+  'table-emblem': assetUrl('assets/ui/table-emblem.webp'),
+  'ui-identity-modal-bg': assetUrl('assets/ui/identity-modal-bg.webp'),
+  'identity-modal-bg': assetUrl('assets/ui/identity-modal-bg.webp'),
 };
 
 /**
  * 获取桌心家徽装饰路径（6F-2 座位环中央装饰，PNG/JPG 半透明叠加）
  */
 export function getTableEmblemPath(): string {
-  return '/assets/ui/table-emblem.webp';
+  return assetUrl('assets/ui/table-emblem.webp');
 }
 
 /**
@@ -73,28 +89,28 @@ export function getTableEmblemPath(): string {
 export function getUiAssetPath(id: string): string {
   if (UI_ASSETS[id]) return UI_ASSETS[id];
   const stripped = id.replace(/^ui-/, '');
-  return `/assets/ui/${stripped}.webp`;
+  return assetUrl(`assets/ui/${stripped}.webp`);
 }
 
 /**
  * 获取荣誉标记图片路径
  */
 export function getHonorTokenPath(): string {
-  return '/assets/tokens/honor-token.webp';
+  return assetUrl('assets/tokens/honor-token.webp');
 }
 
 /**
  * 获取忍者牌卡背图片路径（6F 桌游感布局用：他人手牌背面展示）
  */
 export function getNinjaCardBackPath(): string {
-  return '/assets/visuals/ninja-card-back.webp';
+  return assetUrl('assets/visuals/ninja-card-back.webp');
 }
 
 /**
  * 获取身份牌卡背图片路径（6F 桌游感布局用：未公开身份牌展示）
  */
 export function getHouseCardBackPath(): string {
-  return '/assets/visuals/house-card-back.webp';
+  return assetUrl('assets/visuals/house-card-back.webp');
 }
 
 /**
@@ -120,14 +136,14 @@ export type EmojiId = (typeof EMOJI_IDS)[number];
  * 返回互动物品图片路径 '/assets/items/{itemId}.webp'（6G-2b 图集切割产物）
  */
 export function getItemPath(itemId: string): string {
-  return `/assets/items/${itemId}.webp`;
+  return assetUrl(`assets/items/${itemId}.webp`);
 }
 
 /**
  * 返回快捷表情图片路径 '/assets/emoji/{emojiId}.webp'（6G-2b 图集切割产物）
  */
 export function getEmojiPath(emojiId: string): string {
-  return `/assets/emoji/${emojiId}.webp`;
+  return assetUrl(`assets/emoji/${emojiId}.webp`);
 }
 
 /**

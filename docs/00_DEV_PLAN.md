@@ -244,6 +244,11 @@ updated: 2026-09-18
 - 当前无残留技术债。
 - 未来独立技术债可用 sub-agent 并行推进，前提：(a) 每个子任务改动文件集互不重叠 (b) 每个子任务独立 commit (c) 主 agent 负责合并与最终验证（OpenCode Task 工具支持并行 sub-agent，此约定有效；AGENTS.md 硬约定互引）。
 
+### 技术债 T1 — railway.toml 迁移（2026-12-01 前）
+
+- `railway.toml` 有 deprecation 警告，需迁移到 `.railway/railway.ts`。
+- 后端已在 Railway 成功部署（port 8080 / voice on / seed random），迁移时只换配置形态，不动代码。
+
 ### 6G-3 快捷短语定稿（15 条）
 
 | # | 定稿短语 |
