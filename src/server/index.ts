@@ -131,8 +131,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     t.unref?.();
   }
 
-  function handleBotCommand(room: RoomRuntime, cmd: Command): void {
-    if (!room.state) return;
+  function handleBotCommand(room: RoomRuntime, cmd: Command): boolean {
+    if (!room.state) return false;
     const res = room.applyGameCommand(cmd);
     if (!res.ok) {
       const botSeat = room.state.seats.find((s) => s.seatToken === cmd.seatToken);
@@ -141,11 +141,12 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         seatId: botSeat?.seatId ?? 'unknown',
         reason: res.reason,
       });
-      return;
+      return false;
     }
     room.broadcastPublicEvents(res.newEvents.filter((e) => e.visibility === 'public'));
     room.broadcastPrivateEvents(res.newEvents);
     afterStateChange(room);
+    return true;
   }
 
   function afterStateChange(room: RoomRuntime): void {

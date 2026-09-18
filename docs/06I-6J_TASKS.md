@@ -16,28 +16,39 @@ HEAD 起点：d401701（6G-4b + 6H-1~4 完成，已 push）
 
 ## 任务 0：文档清理（局域网 2 机验证移除）
 
-- [ ] 00_DEV_PLAN.md：移除所有「局域网 2 机手工验证（待用户环境）」待办行（6G-1 / 6G-3 / 6G-4b / 6H-4 四处）
-- [ ] AGENTS.md：检查并移除相关约定（如有）
-- [ ] commit：docs: 移除局域网 2 机待办（用户已手动验证）
-- commit hash：
+- [x] 00_DEV_PLAN.md：移除所有「局域网 2 机手工验证（待用户环境）」待办行（6G-1 / 6G-3 / 6G-4b / 6H-4 四处）
+- [x] AGENTS.md：检查并移除相关约定（如有）→ 无相关约定，无需改
+- [x] commit：docs: 移除局域网 2 机待办（用户已手动验证）
+- commit hash：0b6eec3
 
 ## 任务 1：bot 骗徒牌决策修复
 
 诊断（先输出再修）：
-- [ ] 读 src/core/bot.ts shapeshifter 分支
-- [ ] 读 src/core/resolve.ts 百变者完整步骤（targetA / targetB / swapOrNot）
-- [ ] 找出 botDecide 在哪一步返回 null / 非法 Command
-- [ ] 输出诊断：卡在哪一步、什么原因
+- [x] 读 src/core/bot.ts shapeshifter 分支
+- [x] 读 src/core/resolve.ts 百变者完整步骤（targetA / targetB / swapOrNot）
+- [x] 找出 botDecide 在哪一步返回 null / 非法 Command
+- [x] 输出诊断：卡在哪一步、什么原因
+
+诊断结论（2026-09-18 实测）：
+bot 各分支齐全，根因不在 bot 缺分支，而在两处：
+1. resolve.ts targetB 下发 options = 全体座位（含 targets[0] 本身），而
+   applyTargetChoice 明确 `targets[0] === target → illegalTarget`。
+   bot 按 options 随机命中（概率 1/N，4 人局 25%）→ engine reject。
+2. scheduler 消费 schedKey 后永不重试（handleBotCommand reject 只 warn）；
+   若房主 forceAdvance，applyAllDefaults 默认 options[0] 恰为 targets[0]
+   （targetA 常选 s0 = options[0]）同样非法 → 直接移除 pending，
+   resolveContext 悬空、resolveQueue 非空、pending 为空 → 永久卡死。
+   这就是「AI-1 打出百变者 1 后游戏卡死」。
 
 修复：
-- [ ] 百变者 targetB：非法选项（重复 targets[0]）不再下发；bot 侧防御
-- [ ] 掘墓人 grave_digger（gravePick 选牌 + graveImmediate 立即打出/保留）：确认每步有决策
-- [ ] 捣蛋鬼 troublemaker（troubleReveal 公开/隐藏）：确认
-- [ ] 商人 spirit_merchant（merchantChoose 二选一 + merchantGive/Take 交换）：确认
-- [ ] 盗贼 thief / 裁判 judge（chooseTarget）：确认
-- [ ] scheduler：被 reject 的 bot 决策可重试，不永久卡死（defense-in-depth）
-- [ ] 回归：typecheck + 相关 vitest + e2e 子集
-- [ ] commit：fix: bot 骗徒牌决策补全
+- [x] 百变者 targetB：非法选项（重复 targets[0]）不再下发；bot 侧防御
+- [x] 掘墓人 grave_digger（gravePick 选牌 + graveImmediate 立即打出/保留）：确认每步有决策
+- [x] 捣蛋鬼 troublemaker（troubleReveal 公开/隐藏）：确认
+- [x] 商人 spirit_merchant（merchantChoose 二选一 + merchantGive/Take 交换）：确认
+- [x] 盗贼 thief / 裁判 judge（chooseTarget）：确认
+- [x] scheduler：被 reject 的 bot 决策可重试，不永久卡死（defense-in-depth）
+- [x] 回归：typecheck + 相关 vitest + e2e 子集
+- [x] commit：fix: bot 骗徒牌决策补全
 - commit hash：
 
 ## 任务 2：种子机制（可复现对局）

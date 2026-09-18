@@ -129,11 +129,20 @@ function startCardResolution(state: GameState, instance: CardInstance, actorSeat
   }
   if (b === 'spirit_merchant') {
     const opts = legalTargetsForCard(state, actor, instance);
+    if (opts.length === 0) {
+      // 无合法目标（仅剩自己）：牌面作废，不下发空选项 pending（防 bot/超时卡死）
+      finishInstance(state);
+      return;
+    }
     setPending(state, 'chooseTarget', opts, instance.cardId);
     return;
   }
   if (b === 'troublemaker') {
     const opts = legalTargetsForCard(state, actor, instance);
+    if (opts.length === 0) {
+      finishInstance(state);
+      return;
+    }
     setPending(state, 'chooseTarget', opts, instance.cardId);
     return;
   }
@@ -148,6 +157,11 @@ function startCardResolution(state: GameState, instance: CardInstance, actorSeat
   }
   if (b === 'judge' || b === 'blind_assassin' || b === 'spy' || b === 'mystic' || b === 'shinobi') {
     const opts = legalTargetsForCard(state, actor, instance);
+    if (opts.length === 0) {
+      // 无合法目标（如密探/隐士只剩自己存活）：牌面作废，不下发空选项 pending
+      finishInstance(state);
+      return;
+    }
     setPending(state, 'chooseTarget', opts, instance.cardId);
     return;
   }
@@ -401,7 +415,15 @@ export function applyTargetChoice(
     ctx.targets = [targetSeatId];
     ctx.step = 'targetB';
     state.step = 'chooseTarget';
-    const opts = state.seats.map((s) => s.seatId);
+    // targetB 禁止重复选 targets[0]：直接从选项剔除，不下发非法选项。
+    // 否则 bot 按 options 随机命中即被 illegalTarget 拒收，且 scheduler 已消费
+    // schedKey 不重试、forceAdvance 默认 options[0] 同样非法 → 永久卡死。
+    const first = ctx.targets[0] as string;
+    const opts = state.seats.map((s) => s.seatId).filter((id) => id !== first);
+    if (opts.length === 0) {
+      finishInstance(state);
+      return { ok: true };
+    }
     setPending(state, 'chooseTarget', opts, ctx.instance.cardId);
     return { ok: true };
   }

@@ -16,6 +16,16 @@ const ACTIVE_BASES = new Set(['spy', 'mystic', 'blind_assassin', 'shinobi']);
 /**
  * 纯函数：给定 bot 视角 PlayerView 与当前窗口 ID，计算下一步决策 Command
  * 严禁依赖 DOM、Socket、时间、全局 Math.random
+ *
+ * 骗徒牌多步决策映射（resolve.ts）：
+ * - 百变者 shapeshifter：chooseTarget(targetA) → chooseTarget(targetB，选项已剔除 targetA)
+ *   → chooseOptional(swap/keep)。三步均为本函数覆盖的 kind。
+ * - 掘墓人 grave_digger：chooseTarget(gravePick，选项为牌 instanceId) → chooseOptional(play_now/reserve)
+ * - 捣蛋鬼 troublemaker：chooseTarget → chooseOptional(reveal/hide)
+ * - 商人 spirit_merchant：chooseTarget(目标) → merchantChoose(view_house/view_honor)
+ *   → merchantExchange(merchantGive: no_swap/tokenId) → merchantExchange(merchantTake: seen/random)
+ *   后三步统一走 night.chooseTarget，由 engine 按 ctx.step 分发。
+ * - 盗贼 thief / 裁判 judge：chooseTarget（选项已由 legalTargetsForCard 过滤）
  */
 export function botDecide(
   view: PlayerView,
