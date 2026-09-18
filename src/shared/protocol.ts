@@ -14,6 +14,7 @@ export type ReasonCode =
   | 'INVALID_PAYLOAD'
   | 'UNAUTHORIZED'
   | 'RATE_LIMITED'
+  | 'INVALID_REACTION'
   | 'PHASE_MISMATCH'
   | 'NOT_IN_HAND'
   | 'NO_ACTIVE_WINDOW'
@@ -75,6 +76,7 @@ export const EV = {
   voiceListProducers: 'voice.listProducers',
   // 6G-2a 互动特效（纯社交层，不进 core；只广播不存）
   effectSend: 'effect.send',
+  reactionSend: 'room.reaction',
   // 6G-2b 怀疑标记（纯社交层，不进 core；状态服务端内存持有，快照广播）
   markSet: 'mark.set',
   markClear: 'mark.clear',
@@ -101,6 +103,7 @@ export const OUT = {
   voiceProducers: 'voice.producers',
   // 6G-2a 特效广播（批）
   effectBatch: 'effect.batch',
+  reactionEvent: 'event.reaction',
   // 6G-2b 怀疑标记全量快照
   markState: 'mark.state',
   // 6G-3 快捷短语广播（payload 复用 ChatEventPayload：seatId/nickname/text/ts）
@@ -212,6 +215,31 @@ export interface EffectBatchItem extends EffectSendItem {
 export interface EffectBatchPayload {
   roomCode: string;
   items: EffectBatchItem[];
+}
+
+// ---------------------------------------------------------------------------
+// 6F-B2 reaction（纯互动层；只广播、不进入 GameState）
+// ---------------------------------------------------------------------------
+
+export type ReactionKind = 'egg' | 'flower' | 'emoji';
+
+export interface RoomReactionPayload {
+  seatToken: string;
+  targetSeatId: string;
+  kind: ReactionKind;
+  emoji?: string;
+  count: number;
+  /** 可选关联 id；不参与业务校验，仅用于 command.reject 对应。 */
+  commandId?: string;
+}
+
+export interface ReactionEventPayload {
+  fromSeatId: string;
+  targetSeatId: string;
+  kind: ReactionKind;
+  emoji?: string;
+  count: number;
+  sentAt: number;
 }
 
 // ---------------------------------------------------------------------------

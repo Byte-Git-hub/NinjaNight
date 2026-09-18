@@ -50,6 +50,10 @@ export const EFFECT_COMBO_WINDOW_MS = 1500;
 export const EFFECT_PARTICLE_MAX = envInt('NINJA_EFFECT_PARTICLE_MAX', 200);
 /** 6G-2b 怀疑标记：每人最多标记数（重复点同一目标 = 取消） */
 export const MARK_PER_SEAT_MAX = envInt('NINJA_MARK_PER_SEAT_MAX', 2);
+/** 6F-B2：reaction 独立限频（每 socket 每秒）与 payload 上限。 */
+export const REACTION_RATE_PER_SEC = 5;
+export const REACTION_MAX_COUNT = 10;
+export const REACTION_EMOJI_MAX_LEN = 4;
 
 /** 6J 种子机制：种子须为 0–2^32-1 整数；非法返回 null（两端共用校验） */
 export function parseGameSeed(raw: unknown): number | null {

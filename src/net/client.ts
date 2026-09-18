@@ -7,6 +7,8 @@ import {
   type PresencePayload,
   type RoomAckPayload,
   type RoomErrorPayload,
+  type ReactionEventPayload,
+  type ReactionKind,
 } from '../shared/protocol';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
@@ -23,6 +25,7 @@ export interface NetHandlers {
   onCommandAck?: (commandId: string) => void;
   onCommandReject?: (commandId: string, reasonCode: string) => void;
   onChat?: (payload: ChatEventPayload) => void;
+  onReaction?: (payload: ReactionEventPayload) => void;
   onStatus?: (status: ConnectionStatus) => void;
 }
 
@@ -110,6 +113,7 @@ export class GameNet {
       this.handlers.onCommandReject?.(p.commandId, p.reasonCode),
     );
     this.socket.on(OUT.chatEvent, (p: ChatEventPayload) => this.handlers.onChat?.(p));
+    this.socket.on(OUT.reactionEvent, (p: ReactionEventPayload) => this.handlers.onReaction?.(p));
     this.bindPendingHandlers();
   }
 
@@ -266,6 +270,18 @@ export class GameNet {
   sendChat(text: string): void {
     if (!this.seatToken) return;
     this.socket?.emit(EV.chatSend, { seatToken: this.seatToken, text });
+  }
+
+  sendReaction(targetSeatId: string, kind: ReactionKind, count = 1, emoji?: string): void {
+    if (!this.seatToken) return;
+    this.socket?.emit(EV.reactionSend, {
+      seatToken: this.seatToken,
+      targetSeatId,
+      kind,
+      count,
+      ...(emoji ? { emoji } : {}),
+      commandId: `reaction-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    });
   }
 
   disconnect(): void {

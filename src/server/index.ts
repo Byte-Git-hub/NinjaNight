@@ -20,6 +20,7 @@ import {
   MAX_NICKNAME_LEN,
   MAX_PLAYERS,
   MIN_PLAYERS,
+  REACTION_RATE_PER_SEC,
   parseGameSeed,
 } from '../shared/timeouts';
 import {
@@ -30,6 +31,7 @@ import {
   sanitizeRoomCode,
   type ReasonCode,
   type RoomAckPayload,
+  type ReactionEventPayload,
 } from '../shared/protocol';
 import { RoomRuntime, generateRoomCode, newSeatToken, type SessionInfo } from './room';
 import { logger } from './logger';
@@ -39,6 +41,7 @@ import { SocialMarks, validatePhrase } from './social';
 import { DISCONNECT_RETAIN_MS } from '../shared/timeouts';
 import { VICTORY_AUTO_ADVANCE_MS } from '../shared/timeouts';
 import { scheduleBots } from './bot-scheduler';
+import { validateReaction } from './reactions';
 
 const VALID_TYPES = new Set<CommandType>([
   'draft.pick',
@@ -83,6 +86,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
 
   const rooms = new Map<string, RoomRuntime>();
   const sessionsByToken = new Map<string, SessionInfo>();
+  const reactionRates = new Map<string, { start: number; count: number }>();
 
   function uniqueCode(): string {
     for (let i = 0; i < 50; i += 1) {
@@ -865,6 +869,17 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       return sess.rateCount <= COMMAND_RATE_PER_SEC;
     }
 
+    function takeReactionRate(socketId: string): boolean {
+      const now = Date.now();
+      const current = reactionRates.get(socketId);
+      if (!current || now - current.start > 1000) {
+        reactionRates.set(socketId, { start: now, count: 1 });
+        return true;
+      }
+      current.count += 1;
+      return current.count <= REACTION_RATE_PER_SEC;
+    }
+
     /**
      * 6J-3：建房/加入按 socket 限频（60s 窗口 20 次），防房间码枚举爆破。
      * 超限返回 false（调用方回 RATE_LIMITED）；断开时清理条目。
@@ -1203,6 +1218,43 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       logger.info('effect.relay', { roomCode: room.code, seatId: sess.seatId, type: 'batch' });
     });
 
+    // ---- 6F-B2 reaction（独立 5/s 限频；只广播、不存历史、不进入 GameState） ----
+    socket.on(EV.reactionSend, (payload: unknown) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; commandId?: unknown };
+      const sess = typeof body.seatToken === 'string' ? sessionsByToken.get(body.seatToken) : undefined;
+      if (!sess) {
+        emitError(socket, 'UNAUTHORIZED');
+        return;
+      }
+      const commandId = typeof body.commandId === 'string' ? body.commandId : '';
+      if (!takeReactionRate(socket.id)) {
+        socket.emit(OUT.commandReject, { commandId, reasonCode: 'RATE_LIMITED' });
+        logger.warn('reaction.reject', { roomCode: sess.roomCode, seatId: sess.seatId, reasonCode: 'RATE_LIMITED' });
+        return;
+      }
+      const room = rooms.get(sess.roomCode);
+      if (!room) {
+        emitError(socket, 'ROOM_NOT_FOUND');
+        return;
+      }
+      const reaction = validateReaction(payload, (id) => seatIdsOf(room).has(id));
+      if (!reaction) {
+        socket.emit(OUT.commandReject, { commandId, reasonCode: 'INVALID_REACTION' });
+        logger.warn('reaction.reject', { roomCode: room.code, seatId: sess.seatId, reasonCode: 'INVALID_REACTION' });
+        return;
+      }
+      const event: ReactionEventPayload = {
+        fromSeatId: sess.seatId,
+        targetSeatId: reaction.targetSeatId,
+        kind: reaction.kind,
+        ...(reaction.emoji ? { emoji: reaction.emoji } : {}),
+        count: reaction.count,
+        sentAt: Date.now(),
+      };
+      io.to(room.roomChannel()).emit(OUT.reactionEvent, event);
+      logger.info('reaction.relay', { roomCode: room.code, seatId: sess.seatId, commandType: 'room.reaction' });
+    });
+
     // ---- 6G-2b 怀疑标记（seatToken 鉴权；共享限频桶，超限静默丢弃；重复点同一目标=取消） ----
     socket.on(EV.markSet, (payload: unknown) => {
       const body = (payload ?? {}) as { seatToken?: unknown; targetSeatId?: unknown };
@@ -1301,6 +1353,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
 
     socket.on('disconnect', () => {
       joinRate.delete(socket.id);
+      reactionRates.delete(socket.id);
       const token = socket.data.seatToken as string | undefined;
       if (!token) return;
       const sess = sessionsByToken.get(token);
