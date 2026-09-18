@@ -13,6 +13,8 @@ import { SocialNet } from '../net/social';
 import { VoiceClient, type VoiceClientStatus } from './voice/client';
 import { micBadge } from './voice/icons';
 import { AudioManager, SFX_NAMES, effectTimbre, type SfxName } from './audio';
+import { AchievementTracker } from './achievements/tracker';
+import { ACHIEVEMENTS, achievementDef } from './achievements/definitions';
 import { voiceBannerHtml, voiceBarHtml } from './voice/controls';
 import { EFFECT_ITEMS, QUICK_EMOJIS, getEffectItem, isQuickEmoji } from './effects/items';
 import { EffectLayer } from './effects/particles';
@@ -143,6 +145,9 @@ export class AppUI {
   private soundPrimed = false;
   /** 6H-1：音效面板显隐（字段保持，避免重渲染丢失） */
   private audioPanelOpen = false;
+  /** 6H-3 成就（纯本地 localStorage） */
+  private achieve = new AchievementTracker();
+  private achievePanelOpen = false;
   /** 6G-2 互动特效 + 怀疑标记（纯社交层；状态以服务端广播为准，本地只存快照） */
   private effectNet: EffectNet | null = null;
   private socialNet: SocialNet | null = null;
@@ -191,6 +196,7 @@ export class AppUI {
         this.selected.clear();
         this.resetIdentityUi();
         this.soundPrimed = false;
+        this.achieve.resetGame();
         this.audio.stopBgm();
         this.voiceClient?.leave();
         this.voiceSeats = [];
@@ -373,6 +379,10 @@ export class AppUI {
       // 6G-4a：连击主粒子放大至 particleMax（48px 上限），不遮挡公共区
       layer.burstAt(el, meta, combo >= 2 ? { big: true } : undefined);
       this.fxHit.set(it.targetSeatId, now);
+      // 6H-3：被砸计数（目标是自己时）
+      if (this.view && it.targetSeatId === this.view.self.seatId) {
+        for (const id of this.achieve.hitByEffect()) this.showAchievementCard(id);
+      }
       if (combo >= 2) layer.textAt(el, `${combo} 连击`);
     }
     this.render();
@@ -402,7 +412,7 @@ export class AppUI {
   }
 
   private renderShell(): void {
-    this.root.innerHTML = `<div class="app" id="ui"></div><div id="toast" class="toast" hidden></div>`;
+    this.root.innerHTML = `<div class="app" id="ui"></div><div id="toast" class="toast" hidden></div><div id="achieve-pop" aria-live="polite"></div>`;
   }
 
   private showToast(msg: string, ms = 2500): void {
@@ -456,6 +466,14 @@ export class AppUI {
         ${this.view || this.presence ? `<button id="btn-leave-room" type="button" class="muted">返回大厅</button>` : ''}
         <div class="audio-ctl">
           <button id="btn-sound" type="button" title="音效设置" aria-label="音效设置">${this.audio.enabled ? '🔊' : '🔇'}</button>
+          <button id="btn-achieve" type="button" title="成就" aria-label="成就">🏆</button>
+          <div class="audio-pop" id="achieve-panel"${this.achievePanelOpen ? '' : ' hidden'}>
+            <h4>成就（本地）</h4>
+            <div class="achieve-list">${ACHIEVEMENTS.map((a) => {
+              const un = this.achieve.isUnlocked(a.id);
+              return `<div class="achieve-row${un ? '' : ' locked'}"><b>${un ? '🏵' : '🔒'} ${escapeHtml(a.name)}</b><span>${escapeHtml(a.desc)}</span></div>`;
+            }).join('')}</div>
+          </div>
           <div class="audio-pop" id="audio-panel"${this.audioPanelOpen ? '' : ' hidden'}>
             <label><input id="sound-enabled" type="checkbox" ${this.audio.enabled ? 'checked' : ''} /> 音效开</label>
             <label>音量 <input id="sound-volume" type="range" min="0" max="100" step="1" value="${Math.round(this.audio.volume * 100)}" /></label>
@@ -541,11 +559,33 @@ export class AppUI {
       this.audio.syncBgmToPhase(v.phase, Boolean(v.gameOver));
     }
     this.lastSoundPhase = v.phase;
+    // 6H-3：同流喂成就判定（只含新增 seq）
+    const selfAlive = v.seats.find((s) => s.seatId === v.self.seatId)?.alive ?? true;
     for (const e of v.events) {
       if ((e.seq ?? 0) <= this.lastSoundSeq) continue;
       this.audio.playForEvent(e.type, (e.payload ?? {}) as Record<string, unknown>, v.self.seatId);
+      const fresh = this.achieve.handleEvent(
+        e.type,
+        (e.payload ?? {}) as Record<string, unknown>,
+        v.self.seatId,
+        selfAlive,
+      );
+      for (const id of fresh) this.showAchievementCard(id);
     }
     this.lastSoundSeq = Math.max(this.lastSoundSeq, maxSeq);
+  }
+
+  /** 6H-3：成就解锁卡片（右上角滑入，3s 淡出，不阻塞） */
+  private showAchievementCard(id: string): void {
+    const def = achievementDef(id);
+    if (!def) return;
+    const host = this.root.querySelector('#achieve-pop');
+    if (!host || typeof document === 'undefined') return;
+    const el = document.createElement('div');
+    el.className = 'achieve-card';
+    el.innerHTML = `<b>🏵 成就解锁：${escapeHtml(def.name)}</b><span>${escapeHtml(def.desc)}</span>`;
+    host.appendChild(el);
+    window.setTimeout(() => el.remove(), 3000);
   }
 
   private resetIdentityUi(): void {
@@ -1054,6 +1094,7 @@ export class AppUI {
       this.presence = null;
       this.resetIdentityUi();
       this.soundPrimed = false;
+      this.achieve.resetGame();
       this.audio.stopBgm();
       this.render();
     });
@@ -1080,6 +1121,12 @@ export class AppUI {
     // 6G-2 点击走根委托（见 mount 内 onRootClick），此处不逐个绑定。
     // 6F-4：身份弹窗点击关闭（backdrop 穿透不挡 e2e/游戏点击）
     $('#identity-modal')?.addEventListener('click', () => this.closeIdentityModal());
+    // 6H-3 成就面板显隐（新选择器）
+    $('#btn-achieve')?.addEventListener('click', () => {
+      this.achievePanelOpen = !this.achievePanelOpen;
+      const panel = this.root.querySelector('#achieve-panel');
+      if (panel) panel.toggleAttribute('hidden', !this.achievePanelOpen);
+    });
     // 6H-1 音效设置：面板显隐 + 开关 + 音量 + 试听（新选择器，不碰旧 e2e）
     $('#btn-sound')?.addEventListener('click', () => {
       this.audioPanelOpen = !this.audioPanelOpen;

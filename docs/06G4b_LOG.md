@@ -6,3 +6,4 @@
 [07:52] DONE | 6H-1音效系统(11合成+面板+映射+单测9+e2e) | 待commit
 [08:20] DONE | 6H-2BGM(night/reveal合成+轨道切换+独立开关+单测12+e2e) | 待commit
 [08:45] DONE | 全量e2e35绿，基线刷新(修复后UI)，capture兜底改-approx防覆盖 | 待commit
+[09:30] DONE | 6H-3成就(8定义+判定+本地存储+面板+解锁卡+单测14+e2e) | 待commit
