@@ -11,6 +11,8 @@ export interface VoiceBarState {
   muted: boolean;
   listening: boolean;
   supported: boolean;
+  speechEnabled?: boolean;
+  speechSupported?: boolean;
 }
 
 /** 底部语音条：加入/开麦/听三键（未在房间时由调用方隐藏） */
@@ -20,10 +22,13 @@ export function voiceBarHtml(s: VoiceBarState): string {
   const muteLabel = s.muted ? `${micIcon('closed')} 闭麦中` : `${micIcon('open')} 开麦中`;
   const listenLabel = s.listening ? '听语音：开' : '听语音：关';
   const inVoice = s.status === 'active';
+  const speechSupported = s.speechSupported ?? false;
+  const speechLabel = !speechSupported ? '短语播报：不可用' : s.speechEnabled ? '短语播报：开' : '短语播报：关';
   return `<div class="voice-bar" id="voice-bar" role="group" aria-label="语音连麦">
     <button id="btn-voice-join" type="button" class="voice-btn" ${s.status === 'joining' ? 'disabled' : ''}>${joinLabel}</button>
     <button id="btn-voice-mute" type="button" class="voice-btn" ${inVoice ? '' : 'disabled'}>${muteLabel}</button>
     <button id="btn-voice-listen" type="button" class="voice-btn" aria-pressed="${s.listening ? 'true' : 'false'}">${listenLabel}</button>
+    <button id="btn-voice-speech" type="button" class="voice-btn" aria-pressed="${s.speechEnabled ? 'true' : 'false'}" ${speechSupported ? '' : 'disabled'} title="仅在本机朗读快捷短语，不会上传文本">${speechLabel}</button>
   </div>`;
 }
 
