@@ -23,7 +23,6 @@ import { ACHIEVEMENTS, achievementDef } from './achievements/definitions';
 import { buildHighlight, type RoundHighlight } from './highlights/summary';
 import { highlightBannerHtml } from './highlights/banner';
 import { voiceBannerHtml, voiceBarHtml } from './voice/controls';
-import { PhraseTts } from './voice/tts';
 import { EFFECT_ITEMS, QUICK_EMOJIS, getEffectItem } from './effects/items';
 import { EffectLayer } from './effects/particles';
 import { ItemFlightLayer } from './effects/flights';
@@ -31,7 +30,11 @@ import { CardDragController, type CardDropPayload } from './card-drag';
 import { ItemDragController, type ItemDropPayload } from './item-drag';
 import { mountCardTooltip } from './card-tooltip';
 import { markBadge, markButton, myMarkedTargets } from './social/marks';
-import { phrasesPanelHtml } from './social/phrases';
+import { phrasesPanelHtml, getPhrasesPageCount } from './social/phrases';
+import { playPhraseAudio, PhraseTts } from './voice/tts';
+import { initCardFlightLayer, CardFlightLayer } from './animations/card-flight';
+import { applyStampToSeat } from './animations/stamp';
+import { getDrawPilePath } from './assets';
 import { PHRASES } from '../data/phrases';
 import type { PlayerView, PendingDecision, NinjaCardInstanceView, GameEvent } from '../shared/types';
 import {
@@ -180,6 +183,7 @@ export class AppUI {
   private socialNet: SocialNet | null = null;
   private fxLayer: EffectLayer | null = null;
   private flightLayer: ItemFlightLayer | null = null;
+  private cardFlight: CardFlightLayer | null = null;
   private lastHitAt = new Map<string, number>();
   private cardDrag: CardDragController | null = null;
   private itemDrag: ItemDragController | null = null;
@@ -399,6 +403,7 @@ export class AppUI {
     this.fxLayer.mount(this.root);
     this.flightLayer = new ItemFlightLayer({ onHit: (seatId, strength) => this.itemHit(seatId, strength) });
     this.flightLayer.mount(this.root);
+    this.cardFlight = initCardFlightLayer(this.root);
     const enet = new EffectNet(this.net);
     enet.attach();
     this.effectNet = enet;
@@ -530,6 +535,7 @@ export class AppUI {
       const raw = (phraseBtn as HTMLElement).dataset['phrase'] ?? '';
       const id = Number(raw);
       if (!Number.isInteger(id) || !this.socialNet) return;
+      playPhraseAudio(id);
       this.socialNet.sendPhrase(id);
       return;
     }
@@ -664,6 +670,8 @@ export class AppUI {
     this.playOrigins.clear();
     this.fxLayer?.clear();
     this.flightLayer?.clear();
+    this.cardFlight?.unmount();
+    this.cardFlight = null;
     this.moments.clear();
     this.selectedItem = ''; this.reactionDraft = null; this.reactionTargetSeatId = '';
     this.socialTab = null;
@@ -928,10 +936,33 @@ export class AppUI {
     if (intel.length) this.showIntelNotice(intel, v);
     for (const e of fresh) {
       const payload = (e.payload ?? {}) as Record<string, unknown>;
-      if (e.type === 'night.phaseStarted') this.moments.phase(phaseLabel(v.phase));
+      if (e.type === 'night.phaseStarted') {
+        this.moments.phase(phaseLabel(v.phase));
+        if (payload['phase'] === 'dealHouses' || payload['phase'] === 'draftPick1') {
+          if (v && v.seats.length > 0) {
+            void this.cardFlight?.playDealAnimation(v.seats.map(s => s.seatId));
+          }
+        }
+      }
       if (e.type === 'night.playerDied' && typeof payload['seatId'] === 'string') {
-        this.addAnimation(`.seat-card[data-seat="${cssEscape(String(payload['seatId']))}"]`, 'animate-death');
+        const sid = String(payload['seatId']);
+        const seatEl = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(sid)}"]`);
+        if (seatEl) {
+          void applyStampToSeat(seatEl);
+        }
+        this.addAnimation(`.seat-card[data-seat="${cssEscape(sid)}"]`, 'animate-death');
         this.moments.kill();
+      }
+      if (e.type === 'draft.passed') {
+        if (v && v.seats.length >= 2) {
+          const myIdx = v.seats.findIndex(s => s.seatId === v.self.seatId);
+          const nextIdx = (myIdx + 1) % v.seats.length;
+          const fromSid = v.self.seatId;
+          const toSid = v.seats[nextIdx]?.seatId ?? '';
+          if (toSid) {
+            void this.cardFlight?.playPassAnimation(fromSid, toSid, 2);
+          }
+        }
       }
       if (e.type === 'score.roundWinner') {
         const center = this.root.querySelector('.central')?.getBoundingClientRect();
@@ -1243,7 +1274,7 @@ export class AppUI {
           ${!v ? this.lobbyControls() : ''}
           
         </section>
-        ${v && this.net.isHost ? `<section class="panel host-llm-panel">${this.llmControls()}</section>` : ''}
+        ${v && this.net.isHost && (v.phase === 'roomLobby' || v.phase === 'dealHouses' || !v.round || v.round === 0) ? `<section class="panel host-llm-panel">${this.llmControls()}</section>` : ''}
         ${v ? this.gamePanels(v, pending ?? null) : ''}
         ${v ? this.identityModalHtml(v) : ''}
         ${v ? this.handPeekModalHtml(v) : ''}
@@ -1437,8 +1468,7 @@ export class AppUI {
     let content = '';
     if (this.socialTab === 'chat') content = `<div class="social-chat-compose"><input id="chat-input" maxlength="200" placeholder="说点什么…" value="${escapeHtml(this.chatDraft)}" /><button id="btn-chat" type="button">发送</button></div>`;
     if (this.socialTab === 'phrases') {
-      const all = phrasesPanelHtml(this.phrasePage).match(/<button[\s\S]*?<\/button>/g) ?? [];
-      content = `<section id="phrase-panel"><h3>快捷短语</h3><div class="fx-row">${all.slice(this.socialPage * perPage, (this.socialPage + 1) * perPage).join('')}</div>${this.pager('social', this.socialPage, pages)}</section>`;
+      content = phrasesPanelHtml(this.phrasePage);
     }
     if (this.socialTab === 'effects' || this.socialTab === 'emoji') content = `<div class="fx-bar" aria-label="互动特效"><div class="fx-row">${items.slice(this.socialPage * perPage, (this.socialPage + 1) * perPage).join('')}</div><div class="fx-hint" id="fx-target-hint">${target ? `目标：${escapeHtml(target.nickname)}` : '选择内容 → 点击座位 → 选择数量 → 发送'}</div>${this.pager('social', this.socialPage, pages)}${picker}</div>`;
     return `<section class="social-dock" aria-label="社交互动"><div class="social-dock-tabs">${tabs.map(([id, label]) => `<button type="button" data-social-tab="${id}" class="${this.socialTab === id ? 'active' : ''}">${label}</button>`).join('')}</div>${this.socialTab ? `<div class="social-pop panel"><button type="button" class="social-close" data-social-tab="${this.socialTab}" aria-label="关闭社交">×</button>${content}</div>` : ''}</section>`;

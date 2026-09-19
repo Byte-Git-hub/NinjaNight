@@ -96,7 +96,7 @@ export function playPhraseAudio(phraseId: number | string): void {
   } else {
     try {
       if (typeof Audio !== 'undefined') {
-        const audio = new Audio(assetUrl(ssets/audio/phrases/phrase_.mp3));
+        const audio = new Audio(assetUrl(`assets/audio/phrases/phrase_${phraseId}.mp3`));
         audio.play().catch(() => {});
       }
     } catch {}
@@ -164,7 +164,7 @@ export class PhraseTts {
         this.activeAudio.pause();
       }
       if (typeof Audio !== 'undefined') {
-        const audio = new Audio(assetUrl(ssets/audio/phrases/phrase_.mp3));
+        const audio = new Audio(assetUrl(`assets/audio/phrases/phrase_${phraseId}.mp3`));
         this.activeAudio = audio;
         audio.play().catch(() => {
           this.fallbackSpeak(PHRASES[phraseId]);
