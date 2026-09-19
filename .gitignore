@@ -15,3 +15,7 @@ docs/06_assets/screenshots/
 certs/
 # 一键启动脚本的运行日志（本地生成，不进版本控制）
 logs/
+# e2e 自动重存产物（capture-6g4b / stage6h-* / mobile-flows），不进版本控制
+docs/06G_screenshots/*.png
+docs/06H_screenshots/*.png
+docs/06J_screenshots/mobile-*.png
