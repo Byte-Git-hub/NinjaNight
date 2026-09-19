@@ -7,8 +7,8 @@ import { PHRASES, normalizePhraseId } from '../../src/data/phrases';
 import { validatePhrase } from '../../src/server/social';
 
 describe('PHRASES 定稿', () => {
-  it('共 21 条，与需求文案逐字一致', () => {
-    expect(PHRASES).toHaveLength(21);
+  it('共 23 条，与需求文案逐字一致', () => {
+    expect(PHRASES).toHaveLength(23);
     expect(PHRASES[0]).toBe('我是红方老大');
     expect(PHRASES[1]).toBe('我是蓝方老大');
     expect(PHRASES[2]).toBe('我才是红方老大');
@@ -30,10 +30,12 @@ describe('PHRASES 定稿', () => {
     expect(PHRASES[18]).toBe('谁在骗我，我已经知道了');
     expect(PHRASES[19]).toBe('上忍已出，各位小心');
     expect(PHRASES[20]).toBe('这局我必活到最后');
+    expect(PHRASES[21]).toBe('没牌');
+    expect(PHRASES[22]).toBe('我的牌在后面呢');
   });
 
   it('无空串、无重复', () => {
-    expect(new Set(PHRASES).size).toBe(21);
+    expect(new Set(PHRASES).size).toBe(23);
     for (const t of PHRASES) expect(t.length).toBeGreaterThan(0);
   });
 });
@@ -44,11 +46,13 @@ describe('validatePhrase', () => {
     expect(validatePhrase(5)).toBe('我才是浪人');
     expect(validatePhrase(6)).toBe('快点啊，鸡都要叫了');
     expect(validatePhrase(20)).toBe('这局我必活到最后');
+    expect(validatePhrase(21)).toBe('没牌');
+    expect(validatePhrase(22)).toBe('我的牌在后面呢');
   });
 
   it('越界/非整数/非数字一律 null（整条拒收）', () => {
     expect(validatePhrase(-1)).toBeNull();
-    expect(validatePhrase(21)).toBeNull();
+    expect(validatePhrase(23)).toBeNull();
     expect(validatePhrase(1.5)).toBeNull();
     expect(validatePhrase('3')).toBeNull();
     expect(validatePhrase(undefined)).toBeNull();
@@ -59,7 +63,8 @@ describe('validatePhrase', () => {
   it('normalizePhraseId 同步', () => {
     expect(normalizePhraseId(7)).toBe(7);
     expect(normalizePhraseId(20)).toBe(20);
-    expect(normalizePhraseId(21)).toBeNull();
+    expect(normalizePhraseId(22)).toBe(22);
+    expect(normalizePhraseId(23)).toBeNull();
     expect(normalizePhraseId(99)).toBeNull();
   });
 });

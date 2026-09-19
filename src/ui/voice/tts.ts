@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 快捷短语的本地语音播报。
  *
  * 优先播放预生成的 mimo TTS 音频文件（public/assets/audio/phrases/phrase_{id}.mp3）。
@@ -6,7 +6,7 @@
  * 默认关闭；用户打开后仅保存在当前浏览器的偏好中。
  */
 
-import { PHRASES } from '../../data/phrases';
+import { PHRASES, normalizePhraseId } from '../../data/phrases';
 import { assetUrl } from '../assets';
 
 export const TTS_SETTINGS_KEY = 'ninja-night:phrase-tts';
@@ -80,6 +80,29 @@ export function isPhraseTtsSupported(): boolean {
   return defaultSynthesis() !== null && defaultUtterance() !== null;
 }
 
+let globalPhraseTtsInstance: PhraseTts | null = null;
+
+export function setGlobalPhraseTts(instance: PhraseTts | null): void {
+  globalPhraseTtsInstance = instance;
+}
+
+/** 按 phraseId 严格播放对应音频，不走文本猜测 */
+export function playPhraseAudio(phraseId: number | string): void {
+  const id = typeof phraseId === 'string' ? Number(phraseId) : phraseId;
+  const validId = normalizePhraseId(id);
+  if (validId === null) return;
+  if (globalPhraseTtsInstance) {
+    globalPhraseTtsInstance.playById(validId);
+  } else {
+    try {
+      if (typeof Audio !== 'undefined') {
+        const audio = new Audio(assetUrl(ssets/audio/phrases/phrase_.mp3));
+        audio.play().catch(() => {});
+      }
+    } catch {}
+  }
+}
+
 export class PhraseTts {
   private readonly synthesis: SpeechSynthesisLike | null;
   private readonly utteranceCtor: UtteranceCtor | null;
@@ -98,6 +121,7 @@ export class PhraseTts {
     this.synthesis = synthesis;
     this.utteranceCtor = utteranceCtor;
     this.enabledState = settingStorage(storage) && this.supported;
+    setGlobalPhraseTts(this);
   }
 
   get supported(): boolean {
@@ -131,32 +155,40 @@ export class PhraseTts {
     }
   }
 
-  /** 播报一条短语；优先播放静态 mimo TTS 音频，失败或无对应音频时回退 Web Speech */
+  /** 按 phraseId 严格播放预生成的 mimo TTS 音频 */
+  playById(phraseId: number): void {
+    if (!this.enabledState) return;
+    if (phraseId < 0 || phraseId >= PHRASES.length) return;
+    try {
+      if (this.activeAudio) {
+        this.activeAudio.pause();
+      }
+      if (typeof Audio !== 'undefined') {
+        const audio = new Audio(assetUrl(ssets/audio/phrases/phrase_.mp3));
+        this.activeAudio = audio;
+        audio.play().catch(() => {
+          this.fallbackSpeak(PHRASES[phraseId]);
+        });
+        return;
+      }
+    } catch {}
+    this.fallbackSpeak(PHRASES[phraseId]);
+  }
+
+  /** 播报一条短语文本；优先查表找 phraseId 播放，找不到时回退 Web Speech */
   speak(text: string): void {
     if (!this.enabledState) return;
     const clean = text.replace(/\\s+/g, ' ').trim().slice(0, 80);
     if (!clean) return;
     const now = Date.now();
-    // 同一广播 350ms 内不重复播报
     if (clean === this.lastText && now - this.lastAt < 350) return;
     this.lastText = clean;
     this.lastAt = now;
 
-    // 1. 查找静态预生成音频
     const phraseIdx = PHRASES.findIndex((p) => p === clean);
-    if (phraseIdx >= 0 && typeof Audio !== 'undefined') {
-      try {
-        if (this.activeAudio) {
-          this.activeAudio.pause();
-        }
-        const audio = new Audio(assetUrl("assets/audio/phrases/phrase_" + phraseIdx + ".mp3"));
-        audio.play().catch(() => {
-          this.fallbackSpeak(clean);
-        });
-        return;
-      } catch {
-        // 回退到 Web Speech
-      }
+    if (phraseIdx >= 0) {
+      this.playById(phraseIdx);
+      return;
     }
 
     this.fallbackSpeak(clean);

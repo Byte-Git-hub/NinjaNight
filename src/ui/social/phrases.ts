@@ -1,8 +1,10 @@
-/**
+﻿/**
  * 6G-3 快捷短语面板：纯展示（折叠，与聊天同区）。
  * 点击只发 phraseId，文本以服务端广播为准，全房 toast 浮层 3s。
  */
 import { PHRASES } from '../../data/phrases';
+
+export const PHRASES_PER_PAGE = 9;
 
 function escapeHtml(s: string): string {
   return s
@@ -12,20 +14,23 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+export function getPhrasesPageCount(): number {
+  return Math.ceil(PHRASES.length / PHRASES_PER_PAGE);
+}
+
 /** 快捷短语折叠面板（3x3 九宫格分页展示；按钮选择器 data-phrase="{下标}"） */
 export function phrasesPanelHtml(page = 0): string {
-  const PAGE_SIZE = 9;
-  const totalPages = Math.ceil(PHRASES.length / PAGE_SIZE);
+  const totalPages = getPhrasesPageCount();
   const curPage = Math.max(0, Math.min(page, totalPages - 1));
-  const start = curPage * PAGE_SIZE;
-  const pageItems = PHRASES.slice(start, start + PAGE_SIZE);
+  const start = curPage * PHRASES_PER_PAGE;
+  const pageItems = PHRASES.slice(start, start + PHRASES_PER_PAGE);
 
   const btns = pageItems.map((t, idx) => {
     const originalIdx = start + idx;
     return '<button type="button" class="fx-btn phrase" data-phrase="' + originalIdx + '" title="发送快捷短语">' + escapeHtml(t) + '</button>';
   }).join('');
 
-  return '<details class="panel phrases collapsed-panel" id="phrase-panel">' +
+  return '<details class="panel phrases collapsed-panel" id="phrase-panel" open>' +
     '<summary>快捷短语</summary>' +
     '<div class="phrase-grid-3x3">' + btns + '</div>' +
     '<div class="phrase-pagination">' +

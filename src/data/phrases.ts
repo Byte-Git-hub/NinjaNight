@@ -1,5 +1,5 @@
-/**
- * 6G-3 快捷短语定稿 21 条（纯静态文本，不进 core）。
+﻿/**
+ * 6G-3 快捷短语定稿 23 条（纯静态文本，不进 core）。
  * 客户端只发 phraseId（下标），文本以服务端 lookup 为准广播，不存储、不记历史。
  */
 export const PHRASES: readonly string[] = [
@@ -24,9 +24,11 @@ export const PHRASES: readonly string[] = [
   "谁在骗我，我已经知道了",
   "上忍已出，各位小心",
   "这局我必活到最后",
+  "没牌",
+  "我的牌在后面呢",
 ];
 
-/** 合法下标：0..20 的整数；非法返回 null（服务端整条拒收） */
+/** 合法下标：0..22 的整数；非法返回 null（服务端整条拒收） */
 export function normalizePhraseId(v: unknown): number | null {
   if (typeof v !== "number" || !Number.isInteger(v)) return null;
   if (v < 0 || v >= PHRASES.length) return null;
