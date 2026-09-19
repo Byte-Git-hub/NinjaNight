@@ -120,7 +120,8 @@ export type GameEventType =
   | 'score.roundWinner'
   | 'score.victory'
   | 'react.opened'
-  | 'react.resolved';
+  | 'react.resolved'
+  | 'night.decision';
 
 export interface GameEvent {
   id: string;
@@ -254,4 +255,32 @@ export function cardIdOf(payload: CommandPayload): string | null {
     return payload.cardInstanceId;
   }
   return null;
+}
+
+export type DecisionType =
+  | 'play_card'
+  | 'pass_by_choice'
+  | 'no_matching'
+  | 'timed_out'
+  | 'dead_skip'
+  | 'react_declined';
+
+export type DecisionReason =
+  | 'strategy'
+  | 'no_card_in_hand'
+  | 'already_used'
+  | 'no_valid_target'
+  | 'timeout'
+  | 'player_dead';
+
+export interface PlayerDecisionEventPayload {
+  seatId: SeatId;
+  nickname: string;
+  round: number;
+  phase: GamePhase;
+  decisionType: DecisionType;
+  reason: DecisionReason;
+  cardId?: CardId;
+  targetSeatId?: SeatId;
+  timestamp: number;
 }

@@ -21,6 +21,29 @@ export function enterNightPhase(state: GameState, phase: GamePhase): void {
 
 export function beginCollectDeclarations(state: GameState): void {
   state.step = 'collectDeclarations';
+  for (const s of state.seats) {
+    if (!s.alive) {
+      pushEvent(state, 'night.decision', 'public', {
+        seatId: s.seatId,
+        nickname: s.nickname,
+        round: state.round,
+        phase: state.phase,
+        decisionType: 'dead_skip',
+        reason: 'player_dead',
+        timestamp: Date.now(),
+      });
+    } else if (playableInstanceIds(state, s).length === 0) {
+      pushEvent(state, 'night.decision', 'public', {
+        seatId: s.seatId,
+        nickname: s.nickname,
+        round: state.round,
+        phase: state.phase,
+        decisionType: 'no_matching',
+        reason: 'no_card_in_hand',
+        timestamp: Date.now(),
+      });
+    }
+  }
   state.pending = state.seats
     .filter((s) => s.alive && playableInstanceIds(state, s).length > 0)
     .map((s) => ({
