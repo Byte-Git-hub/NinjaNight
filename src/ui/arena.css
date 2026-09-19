@@ -310,6 +310,22 @@ body.in-game .hand-stack img {
   max-width: 100%;
   max-height: 100%;
 }
+/* 座位手牌真实叠放：扇形总宽恒等于单张宽度（单张缩小 2*dx），不撑破座位盒 */
+body.in-game .hand-stack.fan {
+  --fan-dx: clamp(5px, 0.7vw, 10px);
+  width: clamp(55px, 4.1vw, 78px);
+}
+body.in-game .hand-stack.fan img {
+  position: absolute;
+  left: calc(var(--i, 0) * var(--fan-dx));
+  top: 0;
+  width: calc(clamp(55px, 4.1vw, 78px) - 2 * var(--fan-dx));
+  height: auto;
+  aspect-ratio: 11 / 16;
+}
+body.in-game .hand-stack.fan img:first-child {
+  position: relative;
+}
 body.in-game .seat-body > .house-mini,
 body.in-game .seat-body > .flip-wrap,
 body.in-game .seat-body > .token-stack { max-width: 100%; max-height: 100%; }
@@ -537,6 +553,13 @@ body:not(.in-game) .seats-panel .table-ring .hand-stack img {
   width: 58px;
   height: 84px;
 }
+/* 大厅扇形：同样保持总宽恒定 */
+body:not(.in-game) .seats-panel .table-ring .hand-stack.fan { --fan-dx: 7px; width: 58px; }
+body:not(.in-game) .seats-panel .table-ring .hand-stack.fan img {
+  width: calc(58px - 2 * var(--fan-dx));
+  height: auto;
+  aspect-ratio: 11 / 16;
+}
 body:not(.in-game) .seats-panel .table-ring .token-stack img {
   width: 42px;
   height: 50px;
@@ -558,6 +581,8 @@ body:not(.in-game) .seats-panel .table-ring .token-stack img {
   body.in-game .self-zone > .seat-card.self .flip-wrap { width: 84px; height: 124px; }
   body.in-game .house-mini, body.in-game .flip-wrap { width: 64px; height: 94px; }
   body.in-game .hand-stack img { width: 48px; height: 70px; }
+  body.in-game .hand-stack.fan { --fan-dx: 7px; width: 48px; }
+  body.in-game .hand-stack.fan img { width: calc(48px - 2 * var(--fan-dx)); }
   body.in-game .token-stack img { width: 34px; height: 40px; }
   body.in-game .hand .card, body.in-game .pending .card { width: 68px; height: 100px; }
   body.in-game .central .card.mini { width: 60px; height: 88px; }
@@ -605,6 +630,9 @@ body:not(.in-game) .seats-panel .table-ring .token-stack img {
   body.in-game .hand-stack { margin-left: -7px; }
   body.in-game .hand-stack { margin-left: 0; }
   body.in-game .hand-stack img { width: 26px; height: 38px; }
+  body.in-game .hand-stack.fan { --fan-dx: 3px; width: 26px; }
+  /* 窄屏座位已挤满：扇形改向左展开（右侧无余量，左侧有空隙），避免右溢 */
+  body.in-game .hand-stack.fan img { width: calc(26px - 2 * var(--fan-dx)); left: calc(var(--i, 0) * var(--fan-dx) * -1); }
   body.in-game .token-stack { right: 3px; bottom: 4px; }
   body.in-game .token-stack img { width: 20px; height: 24px; }
   body.in-game .self-zone, body.in-game [data-seat-count='11'] .self-zone {
@@ -634,6 +662,8 @@ body:not(.in-game) .seats-panel .table-ring .token-stack img {
   body:not(.in-game) .seats-panel .table-ring .seat-body { gap: 4px; }
   body:not(.in-game) .seats-panel .table-ring .house-mini { width: 44px; height: 64px; }
   body:not(.in-game) .seats-panel .table-ring .hand-stack img { width: 30px; height: 44px; }
+  body:not(.in-game) .seats-panel .table-ring .hand-stack.fan { --fan-dx: 5px; width: 30px; }
+  body:not(.in-game) .seats-panel .table-ring .hand-stack.fan img { width: calc(30px - 2 * var(--fan-dx)); }
   body:not(.in-game) .seats-panel .table-ring .token-stack img { width: 22px; height: 26px; }
 }
 
@@ -746,6 +776,8 @@ body:not(.in-game) .seats-panel .table-ring .token-stack img {
  body.in-game .seat-body {padding:0 3px 4px;gap:3px;align-items:center}
  body.in-game .house-mini,body.in-game .flip-wrap {width:36px;height:52px;flex:none}
  body.in-game .hand-stack img {width:24px;height:35px}
+  body.in-game .hand-stack.fan { --fan-dx: 3px; width: 24px; }
+  body.in-game .hand-stack.fan img { width: calc(24px - 2 * var(--fan-dx)); }
  body.in-game .token-stack img {width:20px;height:22px}
  body.in-game .central {grid-area:2 / 1 / 3 / 11!important}
  body.in-game .self-zone,body.in-game [data-seat-count='11'] .self-zone {grid-area:3 / 3 / 4 / 9!important;grid-template-columns:110px minmax(0,1fr);gap:10px}

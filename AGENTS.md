@@ -35,10 +35,10 @@ $env:NINJA_WINDOW_MS=5000; npm run dev:server  # 短超时调试
 - **可见性**：令牌**枚数公开、面值/总分私密**（宣称胜利亮牌除外）；Thief 比**枚数**；Shapeshifter 对调不广播；`knownHouses` 是同一轮内的知识快照——单轮内 append-only（拷贝、禁活引用、禁自动刷新，对调后不刷新），`startNextRound` 时清空，UI 投影按当前 round 过滤（双保险）；`room.error` / reject 不得夹带未授权暗牌。
 - **日志脱敏**：只走 `src/server/logger.ts`；禁止记 HONOR 面值、HOUSE、手牌、`seatToken`、种子、视图 payload，只记 roomCode / seatId / command.type / reasonCode。
 - **断线**：仅保留 seat 映射至 `DISCONNECT_RETAIN_MS`（默认 5min）；重连凭 `localStorage` 的 `seatToken` 抢占式重绑并重下发最新单人 `view.snapshot`，**不回放、不恢复对局状态**，过期回大厅表单。
-- **Bot**：`src/core/bot.ts` 保持纯函数（输入仅自身 `PlayerView` + 窗口 id + 注入 `Rng`）；调度走 `src/server/bot-scheduler.ts`（`projectView` + 内部 `setTimeout`，默认 `BOT_DELAY_MS=500`/`BOT_JITTER_MS=1000`），严禁服务端开本地 Socket 连自己、严禁碰完整 `GameState`。
+- **Bot**：`src/core/bot.ts` 保持纯函数（输入仅自身 `PlayerView` + 窗口 id + 注入 `Rng`）；调度走 `src/server/bot-scheduler.ts`（`projectView` + 内部 `setTimeout`，默认 `NINJA_BOT_DELAY_MS=1500`/`NINJA_BOT_JITTER_MS=1000`，击杀/反应专档 `NINJA_BOT_KILL_DELAY_MS=2500`/`NINJA_BOT_REACT_DELAY_MS=2500`，大事件留白 `NINJA_PHASE_SETTLE_MS=1500`），严禁服务端开本地 Socket 连自己、严禁碰完整 `GameState`。
 - **规则**：标记优先级 官方 > 已确认决策 > 网页版 > 待确认；未确认必须标「待确认」，不得静默删牌/改效果/改胜负；`docs` 不替代 `src/shared` 权威类型。
 - **联机**：房间码 6 位（`sanitizeRoomCode`）；鉴权靠 `seatToken`；4–11 人、全员 ready 房主才能 `room.start`，开局后禁加入；`commandId` 幂等缓存 50，旧 `windowId` 回 `STALE_WINDOW`；单 socket 限频 10/s；`room.forceAdvance` 对所有未响应座位走 `applyAllDefaults`（`draftPick/discard→options[0]`、`declare/chooseTarget→pass/options[0]`、`chooseOptional/react→false`）。
-- **UI 选项映射**：`chooseOptional` 的选项→boolean 必须走 `app.ts` 的 `CHOOSE_OPTIONAL_TRUE` 显式映射表（`kill/swap/reveal→true`，其余 false），新增 options 必须登记，禁止 `__true` 暗语；`reactDecide` 的 `__true/__false` 保持不动。
+- **UI 选项映射**：`chooseOptional` 的选项→boolean 必须走 `app.ts` 的 `CHOOSE_OPTIONAL_TRUE` 显式映射表（`kill/swap/reveal/play_now→true`，其余 false），新增 options 必须登记，禁止 `__true` 暗语；`reactDecide` 的 `__true/__false` 保持不动。
 - **e2e 前置检查**：跑 `npm run test:e2e` 前先确认 `:3000` 无残留 node 进程（`Get-Process node` 或 `netstat -ano | findstr :3000`，有残留先杀掉），避免 Playwright `reuseExistingServer` 复用旧服务端代码导致验证失效。
 - **技术债并行**：独立技术债可用 sub-agent 并行推进，前提：(a) 每个子任务的改动文件集互不重叠 (b) 每个子任务独立 commit (c) 主 agent 负责合并与最终验证。
 - **大文件不进 git**：`public/assets/**/_originals/` 保持 gitignore；`docs/06_assets/screenshots/`（e2e 自动重存产物）不进版本控制；生图原稿放 `docs/06_assets/` 的 `.jpg`/`.png` 可提交，但单个需 <1MB。

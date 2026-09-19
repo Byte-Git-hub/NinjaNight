@@ -41,7 +41,8 @@ export function legalTargetsForCard(
     return state.seats.map((s) => s.seatId);
   }
   if (b === 'spy' || b === 'mystic') {
-    return state.seats.filter((s) => s.alive && s.seatId !== actor.seatId).map((s) => s.seatId);
+    // 01 §0.1 裁定 B：spy/mystic 允许指向死亡者（仅查看信息）；仅禁止指向自己
+    return state.seats.filter((s) => s.seatId !== actor.seatId).map((s) => s.seatId);
   }
   if (b === 'thief') {
     return state.seats

@@ -957,6 +957,25 @@ button.card.sel {
   border: 1px solid rgba(212, 175, 55, 0.6);
   box-shadow: 2px 0 0 rgba(30, 41, 59, 0.9), 4px 0 0 rgba(212, 175, 55, 0.35);
 }
+/* 座位手牌真实叠放：最多 3 张按 --i 错开，后续卡绝对定位压在首张上；
+ * 单张缩小 2*dx，扇形总宽恒等于原单张宽度，不撑破座位盒 */
+.hand-stack.fan { --fan-dx: 7px; width: 34px; }
+.hand-stack.fan img {
+  position: absolute;
+  left: calc(var(--i, 0) * var(--fan-dx));
+  top: 0;
+  width: calc(34px - 2 * var(--fan-dx));
+  height: auto;
+  aspect-ratio: 11 / 16;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.55);
+}
+.hand-stack.fan img:first-child {
+  position: relative;
+}
+/* 自己座位暗牌可点击翻看刚拿到的牌（纯本地） */
+.seat-card.self .hand-stack[data-hand-peek] {
+  cursor: pointer;
+}
 .token-stack img {
   width: 30px;
   height: 30px;

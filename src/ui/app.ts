@@ -145,6 +145,8 @@ export class AppUI {
   private identityModalTimer: ReturnType<typeof setTimeout> | null = null;
   /** 6F-4 身份窥视：点击自家卡背翻转查看（纯本地），再点/点外部盖回 */
   private housePeek = false;
+  /** 自家手牌窥视：点击自家座位暗牌查看刚拿到的 1 张（纯本地，仅本人可见） */
+  private handPeekIid: string | null = null;
   /** 6G-1 语音：房间级状态（ seatToken 鉴权后的 voice.state 快照），纯展示层 */
   private voiceNet: VoiceNet | null = null;
   private voiceClient: VoiceClient | null = null;
@@ -303,6 +305,7 @@ export class AppUI {
         }
         if (this.view && this.view.round !== v.round) {
           this.housePeek = false;
+          this.handPeekIid = null;
         }
         const hadView = this.view !== null;
         this.view = v;
@@ -980,6 +983,7 @@ export class AppUI {
   private resetIdentityUi(): void {
     this.identityModalOpen = false;
     this.housePeek = false;
+    this.handPeekIid = null;
     if (this.identityModalTimer !== null) {
       clearTimeout(this.identityModalTimer);
       this.identityModalTimer = null;
@@ -996,6 +1000,34 @@ export class AppUI {
         <img class="identity-front" src="${front}" alt="${escapeHtml(name)}" />
         <p class="identity-name">你的身份：<b>${escapeHtml(name)}</b></p>
         <p class="hint">2.5 秒后自动关闭，点击卡片关闭</p>
+      </div>
+    </div>`;
+  }
+
+  /** 自家新手牌弹窗：只看刚拿到的 1 张（选牌期取 draftHand 尾，否则取 hand 尾；有待选时优先待选项中最新者） */
+  private newestSelfCard(v: PlayerView): { instanceId: string; cardId: string } | null {
+    const piles = [...(v.self.draftHand ?? []), ...v.self.hand];
+    if (piles.length === 0) return null;
+    const opts = v.pendingDecision?.options;
+    if (opts && opts.length > 0) {
+      const inOpts = piles.filter((c) => opts.includes(c.instanceId));
+      if (inOpts.length > 0) return inOpts[inOpts.length - 1]!;
+    }
+    return piles[piles.length - 1]!;
+  }
+
+  private handPeekModalHtml(v: PlayerView): string {
+    if (!this.handPeekIid) return '';
+    const card =
+      [...(v.self.draftHand ?? []), ...v.self.hand].find((c) => c.instanceId === this.handPeekIid) ?? null;
+    if (!card) {
+      this.handPeekIid = null;
+      return '';
+    }
+    return `<div class="identity-modal-backdrop" id="hand-peek-modal" data-hand-peek-close="1">
+      <div class="identity-modal" role="dialog" aria-label="刚拿到的牌">
+        ${renderCardHtml(card.cardId, card.instanceId, false)}
+        <p class="hint">刚拿到的牌（仅你可见），点击任意处关闭</p>
       </div>
     </div>`;
   }
@@ -1039,9 +1071,15 @@ export class AppUI {
       }
     }
 
+    // 座位手牌：真实叠放（最多 3 张错开显示，超过用 +N 角标；≤3 保持 ×N 角标以兼容 e2e）
+    // 自己座位可点击暗牌翻看刚拿到的 1 张（data-hand-peek，纯本地弹窗）
+    const shown = inGame && handCount !== undefined ? Math.min(Math.max(handCount, 0), 3) : 0;
+    const badge = inGame && handCount !== undefined && handCount > 0
+      ? `<i>${handCount > 3 ? `+${handCount}` : `×${handCount}`}</i>`
+      : '';
     const handStack =
       inGame && handCount !== undefined
-        ? `<span class="hand-stack" title="手牌 ${handCount} 张"><img src="${getNinjaCardBackPath()}" alt="手牌背面" /><i>×${handCount}</i></span>`
+        ? `<span class="hand-stack fan" data-count="${handCount}"${isSelf ? ' data-hand-peek="1" role="button" tabindex="0"' : ''} title="${isSelf ? '点击查看刚拿到的牌' : `手牌 ${handCount} 张`}">${Array.from({ length: shown }, (_, i) => `<img src="${getNinjaCardBackPath()}" alt="手牌背面" style="--i:${i}" />`).join('')}${badge}</span>`
         : '';
     const tokenStack =
       inGame && tokens !== undefined
@@ -1144,6 +1182,7 @@ export class AppUI {
         </section>
         ${v ? this.gamePanels(v, pending ?? null) : ''}
         ${v ? this.identityModalHtml(v) : ''}
+        ${v ? this.handPeekModalHtml(v) : ''}
         ${v ? this.socialDockHtml(v) : ''}
         ${this.chatLogPanel(v ?? null)}
       </div>
@@ -1605,6 +1644,31 @@ export class AppUI {
         window.setTimeout(() => this.render(), 300);
       });
     });
+    // 自家手牌窥视：点座位暗牌只看刚拿到的 1 张（纯本地，无网络，他人不可见）
+    this.root.querySelectorAll<HTMLElement>('.seat-card.self .hand-stack[data-hand-peek]').forEach((el) => {
+      const open = () => {
+        const v = this.view;
+        if (!v) return;
+        const newest = this.newestSelfCard(v);
+        if (!newest) {
+          this.showToast('暂无新手牌');
+          return;
+        }
+        this.handPeekIid = newest.instanceId;
+        this.render();
+      };
+      el.addEventListener('click', open);
+      el.addEventListener('keydown', (ev) => {
+        if ((ev as KeyboardEvent).key === 'Enter' || (ev as KeyboardEvent).key === ' ') {
+          ev.preventDefault();
+          open();
+        }
+      });
+    });
+    this.root.querySelector('#hand-peek-modal[data-hand-peek-close]')?.addEventListener('click', () => {
+      this.handPeekIid = null;
+      this.render();
+    });
     // 6F-4：点座位区外部盖回身份
     this.root.querySelector('.table')?.addEventListener('click', (ev) => {
       if (!this.housePeek) return;
@@ -1792,7 +1856,7 @@ function sfxCn(n: string): string {
  * true 侧：kill（上忍击杀）/ swap（百变者交换）/ reveal（捣蛋鬼公开）；
  * 其余（spare/keep/hide 等）一律 false。新增 options 必须在此登记。
  */
-const CHOOSE_OPTIONAL_TRUE = new Set(['kill', 'swap', 'reveal']);
+const CHOOSE_OPTIONAL_TRUE = new Set(['kill', 'swap', 'reveal', 'play_now']);
 
 function optLabel(o: string, v?: PlayerView | null): string {
   if (o === 'view_honor') return '查看令牌';
