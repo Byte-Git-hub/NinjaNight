@@ -83,7 +83,7 @@ describe('UI assets mapping & card rendering', () => {
     expect(html).toContain('data-tip="');
     // tooltip 含阶段与效果（纯文本，CSS hover/:active 显示）
     expect(html).toContain('密探');
-    expect(html).toContain('查看其 HOUSE 牌');
+    expect(html).toContain('查看其身份牌');
     // mini 小卡同样有名称条与 tooltip
     const mini = renderCardHtml('spy:3', 'inst-tip-2', false, 'mini');
     expect(mini).toContain('class="card-name"');

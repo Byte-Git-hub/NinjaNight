@@ -7,19 +7,19 @@
 
 /** 13 条 unique 效果文案：spy/mystic + 骗徒 6 + BA/shinobi + 反应 2 + 大将军 1 */
 export const CARD_DESCRIPTION_ZH: Record<string, string> = {
-  spy: '查看其 HOUSE 牌',
-  mystic: '查看其 HOUSE + 随机一张其 NINJA；若目标仍有 2 张 NINJA，由施术者随机选 1 张看',
-  shapeshifter: '查看二人 HOUSE，可秘密对调；对方不得再看新 HOUSE',
-  grave_digger: '查看 2 张已弃 NINJA，选 1；可立即打出或面朝上留在自己面前后续使用',
-  troublemaker: '查看其 HOUSE；可选择公开',
+  spy: '查看其身份牌',
+  mystic: '查看其身份牌 + 随机一张其忍者牌；若目标仍有 2 张忍者牌，由施术者随机选 1 张看',
+  shapeshifter: '查看二人身份牌，可秘密对调；对方不得再看新身份牌',
+  grave_digger: '查看 2 张已弃忍者牌，选 1；可立即打出或面朝上留在自己面前后续使用',
+  troublemaker: '查看其身份牌；可选择公开',
   spirit_merchant:
-    '查看目标 HONOR 令牌或 HOUSE；可与之交换 1 枚令牌；可给对方任意己方 1 枚、取回任意对方 1 枚（看过或未看过均可）',
-  thief: '亮出自己的 HOUSE；从枚数更多的玩家处拿走 1 枚令牌',
-  judge: '亮出自己的 HOUSE；杀死该玩家；Mirror Monk 与 Martyr 无效',
-  blind_assassin: '直接杀死（不查看 HOUSE）',
-  shinobi: '查看其 HOUSE，可选择杀死',
-  mirror_monk: '被 Shinobi 或 Blind Assassin 选杀时翻开：反杀对方',
-  martyr: '被 Shinobi 或 Blind Assassin 选杀时翻开：获得 1 枚荣誉令牌',
+    '查看目标荣誉令牌或身份牌；可与之交换 1 枚令牌；可给对方任意己方 1 枚、取回任意对方 1 枚（看过或未看过均可）',
+  thief: '亮出自己的身份牌；从枚数更多的玩家处拿走 1 枚令牌',
+  judge: '亮出自己的身份牌；杀死该玩家；还施者与殉道者无效',
+  blind_assassin: '直接杀死（不查看身份牌）',
+  shinobi: '查看其身份牌，可选择杀死',
+  mirror_monk: '被上忍或刺客选杀时翻开：反杀对方',
+  martyr: '被上忍或刺客选杀时翻开：获得 1 枚荣誉令牌',
   mastermind: '夜晚结束后若仍存活则亮出：己方阵营本轮获胜；若为浪人则本轮无阵营获胜',
 };
 
