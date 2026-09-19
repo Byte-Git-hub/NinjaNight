@@ -235,3 +235,11 @@ function escapeAttr(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
+
+export function getDrawPilePath(): string {
+  return assetUrl('assets/ui/draw-pile.webp');
+}
+
+export function getStampFailedPath(): string {
+  return assetUrl('assets/ui/stamp-failed.webp');
+}
