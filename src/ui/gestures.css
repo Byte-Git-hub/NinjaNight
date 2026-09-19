@@ -26,3 +26,37 @@ body.in-game .seat-card[data-hit-notice]::after { content:attr(data-hit-notice);
 @keyframes moment-victory { 0%{opacity:0} 18%,76%{opacity:1} 100%{opacity:0} }
 @keyframes moment-foil { to{transform:translate(60px,110vh) rotate(var(--foil-turn));opacity:0} }
 @media(prefers-reduced-motion:reduce){.table-moment{display:none!important}}
+
+/* 物品拖拽反馈与跟随预览 */
+.item-drag-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.6));
+  animation: item-drag-pulse 0.8s ease-in-out infinite alternate;
+}
+.item-ghost-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(237, 208, 142, 0.6);
+  border-radius: 999px;
+  padding: 4px 10px 4px 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.item-ghost-inner img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+.item-ghost-count {
+  font-size: 13px;
+  font-weight: 700;
+  color: #edd08e;
+  font-family: var(--font-mono, monospace);
+}
+@keyframes item-drag-pulse {
+  0% { transform: translate3d(var(--item-drag-x), var(--item-drag-y), 0) translate(-50%, -50%) scale(1); }
+  100% { transform: translate3d(var(--item-drag-x), var(--item-drag-y), 0) translate(-50%, -50%) scale(1.08); }
+}
