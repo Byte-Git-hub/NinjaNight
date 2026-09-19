@@ -27,7 +27,14 @@ async function dismissIdentity(page: Page) {
 }
 
 async function rect(locator: Locator) {
-  return locator.boundingBox();
+  // View snapshots replace the arena root asynchronously. Retry briefly so a
+  // resize that lands during a snapshot swap does not sample a detached node.
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const box = await locator.boundingBox().catch(() => null);
+    if (box) return box;
+    await locator.page().waitForTimeout(40);
+  }
+  return null;
 }
 
 async function assertNoSeatOverlap(page: Page, label: string) {
