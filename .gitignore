@@ -19,3 +19,7 @@ logs/
 docs/06G_screenshots/*.png
 docs/06H_screenshots/*.png
 docs/06J_screenshots/mobile-*.png
+# Server-only local secrets. Keep the documented placeholder file tracked.
+.env
+.env.*
+!.env.example

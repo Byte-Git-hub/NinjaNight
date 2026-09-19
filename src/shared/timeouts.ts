@@ -22,6 +22,15 @@ export const COMMAND_RATE_PER_SEC = envInt('NINJA_COMMAND_RATE_PER_SEC', 10);
 export const DISCONNECT_RETAIN_MS = envInt('NINJA_DISCONNECT_RETAIN_MS', 5 * 60_000);
 /** victoryCheck 轮间停留时单人房自动进下一轮的延迟（6E.7；多人房只等房主手动） */
 export const VICTORY_AUTO_ADVANCE_MS = envInt('NINJA_VICTORY_AUTO_MS', 5_000);
+/** Bot 社交旁路：仅调度发言，不延迟游戏 Command。密钥配置只存在服务端。 */
+export const BOT_SOCIAL_ROUND_START_MIN_MS = 2000;
+export const BOT_SOCIAL_ROUND_START_MAX_MS = 5000;
+export const LLM_TIMEOUT_MS = envInt('LLM_TIMEOUT_MS', 8000);
+export const LLM_MAX_CALLS_PER_ROUND = envInt('LLM_MAX_CALLS_PER_ROUND', 3);
+export const LLM_MIN_INTERVAL_MS = envInt('LLM_MIN_INTERVAL_MS', 5000);
+export const LLM_MAX_CONCURRENT = 5;
+export const LLM_FAILURE_THRESHOLD = 3;
+export const LLM_CIRCUIT_BREAK_MS = 300000;
 
 export const IDEMPOTENCY_CACHE_SIZE = 50;
 export const MAX_NICKNAME_LEN = 16;

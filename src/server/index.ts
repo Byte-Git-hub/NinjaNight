@@ -42,6 +42,8 @@ import { DISCONNECT_RETAIN_MS } from '../shared/timeouts';
 import { VICTORY_AUTO_ADVANCE_MS } from '../shared/timeouts';
 import { scheduleBots } from './bot-scheduler';
 import { validateReaction } from './reactions';
+import { createBotSocialService } from './bot/social-service';
+import { normalizeLlmApiKey, readLlmConfig } from './bot/llm-config';
 
 const VALID_TYPES = new Set<CommandType>([
   'draft.pick',
@@ -85,8 +87,30 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   const social = new SocialMarks(io);
 
   const rooms = new Map<string, RoomRuntime>();
+  // Initialized by the social scheduler integration when available; kept optional for local-only mode.
+  let botSocial: {
+    sync?: (room: RoomRuntime) => void;
+    clear?: (room: RoomRuntime) => void;
+    invalidate?: (room: RoomRuntime) => void;
+    close?: () => void;
+  } | undefined;
+  botSocial = createBotSocialService(io, effects);
   const sessionsByToken = new Map<string, SessionInfo>();
   const reactionRates = new Map<string, { start: number; count: number }>();
+
+  function llmConfigStatus(room: RoomRuntime): {
+    ok: true; enabled: boolean; source: 'room' | 'server' | 'none'; hasRoomKey: boolean;
+  } {
+    const config = readLlmConfig();
+    const hasRoomKey = Boolean(room.llmOverrideKey);
+    const hasServerKey = Boolean(config.apiKey);
+    return {
+      ok: true,
+      enabled: config.enabled && (hasRoomKey || hasServerKey),
+      source: hasRoomKey ? 'room' : hasServerKey ? 'server' : 'none',
+      hasRoomKey,
+    };
+  }
 
   function uniqueCode(): string {
     for (let i = 0; i < 50; i += 1) {
@@ -101,6 +125,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     for (const [code, room] of rooms) {
       if (room.isIdleExpired(now, EMPTY_ROOM_TTL_MS, ENDED_ROOM_TTL_MS)) {
         room.sessions.clear();
+        room.clearLlmOverrideKey();
+        botSocial?.clear?.(room);
         social.cleanupRoom(code);
         rooms.delete(code);
       }
@@ -161,6 +187,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   function afterStateChange(room: RoomRuntime): void {
     if (!room.state) return;
     if (room.state.gameOver && !room.endedAt) room.endedAt = Date.now();
+    if (room.state.gameOver) { room.clearLlmOverrideKey(); botSocial?.clear?.(room); }
     const pendingSeats = room.state.pending.map((p) => p.seatId);
     if (process.env.DEBUG_BROADCAST || process.env.NODE_ENV !== 'production') {
       logger.info('broadcast.view', {
@@ -172,6 +199,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     }
     room.broadcastView();
     room.broadcastPresence();
+    if (!room.state.gameOver) botSocial?.sync?.(room);
     if (room.state.pending.length > 0) {
       scheduleWindowTimeout(room);
       scheduleBots(room, handleBotCommand);
@@ -343,7 +371,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         emitError(socket, 'RATE_LIMITED', '建房过于频繁');
         return;
       }
-      const body = (payload ?? {}) as { nickname?: unknown };
+      const body = (payload ?? {}) as { nickname?: unknown; llmApiKey?: unknown };
       const nick = sanitizeNickname(body.nickname, MAX_NICKNAME_LEN);
       if (!nick) {
         emitError(socket, 'INVALID_PAYLOAD', '昵称无效');
@@ -351,6 +379,14 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       }
       const code = uniqueCode();
       const room = new RoomRuntime(io, code);
+      if (typeof body.llmApiKey === 'string' && body.llmApiKey.trim() !== '') {
+        const key = normalizeLlmApiKey(body.llmApiKey);
+        if (!key || key.length > 512) {
+          emitError(socket, 'INVALID_PAYLOAD', 'LLM key 无效');
+          return;
+        }
+        room.setLlmOverrideKey(key);
+      }
       const seatToken = newSeatToken();
       room.lobby.push({
         seatId: 's0',
@@ -374,6 +410,33 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         logger.error('socket.handler_error', { error: e.message, type: 'room.create' });
         emitError(socket, 'INVALID_PAYLOAD', '服务器内部错误');
       }
+    });
+
+    // 房主 LLM key 管理：只保存在 RoomRuntime 内存，响应仅返回状态，不回显 key。
+    socket.on(EV.roomLlmConfig, (payload: unknown, ack?: (result: unknown) => void) => {
+      const body = (payload ?? {}) as { seatToken?: unknown; apiKey?: unknown };
+      const token = typeof body.seatToken === 'string' ? body.seatToken : '';
+      const sess = token ? sessionsByToken.get(token) : undefined;
+      const reply = (r: unknown): void => { if (typeof ack === 'function') ack(r); };
+      if (!sess) { reply({ ok: false, reasonCode: 'UNAUTHORIZED' }); return; }
+      if (!sess.connected || sess.socketId !== socket.id) { reply({ ok: false, reasonCode: 'UNAUTHORIZED' }); return; }
+      const room = rooms.get(sess.roomCode);
+      if (!room) { reply({ ok: false, reasonCode: 'ROOM_NOT_FOUND' }); return; }
+      if (sess.seatId !== room.hostSeatId) { reply({ ok: false, reasonCode: 'NOT_HOST' }); return; }
+      if (room.state?.gameOver) { reply({ ok: false, reasonCode: 'GAME_IN_PROGRESS' }); return; }
+      if (body.apiKey !== undefined && body.apiKey !== null && typeof body.apiKey !== 'string') {
+        reply({ ok: false, reasonCode: 'INVALID_PAYLOAD' }); return;
+      }
+      if (typeof body.apiKey === 'string' && body.apiKey.trim().length > 512) {
+        reply({ ok: false, reasonCode: 'INVALID_PAYLOAD' }); return;
+      }
+      if (body.apiKey !== undefined) {
+        const key = typeof body.apiKey === 'string' ? normalizeLlmApiKey(body.apiKey) : undefined;
+        if (!key) room.clearLlmOverrideKey(); else room.setLlmOverrideKey(key);
+        // social scheduler observes revision and cancels stale in-flight requests.
+        botSocial?.invalidate?.(room);
+      }
+      reply(llmConfigStatus(room));
     });
 
     socket.on(EV.roomJoin, (payload: unknown) => {
@@ -1377,12 +1440,17 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       if (humanSeats.length === 0) {
         room.clearTimer?.();
         room.clearBotTimers?.();
+        room.clearLlmOverrideKey();
+        botSocial?.clear?.(room);
         social.cleanupRoom(room.code);
         rooms.delete(room.code);
         logger.info('room.destroy_empty', { roomCode: room.code, seatId: sess.seatId });
         return;
       }
       if (room.hostSeatId === sess.seatId) {
+        // 房主离开后覆盖 key 不转移给新房主。
+        room.clearLlmOverrideKey();
+        botSocial?.invalidate?.(room);
         room.hostSeatId = humanSeats[0].seatId;
         for (const s of room.lobby) {
           s.isHost = s.seatId === room.hostSeatId;
@@ -1396,6 +1464,10 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       sess.connected = false;
       sess.disconnectedAt = Date.now();
       sess.socketId = '';
+      if (sess.seatId === room.hostSeatId) {
+        room.clearLlmOverrideKey();
+        botSocial?.invalidate?.(room);
+      }
       if (room.state) {
         const seat = room.state.seats.find((s) => s.seatId === sess.seatId);
         if (seat) seat.connected = false;
@@ -1426,6 +1498,10 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     sess.disconnectedAt = Date.now();
     sess.socketId = '';
     if (room) {
+      if (sess.seatId === room.hostSeatId) {
+        room.clearLlmOverrideKey();
+        botSocial?.invalidate?.(room);
+      }
       if (room.started && room.state) {
         const seat = room.state.seats.find((s) => s.seatId === sess.seatId);
         if (seat) seat.connected = false;
@@ -1442,6 +1518,8 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
   function resetRoomToLobby(room: RoomRuntime): void {
     room.clearTimer?.();
     room.clearBotTimers?.();
+    room.clearLlmOverrideKey();
+    botSocial?.clear?.(room);
     voice.cleanupRoom(room.code);
     social.cleanupRoom(room.code);
     room.state = null;
@@ -1501,6 +1579,11 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
     close() {
       clearInterval(cleaner);
       clearInterval(pruneTimer);
+      for (const room of rooms.values()) {
+        room.clearLlmOverrideKey();
+        botSocial?.clear?.(room);
+      }
+      botSocial?.close?.();
       return new Promise<void>((resolve) => {
         io.close();
         httpServer.close(() => resolve());

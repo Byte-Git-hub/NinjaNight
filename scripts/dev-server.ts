@@ -1,3 +1,4 @@
+import '../src/server/load-env.ts';
 import { createGameServer } from '../src/server/index.ts';
 
 const port = Number(process.env.PORT ?? 3000);

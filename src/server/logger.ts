@@ -33,6 +33,17 @@ const SENSITIVE_KEYS = new Set([
   'knownHouses',
   'view',
   'payload',
+  'apiKey',
+  'llmApiKey',
+  'llmOverrideKey',
+  'LLM_API_KEY',
+  'authorization',
+  'Authorization',
+  'prompt',
+  'messages',
+  'output',
+  'content',
+  'reasoning_content',
 ]);
 
 function sanitize(fields: LogFields): Record<string, unknown> {

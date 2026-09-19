@@ -38,6 +38,9 @@ export class RoomRuntime {
   bots = new Set<string>();
   botTimers = new Map<string, NodeJS.Timeout>();
   botScheduledKeys = new Set<string>();
+  /** 房主 LLM key 只存在本运行时，绝不参与视图、presence 或游戏状态。 */
+  llmOverrideKey: string | undefined;
+  llmConfigRevision = 0;
   createdAt = Date.now();
   endedAt: number | null = null;
   emptySince: number | null = Date.now();
@@ -56,6 +59,15 @@ export class RoomRuntime {
 
   setState(state: GameState): void {
     this.state = state;
+  }
+
+  setLlmOverrideKey(key: string | undefined): void {
+    this.llmOverrideKey = key;
+    this.llmConfigRevision += 1;
+  }
+
+  clearLlmOverrideKey(): void {
+    this.setLlmOverrideKey(undefined);
   }
 
   broadcastView(): void {
