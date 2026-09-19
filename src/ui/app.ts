@@ -23,6 +23,7 @@ import { ACHIEVEMENTS, achievementDef } from './achievements/definitions';
 import { buildHighlight, type RoundHighlight } from './highlights/summary';
 import { highlightBannerHtml } from './highlights/banner';
 import { voiceBannerHtml, voiceBarHtml } from './voice/controls';
+import { PhraseTts } from './voice/tts';
 import { EFFECT_ITEMS, QUICK_EMOJIS, getEffectItem } from './effects/items';
 import { EffectLayer } from './effects/particles';
 import { ItemFlightLayer } from './effects/flights';
@@ -154,6 +155,8 @@ export class AppUI {
   private voiceNotice = '';
   private voiceSupported = false;
   private voiceStatus: VoiceClientStatus = 'idle';
+  /** 快捷短语本地播报（默认关闭，不经过服务端） */
+  private phraseTts = new PhraseTts();
   /** 6H-1 音效（本地合成，不经 server） */
   private audio = new AudioManager();
   private lastSoundSeq = 0;
@@ -206,6 +209,14 @@ export class AppUI {
   private static errHooked = false;
   /** 6J 种子机制：房主指定的固定种子原文（重渲染不丢失；?seed=xxx 预填） */
   private pendingSeed: string | null = null;
+  private llmSource: 'room' | 'server' | 'none' = 'none';
+  private llmEnabled = false;
+  private llmHasRoomKey = false;
+  private llmStatusLoaded = false;
+  /** LLM 面板与输入草稿只存在当前页面内存，普通快照重绘不应打断房主操作。 */
+  private llmPanelOpen = false;
+  private llmDraftKey = '';
+  private createLlmDraftKey = '';
 
   public get currentView(): PlayerView | null {
     return this.view;
@@ -259,7 +270,12 @@ export class AppUI {
     });
     this.net.setHandlers({
       onAck: () => {
+        // 创建房间时输入的 key 只用于本次请求，成功后立即清掉页面草稿。
+        this.createLlmDraftKey = '';
         this.socialNet?.sync();
+        this.llmStatusLoaded = false;
+        this.llmEnabled = false;
+        void this.refreshLlmStatus();
         this.render();
       },
       onError: (e) => {
@@ -269,6 +285,7 @@ export class AppUI {
       },
       onPresence: (p) => {
         this.presence = p;
+        if (this.net.isHost && !this.llmStatusLoaded) void this.refreshLlmStatus();
         this.socialNet?.sync();
         this.render();
       },
@@ -278,6 +295,9 @@ export class AppUI {
         this.render();
       },
       onTerminated: () => {
+        this.llmStatusLoaded = false;
+        this.llmHasRoomKey = false;
+        void this.refreshLlmStatus();
         this.view = null;
         this.selected.clear();
         this.resetIdentityUi();
@@ -286,6 +306,7 @@ export class AppUI {
         this.hideHighlight();
         this.audio.stopBgm();
         this.voiceClient?.leave();
+        this.phraseTts.stop();
         this.voiceSeats = [];
         this.resetSocialUi();
         this.lastReject = '';
@@ -389,6 +410,7 @@ export class AppUI {
     // 6G-3 快捷短语：全房 toast 浮层 3s（#toast 在 #ui 之外，无需重渲染）
     snet.onPhraseArrive((p) => {
       this.showPhraseBubble(p);
+      this.phraseTts.speak(p.text);
     });
     // 6G-2：根点击委托（mount 时一次）。render 会重建 #ui 内所有节点，
     // 逐个绑定会被重渲染竞态吞点击；委托挂在常驻 root 上，天然免疫。
@@ -606,6 +628,7 @@ export class AppUI {
   }
 
   private resetSocialUi(): void {
+    this.phraseTts.stop();
     if (this.intelNoticeTimer !== null) clearTimeout(this.intelNoticeTimer);
     this.intelNoticeTimer = null;
     this.root.querySelector('#intel-notice')?.setAttribute('hidden', '');
@@ -665,6 +688,12 @@ export class AppUI {
     }
     const el = this.ui();
     if (!el) return;
+    const oldLlmPanel = this.root.querySelector<HTMLDetailsElement>('.llm-adv');
+    if (oldLlmPanel) this.llmPanelOpen = oldLlmPanel.open;
+    const oldRoomKey = this.root.querySelector<HTMLInputElement>('#llm-room-key');
+    if (oldRoomKey) this.llmDraftKey = oldRoomKey.value;
+    const oldCreateKey = this.root.querySelector<HTMLInputElement>('#llm-api-key');
+    if (oldCreateKey) this.createLlmDraftKey = oldCreateKey.value;
     const isGame = Boolean(this.view);
     if (this.view && this.view.phase !== this.bannerPhase) {
       this.bannerPhase = this.view.phase;
@@ -727,6 +756,7 @@ export class AppUI {
       <section class="panel">
         <h2>加入房间</h2>
         <label>昵称 <input id="nick" maxlength="16" placeholder="1–16 字" /></label>
+        <label>LLM key（可选，仅房主内存保存） <input id="llm-api-key" type="password" maxlength="512" autocomplete="off" placeholder="留空使用服务器默认" value="${escapeHtml(this.createLlmDraftKey)}" /></label>
         <div class="row">
           <button id="btn-create" type="button">创建房间</button>
           <input id="code" maxlength="6" placeholder="6 位房间码" />
@@ -910,6 +940,17 @@ export class AppUI {
       }
     }
     this.lastAnimationSeq = Math.max(this.lastAnimationSeq, ...fresh.map((e) => e.seq ?? 0));
+  }
+
+  private async refreshLlmStatus(): Promise<void> {
+    if (!this.net.isHost) return;
+    const result = await this.net.configureLlm();
+    if (!result.ok) return;
+    this.llmSource = result.source;
+    this.llmEnabled = result.enabled;
+    this.llmHasRoomKey = result.hasRoomKey;
+    this.llmStatusLoaded = true;
+    this.render();
   }
 
   private showIntelNotice(events: GameEvent[], v: PlayerView): void {
@@ -1180,6 +1221,7 @@ export class AppUI {
           ${!v ? this.lobbyControls() : ''}
           
         </section>
+        ${v && this.net.isHost ? `<section class="panel host-llm-panel">${this.llmControls()}</section>` : ''}
         ${v ? this.gamePanels(v, pending ?? null) : ''}
         ${v ? this.identityModalHtml(v) : ''}
         ${v ? this.handPeekModalHtml(v) : ''}
@@ -1206,8 +1248,21 @@ export class AppUI {
       </div>
       ${isHost ? this.kickButtons() : ''}
       <p class="hint">需要 ${allReady ? '可开始' : '4–11 人且全员准备（房主可不准备）'}</p>
+      ${this.voiceBar()}
       ${isHost ? this.seedControls() : ''}
+      ${isHost ? this.llmControls() : ''}
     `;
+  }
+
+  private llmControls(): string {
+    const status = !this.llmEnabled
+      ? this.llmHasRoomKey ? '已保存房主 key，但服务端开关未启用（当前仅本地启发式）' : '未启用（仅本地启发式）'
+      : this.llmHasRoomKey ? '已启用：使用房主 key' : this.llmSource === 'server' ? '已启用：使用服务器默认 key' : '未配置 key（仅本地启发式）';
+    return `<details class="llm-adv"${this.llmPanelOpen ? ' open' : ''}><summary>社交专家 / LLM</summary>
+      <label>房主 key <input id="llm-room-key" type="password" maxlength="512" autocomplete="off" placeholder="输入新 key" value="${escapeHtml(this.llmDraftKey)}" /></label>
+      <div class="row"><button id="btn-llm-save" type="button">保存 key</button><button id="btn-llm-clear" type="button" class="muted">撤回房主 key</button></div>
+      <span class="seed-hint">状态：${status}。key 仅存于本房间内存，不会回显或写入浏览器。</span>
+    </details>`;
   }
 
   /**
@@ -1250,6 +1305,8 @@ export class AppUI {
       muted: this.voiceClient.muted,
       listening: this.voiceClient.listening,
       supported: this.voiceSupported,
+      speechEnabled: this.phraseTts.enabled,
+      speechSupported: this.phraseTts.supported,
     });
   }
 
@@ -1535,7 +1592,11 @@ export class AppUI {
     const $ = (sel: string) => this.root.querySelector(sel);
     $('#btn-create')?.addEventListener('click', () => {
       const nick = (this.root.querySelector('#nick') as HTMLInputElement)?.value ?? '';
-      this.net.createRoom(nick);
+      const key = (this.root.querySelector('#llm-api-key') as HTMLInputElement)?.value ?? '';
+      this.net.createRoom(nick, key || undefined);
+    });
+    $('#llm-api-key')?.addEventListener('input', (e) => {
+      this.createLlmDraftKey = (e.target as HTMLInputElement).value;
     });
     $('#btn-join')?.addEventListener('click', () => {
       const nick = (this.root.querySelector('#nick') as HTMLInputElement)?.value ?? '';
@@ -1551,6 +1612,27 @@ export class AppUI {
     });
     $('#seed-input')?.addEventListener('input', (e) => {
       this.pendingSeed = (e.target as HTMLInputElement).value;
+    });
+    $('#btn-llm-save')?.addEventListener('click', () => {
+      const key = this.llmDraftKey.trim();
+      if (!key) { this.showToast('请输入新的 key；如需撤回请点击“撤回房主 key”'); return; }
+      void this.net.configureLlm(key).then((r) => {
+        if (r.ok) {
+          this.llmSource = r.source; this.llmEnabled = r.enabled; this.llmHasRoomKey = r.hasRoomKey; this.llmStatusLoaded = true;
+          this.llmDraftKey = ''; this.llmPanelOpen = true; this.showToast('LLM 配置已保存'); this.render();
+        } else this.showToast(`LLM 配置失败：${r.reasonCode}`);
+      });
+    });
+    $('#btn-llm-clear')?.addEventListener('click', () => {
+      void this.net.configureLlm(null).then((r) => {
+        if (r.ok) {
+          this.llmSource = r.source; this.llmEnabled = r.enabled; this.llmHasRoomKey = r.hasRoomKey; this.llmStatusLoaded = true;
+          this.llmDraftKey = ''; this.llmPanelOpen = true; this.showToast('房主 key 已撤回'); this.render();
+        } else this.showToast(`撤回失败：${r.reasonCode}`);
+      });
+    });
+    $('#llm-room-key')?.addEventListener('input', (e) => {
+      this.llmDraftKey = (e.target as HTMLInputElement).value;
     });
     $('#btn-add-bot')?.addEventListener('click', () => this.net.addBot());
     $('#btn-remove-bot')?.addEventListener('click', () => this.net.removeBot());
@@ -1592,6 +1674,10 @@ export class AppUI {
         vc.setListening(!vc.listening);
         this.render();
       }
+    });
+    $('#btn-voice-speech')?.addEventListener('click', () => {
+      this.phraseTts.toggle();
+      this.render();
     });
     // 6G-2 点击走根委托（见 mount 内 onRootClick），此处不逐个绑定。
     // 6F-4：身份弹窗点击关闭（backdrop 穿透不挡 e2e/游戏点击）

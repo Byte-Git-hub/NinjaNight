@@ -22,12 +22,13 @@ updated: 2026-09-18
 
 | 事件 | payload | 响应 | 说明 |
 |---|---|---|---|
-| `room.create` | `{ nickname }` | ack `{ roomCode, seatToken, seatId }` | 创建房间，创建者为房主 |
+| `room.create` | `{ nickname, llmApiKey? }` | ack `{ roomCode, seatToken, seatId }` | 创建房间，创建者为房主；key 只存服务端内存 |
 | `room.join` | `{ roomCode, nickname }` | ack `{ seatToken, seatId }` | 加入已有房间 |
 | `room.leave` | `{ seatToken }` | ack | 离开/断开座位 |
 | `room.ready` | `{ seatToken, ready }` | presence | 大厅准备 |
 | `room.start` | `{ seatToken }` | 开局事件 | 仅房主；≥4 人且全员 ready |
 | `room.forceAdvance` | `{ seatToken }` | 超时默认 | 仅房主；跳过当前窗口 |
+| `room.llmConfig` | `{ seatToken, apiKey? }` | ack 状态 | 仅房主；省略查询，`null`/空字符串撤回 |
 
 ### 服务端 → 客户端（房间）
 
@@ -199,6 +200,10 @@ UNKNOWN_COMMAND
 - 昵称：长度 1–16，纯文本，去除控制字符。  
 - 聊天：长度 ≤200，纯文本，不做 HTML。  
 - payload：手写校验，格式错误 → `INVALID_PAYLOAD`。  
+
+## 房主 LLM 配置（`room.llmConfig`）
+
+房主可在创建房间时随 `room.create` 传入可选 `llmApiKey`，或在大厅通过 `room.llmConfig` 管理覆盖 key。请求格式为 `{ seatToken, apiKey? }`：省略 `apiKey` 查询状态，字符串保存/替换，`null` 或空字符串撤回。仅房主可调用；非房主返回 `NOT_HOST`。响应只包含 `{ ok, enabled, source: 'room'|'server'|'none', hasRoomKey }`，不回显 key。key 只在服务端房间内存保存，房间结束、重置、销毁时清除，且不进入 presence、view、日志或 stateHash。
 
 ---
 

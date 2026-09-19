@@ -10,6 +10,7 @@ import {
   type ReactionEventPayload,
   type ReactionKind,
   type ReactionEmojiId,
+  type RoomLlmConfigResult,
 } from '../shared/protocol';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
@@ -94,7 +95,10 @@ export class GameNet {
       }
       this.handlers.onError?.(p);
     });
-    this.socket.on(OUT.roomPresence, (p: PresencePayload) => this.handlers.onPresence?.(p));
+    this.socket.on(OUT.roomPresence, (p: PresencePayload) => {
+      this.isHost = this.seatId === p.hostSeatId;
+      this.handlers.onPresence?.(p);
+    });
     this.socket.on(OUT.roomStarted, (p: { roomCode: string }) => this.handlers.onStarted?.(p));
     this.socket.on(OUT.roomTerminated, (p: { roomCode: string }) => this.handlers.onTerminated?.(p));
     this.socket.on(OUT.viewSnapshot, (v: PlayerView) => {
@@ -187,8 +191,23 @@ export class GameNet {
     this.handlers.onStatus?.(s);
   }
 
-  createRoom(nickname: string): void {
-    this.socket?.emit(EV.roomCreate, { nickname });
+  createRoom(nickname: string, llmApiKey?: string): void {
+    this.socket?.emit(EV.roomCreate, { nickname, ...(llmApiKey ? { llmApiKey } : {}) });
+  }
+
+  configureLlm(apiKey?: string | null): Promise<RoomLlmConfigResult> {
+    const socket = this.socket;
+    if (!socket?.connected || !this.seatToken) {
+      return Promise.resolve({ ok: false, reasonCode: 'UNAUTHORIZED' });
+    }
+    return new Promise((resolve) => {
+      socket.timeout(5000).emit(EV.roomLlmConfig, {
+        seatToken: this.seatToken,
+        ...(apiKey === undefined ? {} : { apiKey }),
+      }, (error: Error | null, result: RoomLlmConfigResult) => {
+        resolve(error ? { ok: false, reasonCode: 'INVALID_PAYLOAD' } : result);
+      });
+    });
   }
 
   joinRoom(roomCode: string, nickname: string): void {

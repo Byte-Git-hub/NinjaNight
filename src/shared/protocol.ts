@@ -60,6 +60,7 @@ export const EV = {
   roomEnd: 'room.end',
   roomAddBot: 'room.addBot',
   roomRemoveBot: 'room.removeBot',
+  roomLlmConfig: 'room.llmConfig',
   commandSend: 'command.send',
   chatSend: 'chat.send',
   // 6G-1 语音信令（复用 Socket.IO；音频字节只走 mediasoup worker，不经游戏状态机）
@@ -116,6 +117,19 @@ export interface RoomAckPayload {
   seatId: string;
   isHost: boolean;
 }
+
+/** 房主专属配置：省略 apiKey 查询，null/空字符串撤回，只在服务端内存保存。 */
+export interface RoomLlmConfigPayload {
+  seatToken: string;
+  apiKey?: string | null;
+}
+
+export type RoomLlmConfigResult = {
+  ok: true;
+  enabled: boolean;
+  source: 'room' | 'server' | 'none';
+  hasRoomKey: boolean;
+} | { ok: false; reasonCode: ReasonCode };
 
 export interface PresenceSeat {
   seatId: string;

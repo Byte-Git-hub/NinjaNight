@@ -427,6 +427,8 @@ body.in-game .central .card.mini {
   box-shadow: 0 9px 26px #000b, 0 0 18px #c9a85c22;
   font: 600 13px/1.35 'Noto Serif SC', serif;
   letter-spacing: .03em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   pointer-events: none;
   transform: translate(-50%, -100%);
   animation: phrase-bubble-in 3.2s ease-out both;
@@ -775,7 +777,7 @@ body:not(.in-game) .seats-panel .table-ring .token-stack img {
  body.in-game .seat-head {min-height:20px;font-size:9px;padding:3px 3px 0}
  body.in-game .seat-body {padding:0 3px 4px;gap:3px;align-items:center}
  body.in-game .house-mini,body.in-game .flip-wrap {width:36px;height:52px;flex:none}
- body.in-game .hand-stack img {width:24px;height:35px}
+  body.in-game .hand-stack img {width:24px;height:35px}
   body.in-game .hand-stack.fan { --fan-dx: 3px; width: 24px; }
   body.in-game .hand-stack.fan img { width: calc(24px - 2 * var(--fan-dx)); }
  body.in-game .token-stack img {width:20px;height:22px}
