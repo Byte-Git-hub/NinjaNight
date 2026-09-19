@@ -1,7 +1,7 @@
 /** Pointer-driven card drag interaction for the single-screen table.
  *
- * The controller intentionally owns only interaction state.  Rendering and
- * game decisions remain in app.ts through the onDrop callback.  The source
+ * The controller intentionally owns only interaction state. Rendering and
+ * game decisions remain in app.ts through the onDrop callback. The source
  * card may be replaced during a snapshot render; a detached ghost and the
  * original HTML/rect keep the gesture stable until pointerup.
  */
@@ -61,6 +61,13 @@ export class CardDragController {
     if (!this.options.canStart(target)) return;
     const iid = target.dataset.iid;
     if (!iid) return;
+
+    try {
+      target.setPointerCapture(event.pointerId);
+    } catch {
+      // Ignored if target cannot capture pointer
+    }
+
     this.pending = {
       pointerId: event.pointerId,
       source: target,
@@ -88,12 +95,18 @@ export class CardDragController {
 
   private readonly onPointerUp = (event: PointerEvent): void => {
     if (this.pending && this.pending.pointerId === event.pointerId) {
+      try {
+        this.pending.source.releasePointerCapture(event.pointerId);
+      } catch {}
       this.pending = null;
       return;
     }
     const active = this.active;
     if (!active || active.pointerId !== event.pointerId) return;
     event.preventDefault();
+    try {
+      active.source.releasePointerCapture(event.pointerId);
+    } catch {}
     const target = active.target;
     // A drag gesture must never fall through to the card's click handler,
     // including when it ended over empty table space.
@@ -116,10 +129,16 @@ export class CardDragController {
    * unlike pointerup it must never submit a drop payload. */
   private readonly onPointerCancel = (event: PointerEvent): void => {
     if (this.pending?.pointerId === event.pointerId) {
+      try {
+        this.pending.source.releasePointerCapture(event.pointerId);
+      } catch {}
       this.pending = null;
       return;
     }
     if (this.active?.pointerId !== event.pointerId) return;
+    try {
+      this.active.source.releasePointerCapture(event.pointerId);
+    } catch {}
     this.suppressNextClick = true;
     this.finishDrag();
   };
@@ -127,7 +146,7 @@ export class CardDragController {
   /** Cards contain images and some browsers start native HTML drag before the
    * pointer has crossed our threshold. Keep the gesture in this controller. */
   private readonly onNativeDragStart = (event: DragEvent): void => {
-    if (this.pending || this.active) event.preventDefault();
+    event.preventDefault();
   };
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
@@ -163,6 +182,16 @@ export class CardDragController {
   }
 
   cancel(): void {
+    if (this.pending) {
+      try {
+        this.pending.source.releasePointerCapture(this.pending.pointerId);
+      } catch {}
+    }
+    if (this.active) {
+      try {
+        this.active.source.releasePointerCapture(this.active.pointerId);
+      } catch {}
+    }
     this.pending = null;
     this.finishDrag();
   }
@@ -240,7 +269,10 @@ export class CardDragController {
 
   private finishDrag(): void {
     const active = this.active;
-    if (!active) return;
+    if (!active) {
+      this.root.classList.remove('dragging-card');
+      return;
+    }
     active.ghost?.remove();
     active.target?.classList.remove('drag-target');
     active.source.classList.remove('drag-source');
