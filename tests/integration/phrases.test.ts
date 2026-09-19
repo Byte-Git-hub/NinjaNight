@@ -1,5 +1,5 @@
 /**
- * 6G-3 快捷短语集成测试：短语表定稿 15 条 + 服务端 validatePhrase 校验。
+ * 6G-3 快捷短语集成测试：短语表定稿 21 条 + 服务端 validatePhrase 校验。
  * 广播链路由 e2e 覆盖；服务端不存储（无状态可断言）。
  */
 import { describe, expect, it } from 'vitest';
@@ -7,8 +7,8 @@ import { PHRASES, normalizePhraseId } from '../../src/data/phrases';
 import { validatePhrase } from '../../src/server/social';
 
 describe('PHRASES 定稿', () => {
-  it('共 15 条，与需求文案逐字一致', () => {
-    expect(PHRASES).toHaveLength(15);
+  it('共 21 条，与需求文案逐字一致', () => {
+    expect(PHRASES).toHaveLength(21);
     expect(PHRASES[0]).toBe('快点啊，鸡都要叫了');
     expect(PHRASES[1]).toBe('不要走，决战到天亮');
     expect(PHRASES[2]).toBe('你的忍术，是百变者教的吧');
@@ -24,23 +24,31 @@ describe('PHRASES 定稿', () => {
     expect(PHRASES[12]).toBe('谁在骗我，我已经知道了');
     expect(PHRASES[13]).toBe('上忍已出，各位小心');
     expect(PHRASES[14]).toBe('这局我必活到最后');
+    expect(PHRASES[15]).toBe('我是红方老大');
+    expect(PHRASES[16]).toBe('我是蓝方老大');
+    expect(PHRASES[17]).toBe('我才是红方老大');
+    expect(PHRASES[18]).toBe('我才是蓝方老大');
+    expect(PHRASES[19]).toBe('我是浪人');
+    expect(PHRASES[20]).toBe('我才是浪人');
   });
 
   it('无空串、无重复', () => {
-    expect(new Set(PHRASES).size).toBe(15);
+    expect(new Set(PHRASES).size).toBe(21);
     for (const t of PHRASES) expect(t.length).toBeGreaterThan(0);
   });
 });
 
 describe('validatePhrase', () => {
-  it('0..14 返回对应文本', () => {
+  it('0..20 返回对应文本', () => {
     expect(validatePhrase(0)).toBe('快点啊，鸡都要叫了');
     expect(validatePhrase(14)).toBe('这局我必活到最后');
+    expect(validatePhrase(15)).toBe('我是红方老大');
+    expect(validatePhrase(20)).toBe('我才是浪人');
   });
 
   it('越界/非整数/非数字一律 null（整条拒收）', () => {
     expect(validatePhrase(-1)).toBeNull();
-    expect(validatePhrase(15)).toBeNull();
+    expect(validatePhrase(21)).toBeNull();
     expect(validatePhrase(1.5)).toBeNull();
     expect(validatePhrase('3')).toBeNull();
     expect(validatePhrase(undefined)).toBeNull();
@@ -50,6 +58,8 @@ describe('validatePhrase', () => {
 
   it('normalizePhraseId 同步', () => {
     expect(normalizePhraseId(7)).toBe(7);
+    expect(normalizePhraseId(20)).toBe(20);
+    expect(normalizePhraseId(21)).toBeNull();
     expect(normalizePhraseId(99)).toBeNull();
   });
 });

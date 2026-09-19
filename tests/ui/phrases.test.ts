@@ -1,28 +1,32 @@
 /**
- * 6G-3 快捷短语面板纯函数单测（node 环境，无 DOM）：15 按钮 + toast 文案。
+ * 6G-3 快捷短语 UI 纯函数测试：渲染 HTML 结构与选择器契约。
+ * 折叠面板与发送事件由 e2e 覆盖。
  */
 import { describe, expect, it } from 'vitest';
 import { phrasesPanelHtml, phraseToastText } from '../../src/ui/social/phrases';
+import { PHRASES } from '../../src/data/phrases';
 
 describe('phrasesPanelHtml', () => {
-  it('渲染 15 个 data-phrase 按钮（0..14），折叠面板不碰已有选择器', () => {
+  it('渲染 21 个 data-phrase 按钮（0..20），折叠面板不碰已有选择器', () => {
     const html = phrasesPanelHtml();
     expect(html).toContain('id="phrase-panel"');
-    for (let i = 0; i < 15; i += 1) {
+    expect(html).toContain('class="panel phrases collapsed-panel"');
+    expect(html).toContain('<summary>快捷短语</summary>');
+    for (let i = 0; i < 21; i++) {
       expect(html).toContain(`data-phrase="${i}"`);
     }
-    expect(html).not.toContain('data-phrase="15"');
+    expect(html).not.toContain('data-phrase="21"');
   });
 
   it('按钮文案含首尾短语', () => {
     const html = phrasesPanelHtml();
-    expect(html).toContain('快点啊，鸡都要叫了');
-    expect(html).toContain('这局我必活到最后');
+    expect(html).toContain(PHRASES[0]);
+    expect(html).toContain(PHRASES[PHRASES.length - 1]);
   });
 });
 
 describe('phraseToastText', () => {
   it('「昵称：短语」格式', () => {
-    expect(phraseToastText('甲', '快点啊，鸡都要叫了')).toBe('甲：快点啊，鸡都要叫了');
+    expect(phraseToastText('Alice', '不要走，决战到天亮')).toBe('Alice：不要走，决战到天亮');
   });
 });
