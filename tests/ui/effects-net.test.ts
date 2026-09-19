@@ -104,6 +104,15 @@ describe('EffectNet batching', () => {
     expect((total[0] as { count?: number }).count).toBe(11);
   });
 
+  it('校验 count 参数传递：支持 100 / 1000 数量无损透传并正确压缩入队', () => {
+    const { fx, emitted } = makeNet();
+    fx.attach();
+    expect(fx.send('s1', 'egg', 100)).toBe('sent');
+    vi.advanceTimersByTime(50);
+    let payload = emitted[0]!.payload as { items: Array<{ itemId: string; count?: number }> };
+    expect(payload.items[0]?.count).toBe(100);
+  });
+
   it('单次可发送 1000 个粒子，服务端只收到一条压缩记录', () => {
     const { fx, emitted } = makeNet();
     fx.attach();
