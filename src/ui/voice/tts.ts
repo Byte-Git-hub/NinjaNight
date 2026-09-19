@@ -1,9 +1,13 @@
 /**
  * 快捷短语的本地语音播报。
  *
- * 只使用浏览器 Web Speech API，不把文本发送到服务端，也不持久化内容。
+ * 优先播放预生成的 mimo TTS 音频文件（public/assets/audio/phrases/phrase_{id}.mp3）。
+ * 兜底使用浏览器 Web Speech API，不把文本发送到服务端，也不持久化内容。
  * 默认关闭；用户打开后仅保存在当前浏览器的偏好中。
  */
+
+import { PHRASES } from '../../data/phrases';
+import { assetUrl } from '../assets';
 
 export const TTS_SETTINGS_KEY = 'ninja-night:phrase-tts';
 
@@ -72,6 +76,7 @@ function defaultUtterance(): UtteranceCtor | null {
 
 /** 判断当前浏览器是否能播报短语。可在 SSR / 测试环境安全调用。 */
 export function isPhraseTtsSupported(): boolean {
+  if (typeof Audio !== 'undefined') return true;
   return defaultSynthesis() !== null && defaultUtterance() !== null;
 }
 
@@ -82,6 +87,7 @@ export class PhraseTts {
   private enabledState: boolean;
   private lastText = '';
   private lastAt = 0;
+  private activeAudio: HTMLAudioElement | null = null;
 
   constructor(
     storage: StorageLike | null = browserStorage(),
@@ -95,7 +101,7 @@ export class PhraseTts {
   }
 
   get supported(): boolean {
-    return this.synthesis !== null && this.utteranceCtor !== null;
+    return typeof Audio !== 'undefined' || (this.synthesis !== null && this.utteranceCtor !== null);
   }
 
   get enabled(): boolean {
@@ -115,22 +121,49 @@ export class PhraseTts {
 
   stop(): void {
     try {
+      if (this.activeAudio) {
+        this.activeAudio.pause();
+        this.activeAudio = null;
+      }
       this.synthesis?.cancel();
     } catch {
       /* 播放器异常不能影响游戏 */
     }
   }
 
-  /** 播报一条短语；新消息会替换排队中的旧消息，避免连发堆积。 */
+  /** 播报一条短语；优先播放静态 mimo TTS 音频，失败或无对应音频时回退 Web Speech */
   speak(text: string): void {
-    if (!this.enabledState || !this.synthesis || !this.utteranceCtor) return;
-    const clean = text.replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (!this.enabledState) return;
+    const clean = text.replace(/\\s+/g, ' ').trim().slice(0, 80);
     if (!clean) return;
     const now = Date.now();
-    // 同一广播可能由重连或多次渲染重复抵达，350ms 内不重复播报。
+    // 同一广播 350ms 内不重复播报
     if (clean === this.lastText && now - this.lastAt < 350) return;
     this.lastText = clean;
     this.lastAt = now;
+
+    // 1. 查找静态预生成音频
+    const phraseIdx = PHRASES.findIndex((p) => p === clean);
+    if (phraseIdx >= 0 && typeof Audio !== 'undefined') {
+      try {
+        if (this.activeAudio) {
+          this.activeAudio.pause();
+        }
+        const audio = new Audio(assetUrl("assets/audio/phrases/phrase_" + phraseIdx + ".mp3"));
+        audio.play().catch(() => {
+          this.fallbackSpeak(clean);
+        });
+        return;
+      } catch {
+        // 回退到 Web Speech
+      }
+    }
+
+    this.fallbackSpeak(clean);
+  }
+
+  private fallbackSpeak(clean: string): void {
+    if (!this.synthesis || !this.utteranceCtor) return;
     try {
       const utterance = new this.utteranceCtor(clean);
       utterance.lang = 'zh-CN';
