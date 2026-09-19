@@ -137,7 +137,21 @@ function prefersReducedMotion(): boolean {
  * It is intentionally independent of app.ts render cycles: mounting once is
  * enough and no render operation can remove an in-flight animation.
  */
+interface DropperStream {
+  from: FlightPoint;
+  to: FlightPoint;
+  itemId: string;
+  targetSeatId?: string;
+  onHit?: (seatId: string | undefined, strength: number) => void;
+  pendingCount: number;
+  lastEmitTs: number;
+  src: string;
+  color: string;
+  color2: string;
+}
+
 export class ItemFlightLayer {
+  private readonly dropperStreams: DropperStream[] = [];
   private readonly canvas: HTMLCanvasElement;
   private readonly maxFlights: number;
   private readonly flights: Flight[] = [];
@@ -210,6 +224,12 @@ export class ItemFlightLayer {
   }
 
   /** Current counters, exposed for diagnostics and performance probes. */
+  getPoolTotal(): number {
+    const inFlight = this.flights.reduce((n, f) => n + (f.active ? 1 : 0), 0);
+    const queued = this.dropperStreams.reduce((n, s) => n + s.pendingCount, 0);
+    return inFlight + queued;
+  }
+
   getMetrics(): ItemFlightMetrics {
     return {
       activeFlights: this.flights.reduce((n, f) => n + (f.active ? 1 : 0), 0),
@@ -230,57 +250,58 @@ export class ItemFlightLayer {
   /** Launch one or many item projectiles along a quadratic Bezier arc. */
   launch(event: ItemFlightLaunch): void {
     if (this.destroyed) return;
-    const from = center(event.from);
-    const to = center(event.to);
-    const count = Math.max(1, Math.min(this.maxFlights, Math.floor(event.count ?? 1)));
+    const requested = Math.max(1, Math.floor(event.count ?? 1));
+    const currentPool = this.getPoolTotal();
+    const capacity = this.maxFlights; // 2000
+
+    // 到上限后再扔不报错，但实际不反应
+    if (currentPool >= capacity) {
+      return;
+    }
+
+    // 新加入的只能加到池子上限 2000（例如 1999 时加 1000 个，刷新到 2000）
+    const count = Math.min(requested, capacity - currentPool);
     this.launchedCount += count;
+
     if (this.reducedMotion) {
-      for (let i = 0; i < count; i += 1) this.emitHit(event.targetSeatId, Math.min(4, 1 + Math.floor(i / 4)), event.onHit);
+      for (let i = 0; i < count; i += 1) {
+        this.emitHit(event.targetSeatId, Math.min(4, 1 + Math.floor(i / 4)), event.onHit);
+      }
       this.updateDebugAttrs();
       return;
     }
+
+    const from = center(event.from);
+    const to = center(event.to);
     const item = getEffectItem(event.itemId);
     const src = item?.img ?? getItemPath(event.itemId);
     const color = item?.color ?? '#fde68a';
     const color2 = item?.color2 ?? '#f59e0b';
     const t0 = nowMs();
-    // A cap prevents count=2,000 from creating a 160-second queue while
-    // retaining the requested 80 ms rhythm for the first 15 projectiles.
-    for (let i = 0; i < count; i += 1) {
-      const slot = this.takeFlightSlot();
-      if (!slot) {
-        this.dropped += 1;
-        continue;
-      }
-      const ox = random(-15, 15);
-      const oy = random(-15, 15);
-      const sx = from.x + ox;
-      const sy = from.y + oy;
-      const ex = to.x + random(-15, 15);
-      const ey = to.y + random(-15, 15);
-      const dx = ex - sx;
-      const dy = ey - sy;
-      const distance = Math.hypot(dx, dy);
-      const arc = Math.max(55, Math.min(260, distance * 0.32 + random(-16, 16)));
-      slot.active = true;
-      slot.startAt = t0 + Math.min(i * STAGGER_MS, MAX_STAGGER_MS);
-      slot.duration = DEFAULT_DURATION_MS + random(-45, 80);
-      slot.x0 = sx;
-      slot.y0 = sy;
-      slot.cx = (sx + ex) / 2;
-      slot.cy = (sy + ey) / 2 - arc;
-      slot.x1 = ex;
-      slot.y1 = ey;
-      slot.angle = Math.atan2(dy, dx);
-      slot.spin = random(-Math.PI * 2, Math.PI * 2);
-      slot.size = Math.max(22, Math.min(46, 26 + distance / 22));
-      slot.src = src;
-      slot.color = color;
-      slot.color2 = color2;
-      slot.targetSeatId = event.targetSeatId;
-      slot.onHit = event.onHit;
-      slot.hit = false;
+
+    // 针对大数量：部分即刻发射，其余推入持续降落流
+    const immediateCount = Math.min(count, count > 20 ? 12 : count);
+    const queuedCount = count - immediateCount;
+
+    for (let i = 0; i < immediateCount; i += 1) {
+      this.spawnSingleFlight(from, to, src, color, color2, t0 + i * 28, event.targetSeatId, event.onHit);
     }
+
+    if (queuedCount > 0) {
+      this.dropperStreams.push({
+        from,
+        to,
+        itemId: event.itemId,
+        targetSeatId: event.targetSeatId,
+        onHit: event.onHit,
+        pendingCount: queuedCount,
+        lastEmitTs: t0,
+        src,
+        color,
+        color2,
+      });
+    }
+
     this.kick();
   }
 
@@ -311,6 +332,7 @@ export class ItemFlightLayer {
 
   /** Cancel all projectiles and clear the pixel buffer. */
   clear(): void {
+    this.dropperStreams.length = 0;
     for (const f of this.flights) f.active = false;
     for (const s of this.sparks) s.active = false;
     for (const p of this.emojiPops) p.active = false;
@@ -335,7 +357,10 @@ export class ItemFlightLayer {
   }
 
   private get reducedMotion(): boolean {
-    return this.reducedMotionOverride === true || prefersReducedMotion();
+    if (typeof this.reducedMotionOverride === 'boolean') {
+      return this.reducedMotionOverride;
+    }
+    return prefersReducedMotion();
   }
 
   private resize(): void {
@@ -361,6 +386,52 @@ export class ItemFlightLayer {
     image.src = src;
     this.images.set(src, image);
     return image;
+  }
+
+  private spawnSingleFlight(
+    from: FlightPoint,
+    to: FlightPoint,
+    src: string,
+    color: string,
+    color2: string,
+    startAt: number,
+    targetSeatId?: string,
+    onHit?: (seatId: string | undefined, strength: number) => void
+  ): boolean {
+    const slot = this.takeFlightSlot();
+    if (!slot) {
+      this.dropped += 1;
+      return false;
+    }
+    const ox = random(-15, 15);
+    const oy = random(-15, 15);
+    const sx = from.x + ox;
+    const sy = from.y + oy;
+    const ex = to.x + random(-15, 15);
+    const ey = to.y + random(-15, 15);
+    const dx = ex - sx;
+    const dy = ey - sy;
+    const distance = Math.hypot(dx, dy);
+    const arc = Math.max(55, Math.min(260, distance * 0.32 + random(-16, 16)));
+    slot.active = true;
+    slot.startAt = startAt;
+    slot.duration = DEFAULT_DURATION_MS + random(-45, 80);
+    slot.x0 = sx;
+    slot.y0 = sy;
+    slot.cx = (sx + ex) / 2;
+    slot.cy = (sy + ey) / 2 - arc;
+    slot.x1 = ex;
+    slot.y1 = ey;
+    slot.angle = Math.atan2(dy, dx);
+    slot.spin = random(-Math.PI * 2, Math.PI * 2);
+    slot.size = Math.max(22, Math.min(46, 26 + distance / 22));
+    slot.src = src;
+    slot.color = color;
+    slot.color2 = color2;
+    slot.targetSeatId = targetSeatId;
+    slot.onHit = onHit;
+    slot.hit = false;
+    return true;
   }
 
   private takeFlightSlot(): Flight | undefined {
@@ -442,6 +513,30 @@ export class ItemFlightLayer {
 
   private update(dt: number, timestamp: number): void {
     const dtSeconds = dt / 1000;
+
+    // Drain queued dropper pool items steadily
+    if (this.dropperStreams.length > 0) {
+      const emitIntervalMs = 24; // ~40 drops/second stream
+      for (let sIdx = this.dropperStreams.length - 1; sIdx >= 0; sIdx -= 1) {
+        const stream = this.dropperStreams[sIdx];
+        if (!stream) continue;
+        const elapsed = timestamp - stream.lastEmitTs;
+        const dropsToSpawn = Math.min(stream.pendingCount, Math.max(1, Math.floor(elapsed / emitIntervalMs)));
+        if (dropsToSpawn > 0) {
+          let spawned = 0;
+          for (let i = 0; i < dropsToSpawn; i += 1) {
+            if (this.spawnSingleFlight(stream.from, stream.to, stream.src, stream.color, stream.color2, timestamp + i * 8, stream.targetSeatId, stream.onHit)) {
+              spawned += 1;
+            }
+          }
+          stream.pendingCount -= spawned;
+          stream.lastEmitTs = timestamp;
+          if (stream.pendingCount <= 0) {
+            this.dropperStreams.splice(sIdx, 1);
+          }
+        }
+      }
+    }
     let activeFlights = 0;
     for (const f of this.flights) {
       if (!f.active) continue;

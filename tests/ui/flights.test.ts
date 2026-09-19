@@ -28,6 +28,8 @@ function installDomMock(): { canvas: FakeCanvas; host: { appendChild: (el: FakeC
   };
   const host = { appendChild: (el: FakeCanvas) => { el.isConnected = true; } };
   vi.stubGlobal('document', { createElement: () => canvas });
+  vi.stubGlobal('requestAnimationFrame', (cb: (ts: number) => void) => setTimeout(() => cb(Date.now()), 16));
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
   vi.stubGlobal('window', {
     innerWidth: 1280,
     innerHeight: 720,
@@ -66,5 +68,24 @@ describe('ItemFlightLayer', () => {
     expect(layer.getMetrics().emojiLaunched).toBe(9);
     layer.clear();
     expect(layer.getMetrics().activeEmojiPops).toBe(0);
+  });
+
+  it('handles 2000 capacity dropper pool smoothly without throwing', () => {
+    const { host } = installDomMock();
+    const layer = new ItemFlightLayer({ maxFlights: 2000, prefersReducedMotion: false });
+    layer.mount(host as unknown as HTMLElement);
+    layer.launch({ from: { x: 10, y: 10 }, to: { x: 100, y: 100 }, itemId: 'egg', count: 1999 });
+    expect(layer.getPoolTotal()).toBe(1999);
+
+    // 1999 + 1000 => top up to 2000
+    layer.launch({ from: { x: 10, y: 10 }, to: { x: 100, y: 100 }, itemId: 'egg', count: 1000 });
+    expect(layer.getPoolTotal()).toBe(2000);
+
+    // Further launch at capacity does not throw
+    expect(() => {
+      layer.launch({ from: { x: 10, y: 10 }, to: { x: 100, y: 100 }, itemId: 'egg', count: 100 });
+    }).not.toThrow();
+    expect(layer.getPoolTotal()).toBe(2000);
+    layer.destroy();
   });
 });
