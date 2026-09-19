@@ -1,27 +1,26 @@
-/**
- * 6G-3 快捷短语 UI 纯函数测试：渲染 HTML 结构与选择器契约。
- * 折叠面板与发送事件由 e2e 覆盖。
- */
 import { describe, expect, it } from 'vitest';
 import { phrasesPanelHtml, phraseToastText } from '../../src/ui/social/phrases';
 import { PHRASES } from '../../src/data/phrases';
 
 describe('phrasesPanelHtml', () => {
-  it('渲染 21 个 data-phrase 按钮（0..20），折叠面板不碰已有选择器', () => {
-    const html = phrasesPanelHtml();
+  it('渲染分页 3x3 结构，首页包含 9 个按钮，含翻页按钮与指示器', () => {
+    const html = phrasesPanelHtml(0);
     expect(html).toContain('id="phrase-panel"');
     expect(html).toContain('class="panel phrases collapsed-panel"');
     expect(html).toContain('<summary>快捷短语</summary>');
-    for (let i = 0; i < 21; i++) {
-      expect(html).toContain(`data-phrase="${i}"`);
+    expect(html).toContain('class="phrase-grid-3x3"');
+    expect(html).toContain('class="phrase-pagination"');
+    for (let i = 0; i < 9; i++) {
+      expect(html).toContain('data-phrase="' + i + '"');
     }
-    expect(html).not.toContain('data-phrase="21"');
+    expect(html).not.toContain('data-phrase="9"');
   });
 
-  it('按钮文案含首尾短语', () => {
-    const html = phrasesPanelHtml();
-    expect(html).toContain(PHRASES[0]);
+  it('最后一页包含末尾短语', () => {
+    const lastPage = Math.floor((PHRASES.length - 1) / 9);
+    const html = phrasesPanelHtml(lastPage);
     expect(html).toContain(PHRASES[PHRASES.length - 1]);
+    expect(html).toContain('data-phrase="' + (PHRASES.length - 1) + '"');
   });
 });
 

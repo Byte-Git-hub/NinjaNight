@@ -28,6 +28,7 @@ import { EFFECT_ITEMS, QUICK_EMOJIS, getEffectItem } from './effects/items';
 import { EffectLayer } from './effects/particles';
 import { ItemFlightLayer } from './effects/flights';
 import { CardDragController, type CardDropPayload } from './card-drag';
+import { ItemDragController, type ItemDropPayload } from './item-drag';
 import { mountCardTooltip } from './card-tooltip';
 import { markBadge, markButton, myMarkedTargets } from './social/marks';
 import { phrasesPanelHtml } from './social/phrases';
@@ -181,6 +182,7 @@ export class AppUI {
   private flightLayer: ItemFlightLayer | null = null;
   private lastHitAt = new Map<string, number>();
   private cardDrag: CardDragController | null = null;
+  private itemDrag: ItemDragController | null = null;
   private dragIntent: { instanceId: string; targetSeatId: string; round: number; phase: string } | null = null;
   private playOrigins = new Map<string, { html: string; rect: DOMRect }>();
   private marks: MarkPair[] = [];
@@ -192,6 +194,7 @@ export class AppUI {
   private chatTab: 'chat' | 'log' | 'reaction' = 'chat';
   private phrasePanelOpen = false;
   private socialTab: 'effects' | 'emoji' | 'phrases' | 'chat' | null = null;
+  private phrasePage = 0;
   private chatDraft = '';
   private socialPage = 0;
   private historyPage = 0;
@@ -423,6 +426,18 @@ export class AppUI {
       onDrop: drop => this.dropCard(drop),
     });
     this.cardDrag.mount();
+    this.itemDrag = new ItemDragController(this.root, {
+      getCount: () => this.socialCount,
+      getSelectedItem: () => this.selectedItem,
+      onDrop: (payload: ItemDropPayload) => {
+        this.selectedItem = payload.itemId;
+        this.socialCount = payload.count;
+        this.fxTarget = payload.targetSeatId;
+        this.effectNet?.send(payload.targetSeatId, payload.itemId, payload.count);
+        this.render();
+      },
+    });
+    this.itemDrag.mount();
     this.root.addEventListener('click', (ev) => this.onRootClick(ev));
     window.addEventListener('keydown', (ev) => {
       if ((ev.key === 'Enter' || ev.key === ' ') && document.activeElement?.matches('.seat-card[role="button"]')) { ev.preventDefault(); (document.activeElement as HTMLElement).click(); }
@@ -502,6 +517,13 @@ export class AppUI {
         this.net.sendReaction(this.fxTarget, this.reactionDraft.kind, this.socialCount, this.reactionDraft.emoji, this.reactionDraft.emojiId);
       }
       this.render(); return;
+    }
+    const phrasePageBtn = t.closest('[data-phrase-page-dir]');
+    if (phrasePageBtn) {
+      const dir = Number((phrasePageBtn as HTMLElement).dataset['phrasePageDir'] ?? '0');
+      this.phrasePage = Math.max(0, this.phrasePage + dir);
+      this.render();
+      return;
     }
     const phraseBtn = t.closest('[data-phrase]');
     if (phraseBtn) {
@@ -1415,7 +1437,7 @@ export class AppUI {
     let content = '';
     if (this.socialTab === 'chat') content = `<div class="social-chat-compose"><input id="chat-input" maxlength="200" placeholder="说点什么…" value="${escapeHtml(this.chatDraft)}" /><button id="btn-chat" type="button">发送</button></div>`;
     if (this.socialTab === 'phrases') {
-      const all = phrasesPanelHtml().match(/<button[\s\S]*?<\/button>/g) ?? [];
+      const all = phrasesPanelHtml(this.phrasePage).match(/<button[\s\S]*?<\/button>/g) ?? [];
       content = `<section id="phrase-panel"><h3>快捷短语</h3><div class="fx-row">${all.slice(this.socialPage * perPage, (this.socialPage + 1) * perPage).join('')}</div>${this.pager('social', this.socialPage, pages)}</section>`;
     }
     if (this.socialTab === 'effects' || this.socialTab === 'emoji') content = `<div class="fx-bar" aria-label="互动特效"><div class="fx-row">${items.slice(this.socialPage * perPage, (this.socialPage + 1) * perPage).join('')}</div><div class="fx-hint" id="fx-target-hint">${target ? `目标：${escapeHtml(target.nickname)}` : '选择内容 → 点击座位 → 选择数量 → 发送'}</div>${this.pager('social', this.socialPage, pages)}${picker}</div>`;
