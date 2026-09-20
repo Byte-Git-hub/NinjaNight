@@ -150,6 +150,9 @@ export class AppUI {
   /** 6F-4 身份弹窗：每会话每轮一次（sessionStorage 标记），2.5s 自动关 */
   private identityModalOpen = false;
   private identityModalTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 身份弹窗常驻宿主（#ui 重绘不重建，动画只播一次，防开局快照流刷屏闪烁） */
+  private modalHost: HTMLElement | null = null;
+  private modalKey = '';
   /** 6F-4 身份窥视：点击自家卡背翻转查看（纯本地），再点/点外部盖回 */
   private housePeek = false;
   /** 自家手牌窥视：点击自家座位暗牌查看刚拿到的 1 张（纯本地，仅本人可见） */
@@ -371,6 +374,7 @@ export class AppUI {
         // 6H-1：新事件 → 音效（首个快照只记 seq，不补播）
         this.playViewSounds(v);
         this.render();
+        this.syncIdentityModal(v);
         if (hadView) this.animateViewEvents(v);
         this.resolveDragIntent(v);
       },
@@ -429,6 +433,11 @@ export class AppUI {
     this.flightLayer = new ItemFlightLayer({ onHit: (seatId, strength) => this.itemHit(seatId, strength) });
     this.flightLayer.mount(this.root);
     this.cardFlight = initCardFlightLayer(this.root);
+    // 身份弹窗宿主：常驻 root，不随 render 的 innerHTML 重建（动画播一次，不闪烁）
+    const modalHost = document.createElement('div');
+    modalHost.id = 'modal-layer';
+    this.root.appendChild(modalHost);
+    this.modalHost = modalHost;
     const enet = new EffectNet(this.net);
     enet.attach();
     this.effectNet = enet;
@@ -895,6 +904,7 @@ export class AppUI {
       this.identityModalOpen = false;
       this.identityModalTimer = null;
       this.render();
+      this.syncIdentityModal(this.view);
     }, 2500);
   }
 
@@ -905,6 +915,7 @@ export class AppUI {
       this.identityModalTimer = null;
     }
     this.render();
+    this.syncIdentityModal(this.view);
   }
 
   /** 6H-1：视图事件/阶段 → 本地音效（只播新增 seq，首快照静默记位） */
@@ -1231,6 +1242,20 @@ export class AppUI {
       clearTimeout(this.identityModalTimer);
       this.identityModalTimer = null;
     }
+    this.modalKey = '';
+    if (this.modalHost) this.modalHost.innerHTML = '';
+  }
+
+  /**
+   * 身份弹窗同步：只在 开/关/换轮 三种变迁时写宿主 DOM；
+   * 普通重渲染不动宿主，identityPop 动画只播一次，不闪烁。
+   */
+  private syncIdentityModal(v: PlayerView | null): void {
+    if (!this.modalHost) return;
+    const key = this.identityModalOpen && v && !v.gameOver ? `${v.roomCode}:${v.round}` : '';
+    if (key === this.modalKey) return;
+    this.modalKey = key;
+    this.modalHost.innerHTML = key && v ? this.identityModalHtml(v) : '';
   }
 
   /** 6F-4 开局身份弹窗（背景 identity-modal-bg，正面大卡 + 身份名） */
@@ -1433,7 +1458,6 @@ export class AppUI {
         </section>
         ${v && this.net.isHost && (v.phase === 'roomLobby' || v.phase === 'dealHouses' || !v.round || v.round === 0) ? `<section class="panel host-llm-panel">${this.llmControls()}</section>` : ''}
         ${v ? this.gamePanels(v, pending ?? null) : ''}
-        ${v ? this.identityModalHtml(v) : ''}
         ${v ? this.handPeekModalHtml(v) : ''}
         ${v ? this.socialDockHtml(v) : ''}
         ${this.chatLogPanel(v ?? null)}
@@ -1901,8 +1925,12 @@ export class AppUI {
       this.render();
     });
     // 6G-2 点击走根委托（见 mount 内 onRootClick），此处不逐个绑定。
-    // 6F-4：身份弹窗点击关闭（backdrop 穿透不挡 e2e/游戏点击）
-    $('#identity-modal')?.addEventListener('click', () => this.closeIdentityModal());
+    // 6F-4：身份弹窗点击关闭（宿主常驻，防重复绑定；backdrop 穿透不挡 e2e/游戏点击）
+    const identityModal = $('#identity-modal') as HTMLElement | null;
+    if (identityModal && !identityModal.dataset['bound']) {
+      identityModal.dataset['bound'] = '1';
+      identityModal.addEventListener('click', () => this.closeIdentityModal());
+    }
     // 6H-3 成就面板显隐（新选择器）
     $('#btn-achieve')?.addEventListener('click', () => {
       this.achievePanelOpen = !this.achievePanelOpen;
