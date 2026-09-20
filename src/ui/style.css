@@ -1075,6 +1075,7 @@ button.card.sel {
 /* —— 6F-3 中央公共出牌区（washi 和纸底，当前高亮/过往半透明） —— */
 /* 6G-4b(C1)：washi 过亮致白字不可读，加暗叠加收敛，对局卡组自带深底不受影响 */
 .central {
+  position: relative;
   margin: 10px 0;
   padding: 12px;
   border-radius: 8px;

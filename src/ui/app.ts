@@ -1417,7 +1417,6 @@ export class AppUI {
           <h2 class="table-caption">夜幕已至 · 忍者之夜</h2>
           <div class="table">
             <img class="table-emblem" src="${getTableEmblemPath()}" alt="" aria-hidden="true" />
-            ${v && v.phase.startsWith('draft') ? `<div class="draw-pile-container"><img class="draw-pile-image" src="${getDrawPilePath()}" alt="牌堆" /></div>` : ''}
             <div class="table-ring seats ring" data-player-count="${bucket}" data-seat-count="${allSeats.length}">
               <div class="self-zone" data-seat-position="self">${selfHtml}${selfContent}</div>
               <div class="ring-top" data-ring="top">${ring('top')}</div>
@@ -1707,7 +1706,9 @@ export class AppUI {
       .filter((ph) => ph === v.phase || (groups.get(ph) ?? []).length > 0)
       .sort((a, b) => orderOf(a) - orderOf(b));
     if (phases.length === 0) {
-      return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3><div class="central-empty">本轮暂无打出</div></section>`;
+      // 牌堆只在发牌阶段的空中央区渲染（发牌动画起点）；有打出牌或非发牌阶段不渲染，杜绝遮挡
+      const pile = v.phase.startsWith('draft') ? `<div class="draw-pile-container"><img class="draw-pile-image" src="${getDrawPilePath()}" alt="牌堆" /></div>` : '';
+      return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3>${pile}<div class="central-empty">本轮暂无打出</div></section>`;
     }
     const phase = phases.includes(this.centralPhase) ? this.centralPhase : phases.includes(v.phase) ? v.phase : phases[phases.length - 1];
     const cards = groups.get(phase) ?? [];
