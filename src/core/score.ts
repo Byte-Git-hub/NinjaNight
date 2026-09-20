@@ -29,6 +29,10 @@ export function resolveMastermind(state: GameState): void {
     const fam = houseFamily(seat.house);
     if (fam === 'ronin') {
       mastermindOverride = { family: 'ronin' };
+      pushEvent(state, 'score.mastermindRevealed', 'public', {
+        seatId: seat.seatId,
+        family: 'ronin',
+      });
       pushEvent(state, 'score.roundWinner', 'public', {
         winner: 'mastermind_ronin',
         note: 'mastermind_ronin_no_house',
@@ -37,6 +41,10 @@ export function resolveMastermind(state: GameState): void {
       return;
     }
     mastermindOverride = { family: fam };
+    pushEvent(state, 'score.mastermindRevealed', 'public', {
+      seatId: seat.seatId,
+      family: fam,
+    });
     pushEvent(state, 'score.roundWinner', 'public', {
       winner: fam,
       by: 'mastermind',

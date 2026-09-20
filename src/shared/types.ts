@@ -117,6 +117,7 @@ export type GameEventType =
   | 'night.ninjaViewed'
   | 'house.revealed'
   | 'score.honorAwarded'
+  | 'score.mastermindRevealed' // 大将军亮牌（结算分步展示用，无持有者时不发）
   | 'score.roundWinner'
   | 'score.victory'
   | 'react.opened'
