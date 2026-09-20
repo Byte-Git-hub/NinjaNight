@@ -96,7 +96,7 @@ export function playPhraseAudio(phraseId: number | string): void {
   } else {
     try {
       if (typeof Audio !== 'undefined') {
-        const audio = new Audio(assetUrl(`assets/audio/phrases/phrase_${phraseId}.mp3`));
+        const audio = new Audio(assetUrl(`assets/audio/phrases/phrase_${validId}.mp3`));
         audio.play().catch(() => {});
       }
     } catch {}

@@ -31,7 +31,7 @@ import { ItemDragController, type ItemDropPayload } from './item-drag';
 import { mountCardTooltip } from './card-tooltip';
 import { markBadge, markButton, myMarkedTargets } from './social/marks';
 import { phrasesPanelHtml, getPhrasesPageCount } from './social/phrases';
-import { playPhraseAudio, PhraseTts } from './voice/tts';
+import { PhraseTts } from './voice/tts';
 import { initCardFlightLayer, CardFlightLayer } from './animations/card-flight';
 import { applyStampToSeat } from './animations/stamp';
 import { getDrawPilePath } from './assets';
@@ -535,7 +535,13 @@ export class AppUI {
       const raw = (phraseBtn as HTMLElement).dataset['phrase'] ?? '';
       const id = Number(raw);
       if (!Number.isInteger(id) || !this.socialNet) return;
-      playPhraseAudio(id);
+      // 发送端强制本地试听：绕过 phraseTts.enabled 门控；接收端仍受开关控制
+      try {
+        if (typeof Audio !== 'undefined') {
+          const preview = new Audio(assetUrl(`assets/audio/phrases/phrase_${id}.mp3`));
+          void preview.play().catch(() => {});
+        }
+      } catch {}
       this.socialNet.sendPhrase(id);
       return;
     }
@@ -1222,6 +1228,7 @@ export class AppUI {
       ${selfMeta}
       ${metaBits.length > 0 ? `<div class="seat-meta">${metaBits.join(' ')}</div>` : ''}
       ${markB2}
+      ${dead ? '<div class="stamp-failed-overlay" style="animation:none;opacity:.92" aria-hidden="true"></div>' : ''}
     </li>`;
   }
 
