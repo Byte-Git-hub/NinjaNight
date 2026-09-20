@@ -1,0 +1,93 @@
+/* 游戏说明弹窗：复用 identity-modal-backdrop 和纸金箔骨架 */
+.help-modal {
+  pointer-events: auto;
+  cursor: default;
+  max-width: min(560px, 92vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  background: rgba(16, 22, 38, 0.97);
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 12px;
+  padding: 16px 18px;
+  color: var(--text, #e5e7eb);
+}
+.help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+  background: inherit;
+  padding-bottom: 8px;
+}
+.help-head h3 {
+  margin: 0;
+  font-size: 17px;
+}
+.help-head button {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 20px;
+}
+.help-body section {
+  margin: 12px 0;
+}
+.help-body h4 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: #f3d27a;
+}
+.help-body p {
+  margin: 4px 0;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 8px 0;
+}
+.help-table th,
+.help-table td {
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+.help-table th {
+  background: rgba(212, 175, 55, 0.12);
+  white-space: nowrap;
+}
+.help-card-name,
+.help-card-phase {
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .help-modal {
+    padding: 12px;
+  }
+  .help-table {
+    font-size: 12px;
+  }
+  .help-table thead {
+    display: none;
+  }
+  .help-table tr {
+    display: block;
+    margin-bottom: 8px;
+    border: 1px solid rgba(212, 175, 55, 0.25);
+    border-radius: 8px;
+    padding: 4px 6px;
+  }
+  .help-table td {
+    display: block;
+    border: none;
+    padding: 2px 0;
+  }
+  .help-card-name {
+    font-weight: bold;
+    font-size: 14px;
+  }
+}

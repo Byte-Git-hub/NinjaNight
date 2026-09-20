@@ -33,6 +33,7 @@ import { markBadge, markButton, myMarkedTargets } from './social/marks';
 import { phrasesPanelHtml, getPhrasesPageCount } from './social/phrases';
 import { PhraseTts } from './voice/tts';
 import { initCardFlightLayer, CardFlightLayer } from './animations/card-flight';
+import { helpModalHtml } from './help';
 import { applyStampToSeat } from './animations/stamp';
 import { getDrawPilePath } from './assets';
 import { PHRASES } from '../data/phrases';
@@ -171,6 +172,8 @@ export class AppUI {
   private soundPrimed = false;
   /** 6H-1：音效面板显隐（字段保持，避免重渲染丢失） */
   private audioPanelOpen = false;
+  /** 玩法说明弹窗显隐（大厅入口，字段保持，避免重渲染丢失） */
+  private helpOpen = false;
   /** 6H-3 成就（纯本地 localStorage） */
   private achieve = new AchievementTracker();
   private achievePanelOpen = false;
@@ -446,6 +449,11 @@ export class AppUI {
     this.root.addEventListener('click', (ev) => this.onRootClick(ev));
     window.addEventListener('keydown', (ev) => {
       if ((ev.key === 'Enter' || ev.key === ' ') && document.activeElement?.matches('.seat-card[role="button"]')) { ev.preventDefault(); (document.activeElement as HTMLElement).click(); }
+      if (ev.key === 'Escape' && this.helpOpen) {
+        this.helpOpen = false;
+        this.render();
+        return;
+      }
       if (ev.key === 'Escape' && (this.reactionDraft || this.selectedItem || this.socialTab)) {
         this.reactionDraft = null;
         this.reactionTargetSeatId = '';
@@ -466,6 +474,16 @@ export class AppUI {
     if (!t?.closest) return;
     // 6H-1：点击即手势，顺手确保 AudioContext 已建（幂等， cheap）
     void this.audio.ensure();
+    // 玩法说明弹窗关闭：× 按钮或点击背景（内容区点击不关闭）
+    const helpClose = t.closest('[data-help-close]');
+    if (helpClose) {
+      const isBackdrop = (helpClose as HTMLElement).id === 'help-modal';
+      if (!isBackdrop || ev.target === helpClose) {
+        this.helpOpen = false;
+        this.render();
+        return;
+      }
+    }
     const socialTab = t.closest('[data-social-tab]');
     if (socialTab) {
       const tab = (socialTab as HTMLElement).dataset['socialTab'];
@@ -782,6 +800,7 @@ export class AppUI {
         </div>
       </header>
       ${!this.view && !this.presence ? this.lobbyForm() : this.gameBody()}
+      ${this.helpOpen ? helpModalHtml() : ''}
     `;
     this.bind();
     if (chatFocused) { const input = this.root.querySelector<HTMLInputElement>('#chat-input'); input?.focus(); input?.setSelectionRange(chatCursor,chatCursor); }
@@ -797,6 +816,9 @@ export class AppUI {
           <button id="btn-create" type="button">创建房间</button>
           <input id="code" maxlength="6" placeholder="6 位房间码" />
           <button id="btn-join" type="button">加入</button>
+        </div>
+        <div class="row">
+          <button id="btn-help" class="muted" type="button">玩法说明</button>
         </div>
       </section>
     `;
@@ -1662,6 +1684,10 @@ export class AppUI {
       const nick = (this.root.querySelector('#nick') as HTMLInputElement)?.value ?? '';
       const code = (this.root.querySelector('#code') as HTMLInputElement)?.value ?? '';
       this.net.joinRoom(code, nick);
+    });
+    $('#btn-help')?.addEventListener('click', () => {
+      this.helpOpen = true;
+      this.render();
     });
     $('#btn-ready')?.addEventListener('click', () => this.net.setReady(true));
     $('#btn-start')?.addEventListener('click', () => {
