@@ -8,9 +8,12 @@
   justify-content: center;
   padding: 16px;
   background: rgba(0, 0, 0, 0.72);
+  /* 覆盖 identity-modal-backdrop 的 pointer-events:none，否则确认钮点不中 */
+  pointer-events: auto;
 }
 
 .effect-spotlight {
+  pointer-events: auto;
   width: min(420px, 90vw);
   max-width: min(420px, 90vw);
   max-height: 88vh;
