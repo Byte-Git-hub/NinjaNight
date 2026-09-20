@@ -95,6 +95,8 @@ export function beginDraftPick(state: GameState, step: 1 | 2): void {
   state.windowId = `w-draft${step}-${state.round}-${state.eventSeq}`;
   for (const seat of state.seats) seat.declaredResponded = false;
   rebuildDraftPending(state);
+  // 客户端开局发牌动画触发点（与 app.ts night.phaseStarted 监听对齐，public 才进 view.events）
+  pushEvent(state, 'night.phaseStarted', 'public', { phase: state.phase });
 }
 
 function rebuildDraftPending(state: GameState): void {
