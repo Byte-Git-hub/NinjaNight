@@ -1290,6 +1290,7 @@ export class AppUI {
           <h2 class="table-caption">夜幕已至 · 忍者之夜</h2>
           <div class="table">
             <img class="table-emblem" src="${getTableEmblemPath()}" alt="" aria-hidden="true" />
+            ${v && v.phase.startsWith('draft') ? `<div class="draw-pile-container"><img class="draw-pile-image" src="${getDrawPilePath()}" alt="牌堆" /></div>` : ''}
             <div class="table-ring seats ring" data-player-count="${bucket}" data-seat-count="${allSeats.length}">
               <div class="self-zone" data-seat-position="self">${selfHtml}${selfContent}</div>
               <div class="ring-top" data-ring="top">${ring('top')}</div>
@@ -1579,7 +1580,7 @@ export class AppUI {
       .filter((ph) => ph === v.phase || (groups.get(ph) ?? []).length > 0)
       .sort((a, b) => orderOf(a) - orderOf(b));
     if (phases.length === 0) {
-      return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3><div class="draw-pile-container"><img class="draw-pile-image" src="${getDrawPilePath()}" alt="牌堆" /></div><div class="central-empty">本轮暂无打出</div></section>`;
+      return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3><div class="central-empty">本轮暂无打出</div></section>`;
     }
     const phase = phases.includes(this.centralPhase) ? this.centralPhase : phases.includes(v.phase) ? v.phase : phases[phases.length - 1];
     const cards = groups.get(phase) ?? [];
@@ -1587,7 +1588,7 @@ export class AppUI {
     this.centralPage = Math.min(this.centralPage, pageCount - 1);
     const items = cards.slice(this.centralPage * 4, (this.centralPage + 1) * 4).map(c => `<span class="played-item" data-actor-seat="${escapeHtml(c.actorSeatId)}"><span class="played-who">${escapeHtml(seatName(v, c.actorSeatId))} · ${escapeHtml(getCardDisplayName(c.cardId))}</span>${renderCardHtml(c.cardId, c.instanceId, false, 'mini')}</span>`).join('');
     const phaseNav = `<nav class="central-nav" aria-label="阶段筛选">${phases.map(ph => `<button type="button" data-central-phase="${escapeHtml(ph)}" class="${phase === ph ? 'active' : ''}">${escapeHtml(phaseLabel(ph))}</button>`).join('')}</nav>`;
-    return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3><div class="draw-pile-container"><img class="draw-pile-image" src="${getDrawPilePath()}" alt="牌堆" /></div>${phaseNav}<div class="phase-group${phase === v.phase ? ' now' : ' past'}" data-phase="${escapeHtml(phase)}"><h4 class="phase-group-title">${escapeHtml(phaseLabel(phase))}${phase === v.phase ? ' · 进行中' : ''}</h4><div class="cards-row">${items || '<div class="central-empty">本阶段暂无打出</div>'}</div></div>${pageCount > 1 ? this.pager('central', this.centralPage, pageCount) : ''}</section>`;
+    return `<section class="central" aria-label="中央公共出牌区"><h3>中央公共出牌区</h3>${phaseNav}<div class="phase-group${phase === v.phase ? ' now' : ' past'}" data-phase="${escapeHtml(phase)}"><h4 class="phase-group-title">${escapeHtml(phaseLabel(phase))}${phase === v.phase ? ' · 进行中' : ''}</h4><div class="cards-row">${items || '<div class="central-empty">本阶段暂无打出</div>'}</div></div>${pageCount > 1 ? this.pager('central', this.centralPage, pageCount) : ''}</section>`;
   }
 
   private pendingPanel(pending: PendingDecision | null): string {
