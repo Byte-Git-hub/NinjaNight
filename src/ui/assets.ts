@@ -6,6 +6,12 @@ import { CARD_DESCRIPTION_ZH, CARD_PHASE_ZH } from '../data/card-text';
  * public/ 下文件构建时原样拷贝到 dist，运行时用 base 拼接，子路径部署不 404。
  * node 工程（vitest）无 vite/client 类型，base 由 main.ts 经 setAssetBase 注入，
  * 默认 '/'（本地/dev/测试行为不变）。
+ *
+ * 注意：默认值必须保持 '/'，不能直接取 import.meta.env.BASE_URL——
+ * 本文件同时被 tsconfig.node 程序引用（scripts/simulate-llm-games.ts），
+ * 那边没有 vite/client 类型会编译失败。模块顶层就求值的 URL 常量
+ * （如 effects/items.ts 的 EFFECT_ITEMS.img）必须写成 lazy getter，
+ * 等 setAssetBase() 跑完后再取值，否则线上子路径会请求 /assets/...（丢前缀）而 404。
  */
 let ASSET_BASE = '/';
 
@@ -59,21 +65,28 @@ export function getVisualPath(visualId: string): string {
 }
 
 /**
- * UI 素材映射表（对齐无前缀文件名：lobby-bg.webp / table-texture.webp / button-primary.webp）
+ * UI 素材路径（对齐无前缀文件名：lobby-bg.webp / table-texture.webp / button-primary.webp）。
+ * 必须 lazy 计算：模块顶层求值早于 main.ts 的 setAssetBase()，eager 会冻结 '/' 前缀，
+ * GitHub Pages 子路径部署即 404（与 EFFECT_ITEMS.img 的 getter 同理）。
  */
+function uiAssetUrl(name: string): string {
+  return assetUrl(`assets/ui/${name}.webp`);
+}
+
+/** 保留导出以兼容旧引用；取值一律走 lazy 计算，不再模块顶层冻结。 */
 export const UI_ASSETS: Record<string, string> = {
-  'ui-lobby-bg': assetUrl('assets/ui/lobby-bg.webp'),
-  'lobby-bg': assetUrl('assets/ui/lobby-bg.webp'),
-  'ui-table-texture': assetUrl('assets/ui/table-texture.webp'),
-  'table-texture': assetUrl('assets/ui/table-texture.webp'),
-  'ui-button-primary': assetUrl('assets/ui/button-primary.webp'),
-  'button-primary': assetUrl('assets/ui/button-primary.webp'),
-  'ui-washi-central-bg': assetUrl('assets/ui/washi-central-bg.webp'),
-  'washi-central-bg': assetUrl('assets/ui/washi-central-bg.webp'),
-  'ui-table-emblem': assetUrl('assets/ui/table-emblem.webp'),
-  'table-emblem': assetUrl('assets/ui/table-emblem.webp'),
-  'ui-identity-modal-bg': assetUrl('assets/ui/identity-modal-bg.webp'),
-  'identity-modal-bg': assetUrl('assets/ui/identity-modal-bg.webp'),
+  get 'ui-lobby-bg'() { return uiAssetUrl('lobby-bg'); },
+  get 'lobby-bg'() { return uiAssetUrl('lobby-bg'); },
+  get 'ui-table-texture'() { return uiAssetUrl('table-texture'); },
+  get 'table-texture'() { return uiAssetUrl('table-texture'); },
+  get 'ui-button-primary'() { return uiAssetUrl('button-primary'); },
+  get 'button-primary'() { return uiAssetUrl('button-primary'); },
+  get 'ui-washi-central-bg'() { return uiAssetUrl('washi-central-bg'); },
+  get 'washi-central-bg'() { return uiAssetUrl('washi-central-bg'); },
+  get 'ui-table-emblem'() { return uiAssetUrl('table-emblem'); },
+  get 'table-emblem'() { return uiAssetUrl('table-emblem'); },
+  get 'ui-identity-modal-bg'() { return uiAssetUrl('identity-modal-bg'); },
+  get 'identity-modal-bg'() { return uiAssetUrl('identity-modal-bg'); },
 };
 
 /**

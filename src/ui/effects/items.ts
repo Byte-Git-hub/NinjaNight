@@ -31,15 +31,17 @@ export interface EffectItemMeta {
 }
 
 export const EFFECT_ITEMS: EffectItemMeta[] = [
-  { id: 'egg', name: '鸡蛋', img: getItemPath('egg'), color: '#fef3c7', color2: '#f59e0b' },
-  { id: 'sakura', name: '樱花', img: getItemPath('sakura'), color: '#fbcfe8', color2: '#ec4899' },
-  { id: 'geta', name: '破木屐', img: getItemPath('geta'), color: '#d6a35c', color2: '#92400e' },
-  { id: 'rotten_pill', name: '烂药丸', img: getItemPath('rotten_pill'), color: '#a3e635', color2: '#4d7c0f' },
-  { id: 'basket', name: '竹篮', img: getItemPath('basket'), color: '#fcd34d', color2: '#b45309' },
-  { id: 'secret_letter', name: '密信', img: getItemPath('secret_letter'), color: '#e2e8f0', color2: '#38bdf8' },
-  { id: 'tea', name: '敬茶', img: getItemPath('tea'), color: '#86efac', color2: '#15803d' },
-  { id: 'snowball', name: '雪玉', img: getItemPath('snowball'), color: '#e0f2fe', color2: '#0284c7' },
-  { id: 'shuriken', name: '手里剑', img: getItemPath('shuriken'), color: '#fde68a', color2: '#b45309' },
+  // img 必须 lazy（getter）：模块顶层求值早于 main.ts 的 setAssetBase()，
+  // eager 取值会把 '/' 前缀冻结进字符串，GitHub Pages 子路径部署即 404。
+  { id: 'egg', name: '鸡蛋', get img() { return getItemPath('egg'); }, color: '#fef3c7', color2: '#f59e0b' },
+  { id: 'sakura', name: '樱花', get img() { return getItemPath('sakura'); }, color: '#fbcfe8', color2: '#ec4899' },
+  { id: 'geta', name: '破木屐', get img() { return getItemPath('geta'); }, color: '#d6a35c', color2: '#92400e' },
+  { id: 'rotten_pill', name: '烂药丸', get img() { return getItemPath('rotten_pill'); }, color: '#a3e635', color2: '#4d7c0f' },
+  { id: 'basket', name: '竹篮', get img() { return getItemPath('basket'); }, color: '#fcd34d', color2: '#b45309' },
+  { id: 'secret_letter', name: '密信', get img() { return getItemPath('secret_letter'); }, color: '#e2e8f0', color2: '#38bdf8' },
+  { id: 'tea', name: '敬茶', get img() { return getItemPath('tea'); }, color: '#86efac', color2: '#15803d' },
+  { id: 'snowball', name: '雪玉', get img() { return getItemPath('snowball'); }, color: '#e0f2fe', color2: '#0284c7' },
+  { id: 'shuriken', name: '手里剑', get img() { return getItemPath('shuriken'); }, color: '#fde68a', color2: '#b45309' },
 ];
 
 const ITEM_MAP: ReadonlyMap<string, EffectItemMeta> = new Map(EFFECT_ITEMS.map((m) => [m.id, m]));
