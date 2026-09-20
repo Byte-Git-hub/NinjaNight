@@ -60,12 +60,12 @@ body.in-game .card .card-name { color:#e5d6af; font-size:11px; background:#08122
 body.in-game .card::after { display:none; }
 body.in-game .pending .declare-opt { width:58px; height:83px; }
 body.in-game .pending .declare-actions { margin:3px 0!important; justify-content:center; }
-body.in-game .central { grid-area:2 / 3 / 3 / 11; min-height:0; max-height:100%; height:100%; padding:12px; margin:0; background:none; border:0; box-shadow:none; color:#d6ccba; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+body.in-game .central { grid-area:2 / 3 / 3 / 11; min-height:120px; max-height:100%; height:100%; padding:12px; margin:0; background:none; border:0; box-shadow:none; color:#d6ccba; overflow:visible; display:flex; flex-direction:column; align-items:center; justify-content:center; }
 body.in-game .central h3 { font:400 14px serif; letter-spacing:6px; color:#bbad8b!important; text-shadow:none; }
 body.in-game .central-empty { color:#9aa9be; font-size:11px; font-weight:400; letter-spacing:2px; text-shadow:none; }
 body.in-game .central .phase-group { width:100%; padding:0; margin:0; background:none; border:0; box-shadow:none; }
 body.in-game .central .phase-group-title { color:#c9b98f!important; font-size:12px; text-shadow:none!important; text-align:center; }
-body.in-game .central .cards-row { justify-content:center; flex-wrap:nowrap; gap:12px; }
+body.in-game .central .cards-row { justify-content:center; flex-wrap:wrap; gap:12px; }
 body.in-game .central .card.mini { width:60px; height:88px; }
 body.in-game .played-who { max-width:120px; font-size:10px; color:#c1c7d2; }
 body.in-game .central-nav { display:flex; gap:4px; justify-content:center; }

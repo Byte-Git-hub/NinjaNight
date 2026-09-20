@@ -1766,7 +1766,7 @@ button.card.sel,
   color: #aaa;
 }
 
-/* 盖印动画：从上方落下，墨迹回弹扩散 */
+/* 盖印动画：悬空从小到大放大后砸下，墨迹回弹落定 */
 .stamp-failed-overlay {
   position: absolute;
   top: 50%;
@@ -1778,7 +1778,7 @@ button.card.sel,
   background: url('/assets/ui/stamp-failed.webp') center / contain no-repeat;
   pointer-events: none;
   z-index: 1000;
-  animation: stampDrop 650ms cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  animation: stampSlam 750ms cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 @keyframes stampDrop {
@@ -1802,19 +1802,71 @@ button.card.sel,
   }
 }
 
+/* 盖章砸下：悬空从小到大放大 → 猛砸落印 → 回弹落定（约750ms） */
+@keyframes stampSlam {
+  0% {
+    opacity: 0;
+    transform: translateY(-60px) scale(0.3) rotate(-8deg);
+    filter: blur(3px) drop-shadow(0 18px 18px rgba(220, 38, 38, 0.6));
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-30px) scale(1.15) rotate(-8deg);
+    filter: blur(0px) drop-shadow(0 12px 18px rgba(220, 38, 38, 0.85));
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.25) rotate(-8deg);
+    filter: blur(0px) drop-shadow(0 8px 20px rgba(220, 38, 38, 0.95));
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0) scale(0.95) rotate(-8deg);
+    filter: blur(0px) drop-shadow(0 0 20px rgba(220, 38, 38, 0.95));
+  }
+  75% {
+    opacity: 0.95;
+    transform: translateY(0) scale(1.06) rotate(-8deg);
+    filter: drop-shadow(0 4px 12px rgba(220, 38, 38, 0.85));
+  }
+  100% {
+    opacity: 0.92;
+    transform: translateY(0) scale(1) rotate(-8deg);
+    filter: drop-shadow(0 2px 8px rgba(185, 28, 28, 0.7));
+  }
+}
+
+/* 座位受击抖动：JS 在砸下瞬间对目标座位加 .animate-seat-hit，动画结束移除 */
+.animate-seat-hit {
+  animation: seatHit 450ms ease-out 350ms both;
+  will-change: transform;
+}
+@keyframes seatHit {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  20% { transform: translate(-7px, 4px) rotate(-1.4deg); }
+  40% { transform: translate(6px, -3px) rotate(1.1deg); }
+  60% { transform: translate(-4px, 2px) rotate(-0.7deg); }
+  80% { transform: translate(2px, -1px) rotate(0.35deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+@media(prefers-reduced-motion:reduce){
+  .stamp-failed-overlay { animation: none; opacity: 0.92; transform: scale(1) rotate(-8deg); }
+  .animate-seat-hit { animation: none; }
+}
+
 /* ============================================================
    P2: 中央牌堆与发牌/传牌飞行卡牌动画
    ============================================================ */
 
 .draw-pile-container {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 96px;
-  height: 136px;
+  top: 6px;
+  left: 8px;
+  transform: none;
+  width: 64px;
+  height: 90px;
   pointer-events: none;
-  z-index: 5;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
