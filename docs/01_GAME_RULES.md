@@ -294,21 +294,23 @@ updated: 2026-09-16
 
 ### 7.1 效果定义（按类型）
 
+> 译名以 `src/ui/assets.ts` `CARD_CN` 为准。
+
 | 英文标识 | 中文名 | 阶段 | 目标类型 | 效果 | 可见性 | 编号 | 来源 |
 |---|---|---|---|---|---|---|---|
 | `spy` | 密探 | Spy | 另一名玩家 | 查看其 **HOUSE** 牌 | 私密查看；可口头公开说真话/谎话 | 多张，示例 2/3/4/5 | 【官方】RB+CS+FAQ |
 | `mystic` | 隐士 | Mystic | 另一名玩家 | 查看其 **HOUSE** + **随机一张其 NINJA**；若目标仍有 2 张 NINJA，由施术者随机选 1 张看 | 私密 | 示例 6 | 【官方】RB+FAQ |
-| `shapeshifter` | 变身者 | Trickster | 两名玩家 | 查看二人 HOUSE，可**秘密对调**；对方**不得**再看新 HOUSE | 全私密；不得广播交换发生 | 1 | 【官方】RB+FAQ |
+| `shapeshifter` | 百变者 | Trickster | 两名玩家 | 查看二人 HOUSE，可**秘密对调**；对方**不得**再看新 HOUSE | 全私密；不得广播交换发生 | 1 | 【官方】RB+FAQ |
 | `grave_digger` | 掘墓人 | Trickster | 中央弃牌区 | 查看 2 张已弃 NINJA，选 1；可**立即打出**或面朝上留在自己面前后续使用 | 查看私密；打出后公共 | 2 | 【官方】RB+FAQ |
-| `troublemaker` | 捣乱者 | Trickster | 另一名玩家 | 查看其 HOUSE；**可选择**公开 | 私密→可选公共 | 3 | 【官方】RB+CS |
-| `spirit_merchant` | 灵商 | Trickster | 另一名玩家 | 查看目标 **HONOR 令牌或 HOUSE**；可与之**交换 1 枚**令牌；可给对方任意己方 1 枚、取回任意对方 1 枚（看过或未看过均可） | 查看私密；枚数变化公开 | 4 | 【官方】RB+FAQ |
+| `troublemaker` | 捣蛋鬼 | Trickster | 另一名玩家 | 查看其 HOUSE；**可选择**公开 | 私密→可选公共 | 3 | 【官方】RB+CS |
+| `spirit_merchant` | 商人 | Trickster | 另一名玩家 | 查看目标 **HONOR 令牌或 HOUSE**；可与之**交换 1 枚**令牌；可给对方任意己方 1 枚、取回任意对方 1 枚（看过或未看过均可） | 查看私密；枚数变化公开 | 4 | 【官方】RB+FAQ |
 | `thief` | 盗贼 | Trickster | 荣誉**枚数**更多者 | **亮出**自己的 HOUSE；从枚数更多的玩家处拿走 1 枚令牌 | HOUSE 公开；令牌面值仍不公开 | 5 | 【官方】RB+CS+修订 |
-| `judge` | 判官 | Trickster | 一名玩家 | **亮出**自己的 HOUSE；**杀死**该玩家；**Mirror Monk 与 Martyr 无效** | HOUSE 公开 | 6 | 【官方】RB+CS |
-| `blind_assassin` | 盲眼刺客 | Blind Assassin | 一名玩家 | **直接杀死**（**不**查看 HOUSE） | — | 示例 2 | 【官方】RB+CS |
+| `judge` | 裁判 | Trickster | 一名玩家 | **亮出**自己的 HOUSE；**杀死**该玩家；**Mirror Monk 与 Martyr 无效** | HOUSE 公开 | 6 | 【官方】RB+CS |
+| `blind_assassin` | 刺客 | Blind Assassin | 一名玩家 | **直接杀死**（**不**查看 HOUSE） | — | 示例 2 | 【官方】RB+CS |
 | `shinobi` | 上忍 | Shinobi | 一名玩家 | 查看其 HOUSE，**可选择**杀死 | 查看私密 | 示例 2/4 | 【官方】RB+CS |
-| `mirror_monk` | 镜僧 | react | 触发者 | 被 **Shinobi 或 Blind Assassin** 选杀时翻开：**反杀对方** | 翻开后公共 | — | 【官方】RB+CS |
+| `mirror_monk` | 还施者 | react | 触发者 | 被 **Shinobi 或 Blind Assassin** 选杀时翻开：**反杀对方** | 翻开后公共 | — | 【官方】RB+CS |
 | `martyr` | 殉道者 | react | 触发者 | 被 **Shinobi 或 Blind Assassin** 选杀时翻开：获得 **1 枚**荣誉令牌 | 翻开后公共 | — | 【官方】RB+CS |
-| `mastermind` | 幕后主脑 | reveal | 无 | 夜晚结束后若仍存活则亮出：**己方阵营本轮获胜**；若为**浪人**则**本轮无阵营获胜** | 公开 | — | 【官方】RB+FAQ |
+| `mastermind` | 大将军 | reveal | 无 | 夜晚结束后若仍存活则亮出：**己方阵营本轮获胜**；若为**浪人**则**本轮无阵营获胜** | 公开 | — | 【官方】RB+FAQ |
 
 **命名说明**【官方/决策】：
 
