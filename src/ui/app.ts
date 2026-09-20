@@ -33,6 +33,7 @@ import { markBadge, markButton, myMarkedTargets } from './social/marks';
 import { phrasesPanelHtml, getPhrasesPageCount } from './social/phrases';
 import { PhraseTts } from './voice/tts';
 import { initCardFlightLayer, CardFlightLayer } from './animations/card-flight';
+import { EffectPresenter } from './effects/presenter';
 import { helpModalHtml } from './help';
 import { applyStampToSeat } from './animations/stamp';
 import { getDrawPilePath } from './assets';
@@ -172,6 +173,15 @@ export class AppUI {
   private soundPrimed = false;
   /** 6H-1：音效面板显隐（字段保持，避免重渲染丢失） */
   private audioPanelOpen = false;
+  /** 死亡盖印：已落印座位（静态章防重播）；新死亡座位渲染动画章＋座位抖动 */
+  private stampedSeats = new Set<string>();
+  private stampedRound = 0;
+  /** 效果聚光灯队列（每张牌依次中央展示，前一个完成才下一个） */
+  private presenter = new EffectPresenter();
+  /** 结算分步：大将军→身份牌→结算，按轮建一次 */
+  private revealSteps: Array<{ title: string; html: string }> = [];
+  private revealIdx = 0;
+  private revealKey = '';
   /** 玩法说明弹窗显隐（大厅入口，字段保持，避免重渲染丢失） */
   private helpOpen = false;
   /** 6H-3 成就（纯本地 localStorage） */
@@ -337,6 +347,18 @@ export class AppUI {
         if (this.view && this.view.round !== v.round) {
           this.housePeek = false;
           this.handPeekIid = null;
+          // 换轮：印章/抖动/效果队列/亮牌分步全部重置
+          this.stampedSeats.clear();
+          this.stampedRound = v.round;
+          this.presenter.clear();
+          this.revealSteps = [];
+          this.revealIdx = 0;
+          this.revealKey = '';
+        }
+        // 复活座位清出集合（startNextRound 全员 alive）；首个快照初始化轮号
+        if (this.stampedRound === 0) this.stampedRound = v.round;
+        for (const s of v.seats) {
+          if (s.alive) this.stampedSeats.delete(s.seatId);
         }
         const hadView = this.view !== null;
         this.view = v;
@@ -454,6 +476,11 @@ export class AppUI {
         this.render();
         return;
       }
+      if (ev.key === 'Escape' && this.revealIdx < this.revealSteps.length) {
+        this.revealIdx = this.revealSteps.length;
+        this.render();
+        return;
+      }
       if (ev.key === 'Escape' && (this.reactionDraft || this.selectedItem || this.socialTab)) {
         this.reactionDraft = null;
         this.reactionTargetSeatId = '';
@@ -480,6 +507,21 @@ export class AppUI {
       const isBackdrop = (helpClose as HTMLElement).id === 'help-modal';
       if (!isBackdrop || ev.target === helpClose) {
         this.helpOpen = false;
+        this.render();
+        return;
+      }
+    }
+    // 结算分步弹窗：下一步 / 关闭（内容区点击不关闭）
+    if (t.closest('[data-reveal-next]')) {
+      this.revealIdx += 1;
+      this.render();
+      return;
+    }
+    const revealClose = t.closest('[data-reveal-close]');
+    if (revealClose) {
+      const isBackdrop = (revealClose as HTMLElement).id === 'reveal-modal';
+      if (!isBackdrop || ev.target === revealClose) {
+        this.revealIdx = this.revealSteps.length;
         this.render();
         return;
       }
@@ -801,6 +843,7 @@ export class AppUI {
       </header>
       ${!this.view && !this.presence ? this.lobbyForm() : this.gameBody()}
       ${this.helpOpen ? helpModalHtml() : ''}
+      ${this.revealModalHtml()}
     `;
     this.bind();
     if (chatFocused) { const input = this.root.querySelector<HTMLInputElement>('#chat-input'); input?.focus(); input?.setSelectionRange(chatCursor,chatCursor); }
@@ -911,6 +954,15 @@ export class AppUI {
     if (pending.kind !== 'declareCards' || !pending.options.includes(drop.instanceId)) return;
     this.playOrigins.set(drop.instanceId, { html: drop.html, rect: drop.sourceRect });
     this.dragIntent = drop.targetSeatId ? { instanceId: drop.instanceId, targetSeatId: drop.targetSeatId, round: v.round, phase: v.phase } : null;
+    // 多张可打：拖入只暂存（纯本地，他人不可见），追问是否再打一张；确认经「确认打出选中」发出
+    if (pending.options.length > 1) {
+      this.selected.add(drop.instanceId);
+      const card = v.self.hand.find((c) => c.instanceId === drop.instanceId);
+      const name = card ? getCardDisplayName(card.cardId) : '';
+      this.showToast(`已暂存「${name}」(${this.selected.size}/${pending.options.length})：可再拖一张，或点「确认打出选中」发出`);
+      this.render();
+      return;
+    }
     this.net.sendCommand(v.windowId, 'night.declare', { cardInstanceIds: [drop.instanceId] });
     this.selected.clear();
   }
@@ -962,6 +1014,10 @@ export class AppUI {
       (e.payload as Record<string, unknown>)['viewerSeatId'] === v.self.seatId,
     );
     if (intel.length) this.showIntelNotice(intel, v);
+    // 效果聚光灯：本快照新结算的牌按 seq 排队，依次中央展示（reduced-motion 下内部丢弃）
+    this.presenter.queueFromEvents(fresh, v);
+    // 结算分步：大将军亮牌→身份牌→结算（同快照 seq 排序，一轮建一次）
+    this.buildRevealSteps(fresh, v);
     for (const e of fresh) {
       const payload = (e.payload ?? {}) as Record<string, unknown>;
       if (e.type === 'night.phaseStarted') {
@@ -976,22 +1032,23 @@ export class AppUI {
       if (e.type === 'night.playerDied' && typeof payload['seatId'] === 'string') {
         const sid = String(payload['seatId']);
         const seatEl = this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(sid)}"]`);
+        // 模板已为新死亡座位插入动画章＋抖动类；此处登记防重播＋兜底补章/补抖
+        this.stampedSeats.add(sid);
         if (seatEl) {
-          void applyStampToSeat(seatEl);
+          if (!seatEl.querySelector('.stamp-failed-overlay')) {
+            void applyStampToSeat(seatEl);
+          }
+          seatEl.classList.remove('animate-seat-hit');
+          void seatEl.offsetWidth;
+          seatEl.classList.add('animate-seat-hit');
+          window.setTimeout(() => seatEl.classList.remove('animate-seat-hit'), 950);
         }
         this.addAnimation(`.seat-card[data-seat="${cssEscape(sid)}"]`, 'animate-death');
         this.moments.kill();
       }
       if (e.type === 'draft.passed') {
-        if (v && v.seats.length >= 2) {
-          const myIdx = v.seats.findIndex(s => s.seatId === v.self.seatId);
-          const nextIdx = (myIdx + 1) % v.seats.length;
-          const fromSid = v.self.seatId;
-          const toSid = v.seats[nextIdx]?.seatId ?? '';
-          if (toSid) {
-            void this.cardFlight?.playPassAnimation(fromSid, toSid, 2);
-          }
-        }
+        // 传牌轮：按座位序全桌传递（i+1 → i，与引擎 enterPassPhaseDraft 一致），卡背飞行
+        void this.cardFlight?.playPassAround(v.seats.map(s => s.seatId), 2);
       }
       if (e.type === 'score.roundWinner') {
         const center = this.root.querySelector('.central')?.getBoundingClientRect();
@@ -1077,6 +1134,69 @@ export class AppUI {
     if (!host || !this.highlight) return;
     host.innerHTML = highlightBannerHtml(this.highlight, this.highlightExpanded);
     host.toggleAttribute('hidden', false);
+  }
+
+  /** 结算分步：同快照按 seq 取 大将军→身份牌→结算，三段依次弹窗（客户端展示延迟，不改协议） */
+  private buildRevealSteps(fresh: GameEvent[], v: PlayerView): void {
+    const mm = fresh.find((e) => e.type === 'score.mastermindRevealed');
+    const houses = fresh.filter((e) => e.type === 'house.revealed');
+    const winner = [...fresh].reverse().find((e) => {
+      if (e.type !== 'score.roundWinner') return false;
+      const p = (e.payload ?? {}) as Record<string, unknown>;
+      return Array.isArray(p['awarded']);
+    });
+    if (!mm && houses.length === 0 && !winner) return;
+    const key = `${v.round}`;
+    if (this.revealKey === key) return;
+    this.revealKey = key;
+    const steps: Array<{ title: string; html: string }> = [];
+    if (mm) {
+      const p = (mm.payload ?? {}) as Record<string, unknown>;
+      const sid = String(p['seatId'] ?? '');
+      const fam = String(p['family'] ?? '');
+      const famZh = fam === 'ronin'
+        ? getHouseDisplayName('ronin')
+        : getHouseDisplayName(`${fam}:1`).split(' · ')[0] ?? fam;
+      steps.push({
+        title: '大将军亮牌',
+        html: `${renderCardHtml('mastermind', undefined, false)}<p><b>${escapeHtml(seatName(v, sid))}</b> 亮出大将军——${escapeHtml(famZh)}阵营本轮获胜${fam === 'ronin' ? '（浪人：本轮无阵营获胜）' : ''}</p>`,
+      });
+    }
+    const orderedHouses = houses.slice().sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
+    for (const e of orderedHouses) {
+      const p = (e.payload ?? {}) as Record<string, unknown>;
+      const sid = String(p['seatId'] ?? '');
+      const houseId = String(p['houseId'] ?? '');
+      const art = houseId ? getVisualPath(getVisualId(houseId)) : '';
+      steps.push({
+        title: '身份揭晓',
+        html: `${art ? `<img class="reveal-house-art" src="${art}" alt="" />` : ''}<p><b>${escapeHtml(seatName(v, sid))}</b>：<b>${escapeHtml(getHouseDisplayName(houseId))}</b></p>`,
+      });
+    }
+    if (winner) {
+      const p = (winner.payload ?? {}) as Record<string, unknown>;
+      const awarded = (p['awarded'] as Array<{ seatId: string; count: number }> | undefined) ?? [];
+      steps.push({
+        title: '本轮结算',
+        html: `<p>${escapeHtml(roundLabel(winner, v))}</p><p>${awarded.map((a) => `${escapeHtml(seatName(v, a.seatId))} ＋${a.count} 枚`).join('；') || '无人摸牌'}</p>`,
+      });
+    }
+    this.revealSteps = steps;
+    this.revealIdx = 0;
+  }
+
+  private revealModalHtml(): string {
+    if (this.revealSteps.length === 0 || this.revealIdx >= this.revealSteps.length) return '';
+    const step = this.revealSteps[this.revealIdx];
+    if (!step) return '';
+    const last = this.revealIdx === this.revealSteps.length - 1;
+    return `<div class="identity-modal-backdrop" id="reveal-modal" data-reveal-close="1" style="z-index:2350">
+      <div class="help-modal" role="dialog" aria-label="${escapeHtml(step.title)}">
+        <div class="help-head"><h3>${escapeHtml(step.title)}（${this.revealIdx + 1}/${this.revealSteps.length}）</h3><button type="button" class="muted" data-reveal-close="1" aria-label="关闭结算展示">×</button></div>
+        <div class="help-body"><section>${step.html}</section>
+        <div class="row"><button type="button" class="btn-primary" data-reveal-next="1">${last ? '查看结算' : '下一步'}</button></div></div>
+      </div>
+    </div>`;
   }
 
   private hideHighlight(): void {
@@ -1244,14 +1364,21 @@ export class AppUI {
     const selfId = v?.self.seatId ?? '';
     const markB = inGame ? markBadge(this.marks, s.seatId) : '';
     const markB2 = inGame && !isSelf ? markButton(this.marks, selfId, s.seatId, MARK_PER_SEAT_MAX) : '';
+    // 新死亡座位：动画章（插入即播 stampSlam）＋座位抖动；已落印：静态章防重播
+    const isNewDead = dead && !this.stampedSeats.has(s.seatId);
+    const stampHtml = !dead
+      ? ''
+      : this.stampedSeats.has(s.seatId)
+        ? '<div class="stamp-failed-overlay" style="animation:none;opacity:.92" aria-hidden="true"></div>'
+        : '<div class="stamp-failed-overlay" aria-hidden="true"></div>';
 
-    return `<li class="seat-card${s.isHost ? ' host' : ''}${isBot ? ' bot' : ''}${dead ? ' dead' : ''}${isSelf ? ' self' : ''}${speakingCls}${hitCls}${targetCls}${decisionTarget}${socialTarget}" data-seat="${escapeHtml(s.seatId)}" data-seat-position="${escapeHtml(seatPosition)}"${decisionTarget || socialTarget ? ' tabindex="0" role="button"' : ''}>
+    return `<li class="seat-card${s.isHost ? ' host' : ''}${isBot ? ' bot' : ''}${dead ? ' dead' : ''}${isSelf ? ' self' : ''}${isNewDead ? ' animate-seat-hit' : ''}${speakingCls}${hitCls}${targetCls}${decisionTarget}${socialTarget}" data-seat="${escapeHtml(s.seatId)}" data-seat-position="${escapeHtml(seatPosition)}"${decisionTarget || socialTarget ? ' tabindex="0" role="button"' : ''}>
       <div class="seat-head"><b>${isBot ? '🤖 ' : ''}${escapeHtml(s.nickname)}</b> <span class="seat-id">${escapeHtml(s.seatId)}</span>${s.isHost ? '👑' : ''} ${s.connected ? '●' : '○'}${mic}${markB}${isSelf ? '<em class="you">你</em>' : ''}</div>
       <div class="seat-body">${houseImg}${handStack}${tokenStack}</div>
       ${selfMeta}
       ${metaBits.length > 0 ? `<div class="seat-meta">${metaBits.join(' ')}</div>` : ''}
       ${markB2}
-      ${dead ? '<div class="stamp-failed-overlay" style="animation:none;opacity:.92" aria-hidden="true"></div>' : ''}
+      ${stampHtml}
     </li>`;
   }
 
@@ -1736,6 +1863,12 @@ export class AppUI {
       this.view = null;
       this.presence = null;
       this.resetIdentityUi();
+      this.presenter.clear();
+      this.revealSteps = [];
+      this.revealIdx = 0;
+      this.revealKey = '';
+      this.stampedSeats.clear();
+      this.stampedRound = 0;
       this.soundPrimed = false;
       this.achieve.resetGame();
       this.hideHighlight();

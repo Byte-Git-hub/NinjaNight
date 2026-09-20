@@ -30,6 +30,14 @@
   min-height: 44px;
   font-size: 20px;
 }
+/* 结算分步：身份牌展示图 */
+.reveal-house-art {
+  display: block;
+  width: 120px;
+  max-width: 50vw;
+  margin: 4px auto 8px;
+  border-radius: 8px;
+}
 .help-body section {
   margin: 12px 0;
 }

@@ -2,6 +2,7 @@ import './ui/style.css';
 import './ui/arena.css';
 import './ui/gestures.css';
 import './ui/help.css';
+import './ui/effects/presenter.css';
 import { GameNet } from './net/client';
 import { AppUI } from './ui/app';
 import { setAssetBase } from './ui/assets';
