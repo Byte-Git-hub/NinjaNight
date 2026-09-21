@@ -143,6 +143,8 @@ export class AppUI {
   private chat: ChatEventPayload[] = [];
   private status: ConnectionStatus = 'idle';
   private lastReject = '';
+  /** 已发出待确认的决策key（windowId+type+payload）：防连点重复提交，收到新视图/拒收后清除 */
+  private inflightKey: string | null = null;
   /** 阶段横幅：记录最近一次 phase 切换（仅夜晚五阶段弹横幅，3s 后自行隐藏） */
   private bannerPhase: string | null = null;
   private bannerAt = 0;
@@ -316,6 +318,7 @@ export class AppUI {
       },
       onStarted: () => {
         this.lastReject = '';
+        this.inflightKey = null;
         this.socialNet?.sync();
         this.render();
       },
@@ -335,11 +338,15 @@ export class AppUI {
         this.voiceSeats = [];
         this.resetSocialUi();
         this.lastReject = '';
+        this.inflightKey = null;
         this.showToast('对局已终止，回到大厅');
         this.render();
       },
       onView: (v) => {
         this.lastViewTimestamp = Date.now();
+        // 自愈：新快照到达说明服务端状态已推进，旧拒收横幅不再有效，直接清除
+        this.lastReject = '';
+        this.inflightKey = null;
         if (import.meta.env.DEV) {
           const pending = v.pendingDecision ? v.pendingDecision.seatId : 'none';
           console.log(`[view.snapshot] phase=${v.phase} pending=${pending} at=${this.lastViewTimestamp}`);
@@ -395,6 +402,14 @@ export class AppUI {
       onCommandReject: (_id, reason) => {
         this.dragIntent = null;
         this.playOrigins.clear();
+        this.inflightKey = null;
+        // STALE_WINDOW 只是新旧窗口交接时的预期竞态（超时推进/Bot/他人先动/连点），
+        // 新快照随后即到并自愈，只 toast 提示，不进 sticky 红条，避免常亮误导。
+        if (reason === 'STALE_WINDOW') {
+          this.showToast('操作慢了一步，已是最新局面，请按当前界面重选');
+          this.render();
+          return;
+        }
         this.lastReject = reason;
         this.showToast(`指令被拒绝：${reason}`);
         this.render();
@@ -986,11 +1001,22 @@ export class AppUI {
     this.lastSoundSeq = Math.max(this.lastSoundSeq, maxSeq);
   }
 
+  /** 决策发送统一入口：同一窗口的完全相同指令只发一次（防连点拿旧 windowId 撞 STALE_WINDOW），收到新视图/拒收后解锁。 */
+  private sendDecision(windowId: string, type: string, payload: Record<string, unknown>): void {
+    const key = `${windowId}|${type}|${JSON.stringify(payload)}`;
+    if (this.inflightKey === key) {
+      this.showToast('指令已发送，等待中…');
+      return;
+    }
+    this.inflightKey = key;
+    this.net.sendCommand(windowId, type, payload);
+  }
+
   private dropCard(drop: CardDropPayload): void {
     const v = this.view, pending = v?.pendingDecision;
     if (!v || !pending || (!drop.targetSeatId && !drop.central)) return;
     if (pending.kind === 'chooseTarget' && drop.targetSeatId && pending.options.includes(drop.targetSeatId) && pending.context.relatedInstanceIds.includes(drop.instanceId)) {
-      this.net.sendCommand(v.windowId, 'night.chooseTarget', { targetSeatId: drop.targetSeatId });
+      this.sendDecision(v.windowId, 'night.chooseTarget', { targetSeatId: drop.targetSeatId });
       this.playCardFlight(drop.html, drop.sourceRect, this.root.querySelector<HTMLElement>(`.seat-card[data-seat="${cssEscape(drop.targetSeatId)}"]`));
       return;
     }
@@ -1006,7 +1032,7 @@ export class AppUI {
       this.render();
       return;
     }
-    this.net.sendCommand(v.windowId, 'night.declare', { cardInstanceIds: [drop.instanceId] });
+    this.sendDecision(v.windowId, 'night.declare', { cardInstanceIds: [drop.instanceId] });
     this.selected.clear();
   }
 
@@ -1018,7 +1044,7 @@ export class AppUI {
     if (p?.kind !== 'chooseTarget' || !p.context.relatedInstanceIds.includes(intent.instanceId)) return;
     this.dragIntent = null;
     if (p.options.includes(intent.targetSeatId)) {
-      this.net.sendCommand(v.windowId, 'night.chooseTarget', { targetSeatId: intent.targetSeatId });
+      this.sendDecision(v.windowId, 'night.chooseTarget', { targetSeatId: intent.targetSeatId });
     } else {
       this.showPhraseBubble({ seatId: v.self.seatId, nickname: '', text: '目标已不可选，请点击其他高亮座位' } as ChatEventPayload);
     }
@@ -2070,7 +2096,7 @@ export class AppUI {
     $('#btn-pass')?.addEventListener('click', () => {
       const v = this.view;
       if (!v) return;
-      this.net.sendCommand(v.windowId, 'night.passPhase', {});
+      this.sendDecision(v.windowId, 'night.passPhase', {});
     });
     $('#btn-declare')?.addEventListener('click', () => {
       const v = this.view;
@@ -2080,7 +2106,7 @@ export class AppUI {
         return;
       }
       this.rememberPlayOrigins();
-      this.net.sendCommand(v.windowId, 'night.declare', {
+      this.sendDecision(v.windowId, 'night.declare', {
         cardInstanceIds: [...this.selected],
       });
       this.selected.clear();
@@ -2158,12 +2184,12 @@ export class AppUI {
           // 显式映射表（kill/swap/reveal → true；spare/keep/hide → false）。
           // 新增 options 必须在此表登记，禁止 __true 暗语。
           const choose = CHOOSE_OPTIONAL_TRUE.has(opt);
-          this.net.sendCommand(v.windowId, 'night.chooseOptional', { choose });
+          this.sendDecision(v.windowId, 'night.chooseOptional', { choose });
           return;
         }
         if (pending.kind === 'reactDecide') {
           const react = opt === '__true';
-          this.net.sendCommand(v.windowId, 'react.decide', { react });
+          this.sendDecision(v.windowId, 'react.decide', { react });
           return;
         }
         if (
@@ -2173,15 +2199,15 @@ export class AppUI {
         ) {
           // 6H-1：目标选择"叮"
           this.audio.play('target-pick');
-          this.net.sendCommand(v.windowId, 'night.chooseTarget', { targetSeatId: opt });
+          this.sendDecision(v.windowId, 'night.chooseTarget', { targetSeatId: opt });
           return;
         }
         if (pending.kind === 'draftPick') {
-          this.net.sendCommand(v.windowId, 'draft.pick', { cardInstanceId: opt });
+          this.sendDecision(v.windowId, 'draft.pick', { cardInstanceId: opt });
           return;
         }
         if (pending.kind === 'draftDiscard') {
-          this.net.sendCommand(v.windowId, 'draft.discard', { cardInstanceId: opt });
+          this.sendDecision(v.windowId, 'draft.discard', { cardInstanceId: opt });
         }
       });
     });
