@@ -1,6 +1,10 @@
 # 忍者之夜后端（Railway）：Node + Socket.IO + 可选 mediasoup（默认降级关闭语音）
+# 注意：构建必须用 `npm install` 而非 `npm ci`——Railpack 把
+# /app/node_modules 挂为跨构建缓存层，`npm ci` 先 rmdir 会撞 EBUSY
+#（resource busy or locked）导致镜像构建失败；有 package-lock.json
+# 时 install 同样按锁版本安装。
 [build]
-buildCommand = "npm ci && npm run build:server"
+buildCommand = "npm install && npm run build:server"
 
 [deploy]
 startCommand = "npm start"
