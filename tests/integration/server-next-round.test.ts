@@ -113,13 +113,26 @@ describe('Bug2: victoryCheck 下一轮（server）', () => {
     expect(next.round).toBe(end.round + 1);
   });
 
-  it('单人+bot 房 victoryCheck 后 5s 自动进下一轮', async () => {
+  it('单人+bot 房 victoryCheck 后 10s 自动进下一轮（结算倒计时可视）', async () => {
     const { host, token } = await startSoloBots();
     const end = await forceToVictory(host, token);
     expect(end.gameOver).toBe(false);
     expect(end.phase).toBe('victoryCheck');
-    // 不做任何操作，等自动推进（默认 5000ms）
-    const next = await waitPhase(host, ['draftPick1'], 15000);
+    // 结算倒计时 deadline 由服务端下发：约 now+10s（VICTORY_AUTO_ADVANCE_MS）
+    expect(typeof end.autoAdvanceAt).toBe('number');
+    const gap = (end.autoAdvanceAt as number) - Date.now();
+    expect(gap).toBeGreaterThan(5000);
+    expect(gap).toBeLessThanOrEqual(10000);
+    // 不做任何操作，等自动推进（默认 10000ms）
+    const next = await waitPhase(host, ['draftPick1'], 25000);
     expect(next.round).toBe(end.round + 1);
-  }, 40000);
+  }, 60000);
+
+  it('多人房 victoryCheck 不下发自动推进 deadline（等房主手动）', async () => {
+    const { host, token } = await startFourHumans();
+    const end = await forceToVictory(host, token);
+    expect(end.gameOver).toBe(false);
+    expect(end.phase).toBe('victoryCheck');
+    expect(end.autoAdvanceAt).toBeUndefined();
+  });
 });

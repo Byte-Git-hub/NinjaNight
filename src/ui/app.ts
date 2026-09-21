@@ -146,6 +146,8 @@ export class AppUI {
   /** 阶段横幅：记录最近一次 phase 切换（仅夜晚五阶段弹横幅，3s 后自行隐藏） */
   private bannerPhase: string | null = null;
   private bannerAt = 0;
+  /** victoryCheck 单人房自动推进倒计时：500ms 只刷数字文本，不整页重绘 */
+  private autoAdvanceTimer: ReturnType<typeof setInterval> | null = null;
   public lastViewTimestamp = 0;
   /** 6F-4 身份弹窗：每会话每轮一次（sessionStorage 标记），2.5s 自动关 */
   private identityModalOpen = false;
@@ -855,7 +857,37 @@ export class AppUI {
       ${this.revealModalHtml()}
     `;
     this.bind();
+    this.syncAutoAdvanceCountdown();
     if (chatFocused) { const input = this.root.querySelector<HTMLInputElement>('#chat-input'); input?.focus(); input?.setSelectionRange(chatCursor,chatCursor); }
+  }
+
+  /**
+   * 结算倒计时：view.autoAdvanceAt 存在时每 500ms 只刷新数字文本；
+   * 离开 victoryCheck 或字段消失即停（render 全量重绘会重建节点，ticker 按节点存在与否自愈）。
+   */
+  private syncAutoAdvanceCountdown(): void {
+    const active =
+      this.view?.phase === 'victoryCheck' &&
+      typeof this.view.autoAdvanceAt === 'number' &&
+      this.root.querySelector<HTMLElement>('[data-auto-advance]') !== null;
+    if (!active) {
+      if (this.autoAdvanceTimer !== null) {
+        clearInterval(this.autoAdvanceTimer);
+        this.autoAdvanceTimer = null;
+      }
+      return;
+    }
+    const paint = () => {
+      const node = this.root.querySelector<HTMLElement>('[data-auto-advance]');
+      if (!node) return;
+      const raw = Number(node.dataset['autoAdvance'] ?? NaN);
+      const left = Number.isFinite(raw) ? Math.max(0, Math.ceil((raw - Date.now()) / 1000)) : 0;
+      node.textContent = `约 ${left} 秒`;
+    };
+    paint();
+    if (this.autoAdvanceTimer === null) {
+      this.autoAdvanceTimer = setInterval(paint, 500);
+    }
   }
 
   private lobbyForm(): string {
@@ -1594,6 +1626,11 @@ export class AppUI {
           ? `<div class="row"><button id="btn-next-round" type="button" class="btn-primary">开始下一轮</button></div>`
           : '<p class="hint">等待房主开始下一轮…</p>'
         : '';
+    // 单人房自动推进倒计时（view.autoAdvanceAt 由服务端下发；多人房无此字段，不显示）
+    const autoAdvanceHint =
+      !v.gameOver && v.phase === 'victoryCheck' && typeof v.autoAdvanceAt === 'number'
+        ? `<p class="hint">结算展示中…<span data-auto-advance="${v.autoAdvanceAt}"></span>后自动进入下一轮</p>`
+        : '';
 
     // 阶段横幅：夜晚五阶段切换后 3s 内展示（非阻塞浮层，CSS 淡出）
     const hint = NIGHT_HINT[this.bannerPhase ?? ''];
@@ -1609,6 +1646,7 @@ export class AppUI {
         ${gameOverBanner}
         ${roundBanner}
         ${nextRoundBtn}
+        ${autoAdvanceHint}
         <button type="button" data-info-toggle class="info-toggle">情报 / 管理</button><div class="table-info"${this.infoOpen ? "" : " hidden"}>${this.voiceBar()}<div class="reserved"><b>预留：</b>${reserved || '无'}</div>
         <div class="known"><h3>已知身份</h3>${known || '无'}</div>
         <div class="row">

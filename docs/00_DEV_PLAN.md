@@ -168,7 +168,7 @@ updated: 2026-09-18
 ### 阶段 6E.7 — 联机 bug 三连修 — **完成**
 
 - [x] bug1 阶段校验三层加固（`61bb1e1`）
-- [x] bug2 `startNextRound` + victoryCheck 流转（单人房 5s 自动推进 `NINJA_VICTORY_AUTO_MS`）（`39e6110`）
+- [x] bug2 `startNextRound` + victoryCheck 流转（单人房 10s 自动推进 `NINJA_VICTORY_AUTO_MS`，结算倒计时可视）（`39e6110`）
 - [x] bug3 计分脱敏：`roundWinner` 只公开枚数，`victory` 总分公开（`9588cd2`）
 - [x] fix6a 恢复 `roomTerminated` 监听修 lifecycle:40 + Issue1/2 验证记录（`f331934`，见 `docs/06E7_VERIFICATION.md`：e2e 18/18 + vitest 92）
 - [x] 6F.5-fix1–3：日志溢出 / 卡名 tooltip / `knownHouses` 跨轮清空 + `CHOOSE_OPTIONAL_TRUE` 显式映射（`6d1edab` / `225c732` / `c88a830`）

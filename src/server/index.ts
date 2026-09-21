@@ -197,6 +197,9 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
         pendingSeats,
       });
     }
+    // victory 定时先排（单人房同时确定 autoAdvanceAt deadline），
+    // 再广播，快照一次带齐倒计时所需字段。
+    scheduleVictoryAuto(room);
     room.broadcastView();
     room.broadcastPresence();
     if (!room.state.gameOver) botSocial?.sync?.(room);
@@ -204,7 +207,6 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       scheduleWindowTimeout(room);
       scheduleBots(room, handleBotCommand);
     }
-    scheduleVictoryAuto(room);
   }
 
   const victoryTimers = new Map<string, NodeJS.Timeout>();
@@ -214,10 +216,13 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       clearTimeout(t);
       victoryTimers.delete(code);
     }
+    const room = rooms.get(code);
+    if (room) room.victoryAutoAt = null;
   }
   /**
    * Q3 裁定：victoryCheck 轮间停留，多人房等房主手动 forceAdvance；
-   * 仅当在线真人 ≤1 时 5s 后自动进下一轮（可视倒计时 TODO 6F）。
+   * 仅当在线真人 ≤1 时自动进下一轮（VICTORY_AUTO_ADVANCE_MS，默认 10s；
+   * deadline 经 view.autoAdvanceAt 下发，结算页可视倒计时）。
    */
   function scheduleVictoryAuto(room: RoomRuntime): void {
     clearVictoryAuto(room.code);
@@ -226,6 +231,7 @@ export function createGameServer(port = Number(process.env.PORT ?? 3000)) {
       (s) => s.connected && !room.bots.has(s.seatId),
     );
     if (humans.length > 1) return;
+    room.victoryAutoAt = Date.now() + VICTORY_AUTO_ADVANCE_MS;
     const t = setTimeout(() => {
       victoryTimers.delete(room.code);
       if (rooms.get(room.code) !== room || !room.state) return;

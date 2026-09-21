@@ -238,6 +238,12 @@ export interface PlayerView {
   revealedCards: NinjaCardInstanceView[];
   gameOver: boolean;
   winners: SeatId[];
+  /**
+   * 单人房 victoryCheck 自动推进的服务端 deadline（epoch 毫秒）。
+   * 仅单人房自动路径下发，用于结算倒计时展示；多人房（等房主手动）与其它阶段为 undefined。
+   * 纯展示元数据，不含任何暗牌信息。
+   */
+  autoAdvanceAt?: number;
 }
 
 // ---------------------------------------------------------------------------

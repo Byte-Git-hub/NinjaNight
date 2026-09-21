@@ -43,6 +43,8 @@ export class RoomRuntime {
   llmConfigRevision = 0;
   createdAt = Date.now();
   endedAt: number | null = null;
+  /** victoryCheck 单人房自动推进 deadline（epoch 毫秒）；仅自动路径有效，其它情况为 null。 */
+  victoryAutoAt: number | null = null;
   emptySince: number | null = Date.now();
   started = false;
   private io: Server;
@@ -74,7 +76,12 @@ export class RoomRuntime {
     if (!this.state) return;
     for (const sess of this.sessions.values()) {
       const view = projectView(this.state, sess.seatId);
-      if (view) this.io.to(sess.socketId).emit(OUT.viewSnapshot, view);
+      if (!view) continue;
+      // 结算倒计时展示用：仅 victoryCheck 下发，其它阶段不带（防过期值残留）。
+      if (this.state.phase === 'victoryCheck' && this.victoryAutoAt !== null) {
+        view.autoAdvanceAt = this.victoryAutoAt;
+      }
+      this.io.to(sess.socketId).emit(OUT.viewSnapshot, view);
     }
   }
 
