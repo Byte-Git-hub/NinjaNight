@@ -12,7 +12,7 @@
 
 | 大厅（桌面） | 对局中（桌面） | 移动端对局 |
 |---|---|---|
-| ![大厅](docs/06_assets/readme/desktop-lobby.jpg) | ![对局](docs/06_assets/readme/desktop-game.jpg) | ![移动端](docs/06_assets/readme/mobile-game.png) |
+| ![大厅](docs/06_assets/readme/desktop-lobby.jpg) | ![对局](docs/06_assets/readme/desktop-game.jpg) | ![移动端](docs/06_assets/readme/mobile-game.jpg) |
 
 ## 玩法（5 行）
 
