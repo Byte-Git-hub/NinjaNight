@@ -7,7 +7,8 @@ import { test, expect } from '@playwright/test';
 test('单人房结算倒计时可视 + 约10秒自动进下一轮', async ({ page }) => {
   test.setTimeout(150000);
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/');
+  // 默认本地联调；E2E_BASE_URL 指向线上时即为线上验收（Pages 前端 + Railway 后端）
+  await page.goto(process.env.E2E_BASE_URL ?? '/');
   await page.fill('#nick', '倒计时测试');
   await page.click('#btn-create');
   await page.click('#btn-add-bot');
