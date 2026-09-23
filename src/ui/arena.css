@@ -536,6 +536,16 @@ body:not(.in-game) .seats-panel .table-ring .seat-card {
   padding: 0;
   overflow: visible;
 }
+/* 大厅自己座位与他人同框同宽（覆盖 style.css 的 cyan/max-width/全宽） */
+body:not(.in-game) .seats-panel .table-ring .seat-card.self {
+  grid-column: auto;
+  order: 0;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  border-color: rgba(212, 175, 55, 0.5);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
 body:not(.in-game) .seats-panel .table-ring .seat-avatar { display: none !important; }
 body:not(.in-game) .seats-panel .table-ring .seat-body {
   display: flex;

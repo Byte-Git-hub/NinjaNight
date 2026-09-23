@@ -306,7 +306,7 @@ export class AppUI {
         this.render();
       },
       onError: (e) => {
-        this.lastReject = `${e.reasonCode}${e.message ? ': ' + e.message : ''}`;
+        this.lastReject = e.message || e.reasonCode;
         this.showToast(`错误：${this.lastReject}`);
         this.render();
       },
@@ -410,7 +410,7 @@ export class AppUI {
           this.render();
           return;
         }
-        this.lastReject = reason;
+        this.lastReject = reason === 'UNAUTHORIZED' ? '座位已过期，请重新加入' : reason;
         this.showToast(`指令被拒绝：${reason}`);
         this.render();
       },
@@ -774,6 +774,15 @@ export class AppUI {
     this.root.innerHTML = `<div class="app" id="ui"></div><div id="toast" class="toast" hidden></div><div id="achieve-pop" aria-live="polite"></div><div id="highlight-pop" hidden></div><div id="intel-notice" class="intel-notice" role="status" aria-live="polite" hidden></div>`;
   }
 
+  private bindDismissableBanners(): void {
+    this.root.querySelectorAll<HTMLElement>('[data-dismiss-banner]').forEach((el) => {
+      el.addEventListener('click', () => {
+        this.lastReject = '';
+        this.render();
+      });
+    });
+  }
+
   private showToast(msg: string, ms = 2500): void {
     const t = this.root.querySelector('#toast');
     if (!t) return;
@@ -832,7 +841,7 @@ export class AppUI {
           ? `<div class="banner">连接中…</div>`
           : '';
     const reject = this.lastReject
-      ? `<div class="banner err">${escapeHtml(this.lastReject)}</div>`
+      ? `<div class="banner err" data-dismiss-banner role="status">${escapeHtml(this.lastReject)}</div>`
       : '';
     const voiceBanner = voiceBannerHtml(this.voiceNotice);
     const oldChat = this.root.querySelector<HTMLInputElement>('#chat-input');
@@ -872,6 +881,7 @@ export class AppUI {
       ${this.revealModalHtml()}
     `;
     this.bind();
+    this.bindDismissableBanners();
     this.syncAutoAdvanceCountdown();
     if (chatFocused) { const input = this.root.querySelector<HTMLInputElement>('#chat-input'); input?.focus(); input?.setSelectionRange(chatCursor,chatCursor); }
   }

@@ -246,6 +246,18 @@ body.in-game {
 }
 
 /* —— 警告与状态条 —— */
+/* 横幅绝对定位覆盖层：不得占用 .app 网格行，否则大厅 2 行布局会被顶乱 */
+.app > .banner {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  width: max-content;
+  max-width: min(720px, calc(100vw - 24px));
+  margin: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
 .banner {
   background: rgba(30, 41, 59, 0.85);
   border: 1px solid rgba(212, 175, 55, 0.4);
@@ -253,6 +265,8 @@ body.in-game {
   border-radius: 8px;
   margin-bottom: 12px;
   backdrop-filter: blur(6px);
+  overflow-wrap: anywhere;
+  line-height: 1.45;
 }
 .banner.warn {
   border-color: rgba(212, 175, 55, 0.8);
@@ -261,6 +275,7 @@ body.in-game {
 .banner.err {
   border-color: rgba(220, 38, 38, 0.8);
   color: #ff8a80;
+  background: rgba(69, 18, 20, 0.92);
 }
 
 /* —— 主面板网格 —— */
@@ -1016,6 +1031,15 @@ button.card.sel {
   margin: 2px auto 0;
   border-color: var(--neon-cyan);
   box-shadow: 0 0 12px rgba(34, 211, 238, 0.25), 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+/* 大厅/等开局：自己与他人同框同宽，仅靠「你」徽章区分 */
+body:not(.in-game) .seats-panel .table-ring .seat-card.self {
+  grid-column: auto;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  border-color: rgba(212, 175, 55, 0.5);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
 }
 .seats.ring li.seat-card.dead {
   opacity: 0.55;
